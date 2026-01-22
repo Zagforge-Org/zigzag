@@ -6,7 +6,6 @@ const Context = @import("context.zig").Context;
 const Pool = @import("../workers/pool.zig").Pool;
 const WaitGroup = @import("../workers/wait_group.zig").WaitGroup;
 const FileCache = @import("../fs/cache.zig").FileCache;
-const processChunk = @import("process_chunk.zig").processChunk;
 
 fn basename(path: []const u8) []const u8 {
     var lastSlash: usize = 0;
@@ -53,17 +52,15 @@ const ProcessStats = struct {
 
         std.log.info("=== Processing Summary ===", .{});
         std.log.info("Total files: {d}", .{total});
-        std.log.info("Cached (unchanged): {d}", .{cached});
+        std.log.info("Cached (from .cache): {d}", .{cached});
         std.log.info("Processed (updated): {d}", .{processed});
         std.log.info("Ignored: {d}", .{ignored});
     }
 };
 
-// Track all files we encounter
 const FileEntry = struct {
     path: []const u8,
     content: []u8,
-    is_new: bool,
 };
 
 const FileJob = struct {
@@ -122,71 +119,42 @@ fn processFileJob(job: FileJob) anyerror!void {
 
     const is_cached = cache.isCached(path, mtime, size, hash) catch false;
 
+    var content: []u8 = undefined;
+
     if (is_cached) {
-        // File unchanged - get from cache
-        std.log.debug("Cached (unchanged): {s}", .{path});
+        // Read from cache
+        std.log.debug("Cached (reading from .cache): {s}", .{path});
         _ = stats.cached_files.fetchAdd(1, .monotonic);
 
-        if (try cache.getCachedEntry(path)) |entry| {
-            entries_mutex.lock();
-            defer entries_mutex.unlock();
+        content = cache.getCachedContent(path) catch blk: {
+            std.log.debug("Failed to read cache for {s}, reading original", .{path});
+            // Fallback to reading original file
+            break :blk fs.readFileAlloc(allocator, path) catch return;
+        };
+    } else {
+        // Read original file and update cache
+        std.log.info("Processing (reading original): {s}", .{path});
+        _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-            const path_copy = try allocator.dupe(u8, path);
-            const content_copy = try allocator.dupe(u8, entry.content);
+        content = fs.readFileAlloc(allocator, path) catch |err| {
+            std.log.debug("Failed to read file {s}: {}", .{ path, err });
+            return;
+        };
 
-            try file_entries.put(path_copy, .{
-                .path = path_copy,
-                .content = content_copy,
-                .is_new = false,
-            });
-        }
-        return;
+        // Update cache
+        cache.update(path, hash, mtime, size, content) catch |err| {
+            std.log.debug("Failed to update cache for {s}: {}", .{ path, err });
+        };
     }
 
-    // File is new or changed, process it
-    std.log.info("Processing (changed): {s}", .{path});
-    _ = stats.processed_files.fetchAdd(1, .monotonic);
-
-    var content_buffer: std.ArrayList(u8) = .empty;
-    defer content_buffer.deinit(allocator);
-
-    var result = fs.readFileAuto(allocator, path, processChunk, ctx.?) catch |err| {
-        std.log.debug("Failed to process file {s}: {}", .{ path, err });
-        return;
-    };
-
-    switch (result) {
-        .Alloc => |data| {
-            std.log.debug("Read {s} via allocation ({d} bytes)", .{ path, data.len });
-            try content_buffer.appendSlice(allocator, data);
-            allocator.free(data);
-        },
-        .Mapped => |*mapped| {
-            std.log.debug("Read {s} via mmap ({d} bytes)", .{ path, mapped.len });
-            try content_buffer.appendSlice(allocator, mapped.data);
-            mapped.deinit();
-        },
-        .Chunked => {
-            std.log.debug("Read {s} via chunking", .{path});
-            const full_content = fs.readFileAlloc(allocator, path) catch |err| {
-                std.log.debug("Failed to re-read chunked file {s}: {}", .{ path, err });
-                return;
-            };
-            defer allocator.free(full_content);
-            try content_buffer.appendSlice(allocator, full_content);
-        },
-    }
-
+    // Store for report generation
     entries_mutex.lock();
     defer entries_mutex.unlock();
 
     const path_copy = try allocator.dupe(u8, path);
-    const content_copy = try allocator.dupe(u8, content_buffer.items);
-
     try file_entries.put(path_copy, .{
         .path = path_copy,
-        .content = content_copy,
-        .is_new = true,
+        .content = content, // Transfer ownership
     });
 }
 
@@ -289,31 +257,15 @@ pub fn exec(cfg: *const Config, cache: *FileCache) !void {
     try walker.walkDir(cfg.path, walkCallback, walk_ctx);
     wg.wait();
 
-    // Now rebuild report.md with all entries
-    std.log.info("Rebuilding report.md...", .{});
+    // Build report.md from all collected files
+    std.log.info("Building report.md...", .{});
 
     var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
 
-    var current_pos: usize = 0;
     var it = file_entries.iterator();
     while (it.next()) |entry| {
-        const file_entry = entry.value_ptr;
-        const start_pos = current_pos;
-
-        try md_file.writeAll(file_entry.content);
-        current_pos += file_entry.content.len;
-
-        const end_pos = current_pos;
-
-        // Update cache with position info
-        if (file_entry.is_new) {
-            const stat = try std.fs.cwd().statFile(file_entry.path);
-            const mtime = @as(u64, @intCast(stat.mtime));
-            const size = stat.size;
-
-            try cache.update(file_entry.path, null, mtime, size, file_entry.content, start_pos, end_pos);
-        }
+        try md_file.writeAll(entry.value_ptr.content);
     }
 
     stats.printSummary();
