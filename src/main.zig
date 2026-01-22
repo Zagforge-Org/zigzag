@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const config = @import("./cli/config.zig");
 const runner = @import("./cli/runner.zig");
 const FileCache = @import("./fs/cache.zig").FileCache;
@@ -22,11 +21,11 @@ pub fn main() !void {
     var it = std.process.args();
     _ = it.next(); // Skip program name
 
-    var list = std.ArrayList([]const u8).init(allocator);
-    defer list.deinit();
+    var list = std.ArrayList([]const u8){};
+    defer list.deinit(allocator);
 
     while (it.next()) |arg| {
-        try list.append(arg);
+        try list.append(allocator, arg);
     }
 
     const result = config.Config.parse(list.items, allocator);
@@ -49,4 +48,3 @@ pub fn main() !void {
         },
     }
 }
-

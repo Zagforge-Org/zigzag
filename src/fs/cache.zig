@@ -3,7 +3,8 @@ const std = @import("std");
 const SEED: u64 = 0x123456789ABCDEF0;
 
 /// CacheEntry represents an entry in the file cache.
-const CacheEntry = packed struct {
+/// We use extern struct to ensure the layout matches the C struct.
+const CacheEntry = extern struct {
     path_len: u32,
     mtime: u64,
     size: usize,
@@ -12,7 +13,7 @@ const CacheEntry = packed struct {
 
 pub const FileCache = struct {
     allocator: std.mem.Allocator,
-    cache_dir: ?[]const u8,
+    cache_dir: []const u8,
     small_file_threshold: usize,
     mutex: std.Thread.Mutex,
 
@@ -39,26 +40,30 @@ pub const FileCache = struct {
         };
     }
 
-    /// Compute a simple hash or fast path for filename
-    fn computeCacheFilePath(self: *Self, path: []const u8, hash: ?[32]u8) []u8 {
+    /// Compute cache file path
+    fn computeCacheFilePath(self: *Self, path: []const u8, hash: ?[32]u8) ![]u8 {
         const allocator = self.allocator;
         if (hash) |h| {
-            // Allocate space for the hex representation of the hash:
-            // - 64 bytes for a SHA-256 hash (32 bytes * 2 hex chars per byte)
-            // - +4 bytes as extra buffer for safety, null-terminator, or small suffixes
-            var hex_path = try allocator.alloc(u8, 64 + 4);
-            const len = try std.fmt.format(hex_path, "{s}/{*x}", .{ self.cache_dir, h[0..] });
-            return hex_path[0..len];
+            // Convert hash to hex string manually
+            var hex_buf: [64]u8 = undefined;
+            const charset = "0123456789abcdef";
+            for (h, 0..) |byte, i| {
+                hex_buf[i * 2] = charset[byte >> 4];
+                hex_buf[i * 2 + 1] = charset[byte & 0x0F];
+            }
+
+            // Combine cache_dir and hex
+            return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.cache_dir, hex_buf });
         } else {
-            // Small file fast path
-            const sanitized = std.mem.replace(path, "/", "_");
-            // Allocate a buffer large enough for the full cache file path:
-            // - self.cache_dir.len → space for the cache directory string
-            // - 1 → space for the '/' character between directory and filename
-            // - sanitized.len → space for the sanitized filename
-            const full_path = try allocator.alloc(u8, self.cache_dir.len + 1 + sanitized.len);
-            std.mem.copy(u8, full_path[0..self.cache_dir.len], self.cache_dir);
-            return full_path;
+            // Small file fast path - sanitize path
+            const sanitized = try allocator.alloc(u8, path.len);
+            defer allocator.free(sanitized);
+
+            for (path, 0..) |c, i| {
+                sanitized[i] = if (c == '/') '_' else c;
+            }
+
+            return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ self.cache_dir, sanitized });
         }
     }
 
@@ -74,10 +79,9 @@ pub const FileCache = struct {
         const file = std.fs.cwd().openFile(cache_file, .{ .mode = .read_only }) catch |err| {
             switch (err) {
                 error.FileNotFound => return false,
-                _ => return err,
+                else => return err,
             }
         };
-
         defer file.close();
 
         const data = try file.readToEndAlloc(allocator, 8192);
@@ -85,7 +89,7 @@ pub const FileCache = struct {
 
         if (data.len < @sizeOf(CacheEntry)) return false;
 
-        const entry: *const CacheEntry = @ptrCast(data.ptr);
+        const entry: *const CacheEntry = @ptrCast(@alignCast(data.ptr));
 
         if (entry.mtime == mtime and entry.size == size) return true;
 
@@ -93,40 +97,38 @@ pub const FileCache = struct {
     }
 
     /// Update cache for a file
-    pub fn update(self: *FileCache, path: []const u8, hash: ?[32]u8, mtime: u64, size: usize) !void {
+    pub fn update(self: *Self, path: []const u8, hash: ?[32]u8, mtime: u64, size: usize) !void {
         const allocator = self.allocator;
         const cache_file = try self.computeCacheFilePath(path, hash);
         defer allocator.free(cache_file);
 
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
         var file = try std.fs.cwd().createFile(cache_file, .{ .truncate = true });
         defer file.close();
 
-        var entry: CacheEntry = CacheEntry{
+        var entry = CacheEntry{
             .mtime = mtime,
             .size = size,
             .hash = if (hash) |h| h else [_]u8{0} ** 32,
             .path_len = @intCast(path.len),
         };
 
-        const entryPtr: [*]const u8 = @ptrCast(&entry);
-
-        try file.writeAll(entryPtr);
+        const entry_bytes = std.mem.asBytes(&entry);
+        try file.writeAll(entry_bytes);
         try file.writeAll(path);
     }
 
     /// Cleanup stale entries
     pub fn cleanup(self: *Self) !void {
         const cwd = std.fs.cwd();
-        const dir = try cwd.openDir(self.cache_dir, .{ .iterate = true });
+        var dir = try cwd.openDir(self.cache_dir, .{ .iterate = true });
         defer dir.close();
 
         var it = dir.iterate();
 
-        while (true) {
-            const maybe_entry = it.next();
-            if (maybe_entry == null) break; // iteration done
-            const entry: std.fs.Dir.Entry = maybe_entry.?;
-
+        while (try it.next()) |entry| {
             // Only delete files
             if (entry.kind != .file) continue;
 
@@ -135,7 +137,7 @@ pub const FileCache = struct {
             defer self.allocator.free(full_path);
 
             // Attempt to delete the file
-            _ = cwd.deleteFile(full_path) catch {};
+            cwd.deleteFile(full_path) catch {};
         }
     }
 
@@ -144,25 +146,23 @@ pub const FileCache = struct {
         const allocator = self.allocator;
         const cwd = std.fs.cwd();
 
-        //  Open file for reading
+        // Open file for reading
         const file = try cwd.openFile(path, .{ .mode = .read_only });
         defer file.close();
 
         // Read the entire file into memory
-        const data = try file.readToEndAlloc(allocator, 8192);
+        const max_size = 100 * 1024 * 1024; // 100MB limit
+        const data = try file.readToEndAlloc(allocator, max_size);
         defer allocator.free(data);
 
-        // Comopute sha-256 hash
-        var hasher = std.hash.XxHash3.init(SEED);
-        hasher.update(data);
+        // Compute hash
+        var hash: [32]u8 = undefined;
+        std.crypto.hash.sha2.Sha256.hash(data, &hash, .{});
 
-        return hasher.final();
+        return hash;
     }
 
     pub fn deinit(self: *Self) void {
-        if (self.cache_dir) |dir| {
-            self.allocator.free(dir);
-            self.cache_dir = null;
-        }
+        self.allocator.free(self.cache_dir);
     }
 };
