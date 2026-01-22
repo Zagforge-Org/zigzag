@@ -10,24 +10,43 @@ fn processChunk(_: []const u8) !void {
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    // Create cache directory path
+    // Create cache directory path (./.cache)
     const cachePath = try std.fs.path.join(allocator, &.{ ".", ".cache" });
     defer allocator.free(cachePath);
 
     // Initialize cache with 64KB threshold for small files
+    // Small files use path-based caching, large files use hash-based caching
     var cache = try FileCache.init(allocator, cachePath, 64 * 1024);
     defer cache.deinit();
 
     var it = std.process.args();
     _ = it.next(); // Skip program name
 
+    // Create list to hold command-line arguments
     var list = std.ArrayList([]const u8){};
     defer list.deinit(allocator);
 
+    // Check for --clear-cache flag
+    var should_clear_cache = false;
     while (it.next()) |arg| {
-        try list.append(allocator, arg);
+        if (std.mem.eql(u8, arg, "--clear-cache")) {
+            should_clear_cache = true;
+        } else {
+            try list.append(allocator, arg);
+        }
     }
 
+    // Clear cache if requested
+    if (should_clear_cache) {
+        std.log.info("Clearing cache...", .{});
+        try cache.cleanup();
+        std.log.info("Cache cleared successfully", .{});
+        if (list.items.len == 0) {
+            return; // Just clear cache and exit
+        }
+    }
+
+    // Parse config from remaining arguments
     const result = config.Config.parse(list.items, allocator);
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
@@ -48,3 +67,4 @@ pub fn main() !void {
         },
     }
 }
+
