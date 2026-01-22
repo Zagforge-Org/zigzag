@@ -16,7 +16,6 @@ pub const Config = struct {
     mmap_threshold: usize,
     skip_git: bool,
     skip_cache: bool,
-    // print_strategy: bool,
     ignore_patterns: []const u8,
     n_threads: usize,
     version: []const u8 = VERSION,
