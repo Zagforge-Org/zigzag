@@ -14,38 +14,6 @@ pub const WinMMap = struct {
 
     const Self = @This();
 
-    // pub fn open(path: []const u8) !Self {
-    //     var file = try std.fs.cwd().openFile(path, .{});
-    //     errdefer file.close();
-
-    //     const size = try file.getEndPos();
-    //     if (size == 0) return Self{ .data = &[_]u8{}, .mapping = null };
-
-    //     const mapping = windows_api.CreateFileMappingW(
-    //         file.handle,
-    //         null,
-    //         windows_api.PAGE_READONLY,
-    //         @intCast(size >> 32),
-    //         @intCast(size & 0xffffffff),
-    //         null,
-    //     ) orelse return error.MMapFailed;
-
-    //     const view = windows_api.MapViewOfFile(
-    //         mapping,
-    //         windows_api.FILE_MAP_READ,
-    //         0,
-    //         0,
-    //         0,
-    //     ) orelse return error.MapViewFailed;
-
-    //     const bytes = @as([*]const u8, @ptrCast(view))[0..@intCast(size)];
-
-    //     return Self{
-    //         .data = bytes,
-    //         .mapping = mapping,
-    //     };
-    // }
-    //
     pub fn open(path: []const u8) !Self {
         var file = try std.fs.cwd().openFile(path, .{});
         errdefer file.close();
