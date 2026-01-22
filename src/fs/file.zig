@@ -31,11 +31,7 @@ pub const MappedFile = struct {
                     const ptr: *anyopaque = @ptrCast(@constCast(self.data.ptr));
                     _ = windows_api.UnmapViewOfFile(ptr);
                 },
-                // else => _ = std.os.linux.munmap(self.data.ptr, self.len),
-                else => {
-                    const ptr: [*]align(std.mem.page_size) u8 = @alignCast(@constCast(self.data.ptr));
-                    _ = std.posix.munmap(@as([*]align(std.mem.page_size) u8, ptr)[0..self.len]);
-                },
+                else => _ = std.os.linux.munmap(self.data.ptr, self.len),
             }
             self.data = &[_]u8{};
             self.len = 0;
