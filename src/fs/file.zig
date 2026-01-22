@@ -3,6 +3,7 @@ const winMmap = @import("./mmap/win.zig").WinMMap;
 const unixMmap = @import("./mmap/unix.zig").UnixMMap;
 const windows_api = @import("../api/win.zig");
 const Context = @import("../cli/context.zig").Context;
+const TProcessChunk = @import("../cli/process_chunk.zig").TProcessChunk;
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
@@ -63,7 +64,7 @@ pub fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
 }
 
 /// Read a file in chunk
-pub fn readFileChunked(path: []const u8, comptime process: anytype, ctx: *Context) !void {
+pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *Context) !void {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
@@ -72,7 +73,7 @@ pub fn readFileChunked(path: []const u8, comptime process: anytype, ctx: *Contex
     while (true) {
         const bytes_read = try file.read(buffer[0..]);
         if (bytes_read == 0) break;
-        process(ctx, buffer[0..bytes_read]);
+        try process(ctx, buffer[0..bytes_read]);
     }
 }
 
@@ -97,34 +98,10 @@ pub fn readFileMapped(path: []const u8) !MappedFile {
 }
 
 /// Automatically choose best read strategy based on file size
-// pub fn readFileAuto(
-//     allocator: std.mem.Allocator,
-//     path: []const u8,
-//     comptime process: anytype,
-//     ctx: *Context,
-// ) !ReadResult {
-//     const size = try getFileSize(path);
-
-//     // Small files → read fully into memory
-//     if (size <= SMALL_FILE_THRESHOLD) {
-//         const data = try readFileAlloc(allocator, path);
-//         return .{ .Alloc = data };
-//     }
-
-//     // Medium files → memory map
-//     if (size <= MMAP_THRESHOLD) {
-//         const mapped = try readFileMapped(path);
-//         return .{ .Mapped = mapped };
-//     }
-
-//     // Very large files → stream in chunks
-//     try readFileChunked(path, process);
-//     return .{ .Chunked = {} };
-// }
 pub fn readFileAuto(
     allocator: std.mem.Allocator,
     path: []const u8,
-    comptime process: anytype,
+    process: TProcessChunk,
     ctx: *Context,
 ) !ReadResult {
     const size = try getFileSize(path);
