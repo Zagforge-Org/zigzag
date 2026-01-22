@@ -29,7 +29,6 @@ pub const Config = struct {
             .mmap_threshold = 16 << 20,
             .skip_git = false,
             .skip_cache = false,
-            // .print_strategy = false,
             .ignore_patterns = "",
             .n_threads = std.Thread.getCpuCount() catch 1,
         };

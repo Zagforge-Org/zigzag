@@ -23,13 +23,6 @@ pub fn main() !void {
         try list.append(allocator, arg);
     }
 
-    // var it = std.process.args();
-    // _ = it.next(); // skip program name
-    // while (true) {
-    //     const arg = it.next() orelse break;
-    //     try list.append(allocator, arg);
-    // }
-
     // Parse config from arguments
     const result = config.Config.parse(list.items, allocator);
     switch (result) {
