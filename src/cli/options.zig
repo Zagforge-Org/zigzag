@@ -1,0 +1,21 @@
+const std = @import("std");
+const Config = @import("config.zig").Config;
+const handler = @import("handler.zig");
+
+pub const OptionHandler = struct {
+    name: []const u8,
+    takes_value: bool,
+    handler: *const fn (*Config, std.mem.Allocator, ?[]const u8) anyerror!void,
+};
+
+pub const options = [_]OptionHandler{
+    .{ .name = "--version", .takes_value = false, .handler = &handler.printVersion },
+    .{ .name = "--help", .takes_value = false, .handler = &handler.printHelp },
+    .{ .name = "--skip-git", .takes_value = false, .handler = &handler.handleSkipGit },
+    .{ .name = "--skip-cache", .takes_value = false, .handler = &handler.handleSkipCache },
+    .{ .name = "--strategy", .takes_value = false, .handler = &handler.handleStrategy },
+    .{ .name = "--small", .takes_value = true, .handler = &handler.handleSmall },
+    .{ .name = "--mmap", .takes_value = true, .handler = &handler.handleMmap },
+    .{ .name = "--path", .takes_value = true, .handler = &handler.handlePath },
+    .{ .name = "--ignore", .takes_value = true, .handler = &handler.handleIgnore },
+};
