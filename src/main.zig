@@ -14,16 +14,24 @@ pub fn main() !void {
     var list = std.ArrayList([]const u8){};
     defer list.deinit(allocator);
 
-    var it = std.process.args();
-    _ = it.next(); // skip program name
-    while (true) {
-        const arg = it.next() orelse break;
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
+
+    _ = args.skip(); // skip program name
+
+    while (args.next()) |arg| {
         try list.append(allocator, arg);
     }
 
+    // var it = std.process.args();
+    // _ = it.next(); // skip program name
+    // while (true) {
+    //     const arg = it.next() orelse break;
+    //     try list.append(allocator, arg);
+    // }
+
     // Parse config from arguments
     const result = config.Config.parse(list.items, allocator);
-
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
             var typedCfg: config.Config = cfg;
