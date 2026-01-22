@@ -1,17 +1,15 @@
 const std = @import("std");
 
-/// CacheEntry with position tracking in the report
 const CacheEntry = struct {
     mtime: u64,
     size: usize,
-    content: []u8,
-    start_pos: usize, // Where this file's content starts in report.md
-    end_pos: usize, // Where this file's content ends in report.md
+    cache_filename: []u8, // Just the filename in .cache/files/
 };
 
 pub const FileCache = struct {
     allocator: std.mem.Allocator,
     cache_dir: []const u8,
+    files_dir: []const u8,
     small_file_threshold: usize,
     memory_cache: std.StringHashMap(CacheEntry),
     mutex: std.Thread.Mutex,
@@ -20,6 +18,8 @@ pub const FileCache = struct {
 
     pub fn init(allocator: std.mem.Allocator, cache_dir: []const u8, small_file_threshold: usize) !Self {
         const cwd = std.fs.cwd();
+
+        // Create .cache directory
         cwd.makeDir(cache_dir) catch |err| {
             switch (err) {
                 error.PathAlreadyExists => {},
@@ -27,11 +27,24 @@ pub const FileCache = struct {
             }
         };
 
-        const owned_dir = try allocator.dupe(u8, cache_dir);
+        // Create .cache/files directory
+        const files_dir = try std.fmt.allocPrint(allocator, "{s}/files", .{cache_dir});
+        cwd.makeDir(files_dir) catch |err| {
+            switch (err) {
+                error.PathAlreadyExists => {},
+                else => {
+                    allocator.free(files_dir);
+                    return err;
+                },
+            }
+        };
+
+        const owned_cache_dir = try allocator.dupe(u8, cache_dir);
 
         var cache = Self{
             .allocator = allocator,
-            .cache_dir = owned_dir,
+            .cache_dir = owned_cache_dir,
+            .files_dir = files_dir,
             .small_file_threshold = small_file_threshold,
             .memory_cache = std.StringHashMap(CacheEntry).init(allocator),
             .mutex = .{},
@@ -51,39 +64,30 @@ pub const FileCache = struct {
         };
         defer file.close();
 
-        const data = try file.readToEndAlloc(self.allocator, 100 * 1024 * 1024);
+        const data = try file.readToEndAlloc(self.allocator, 10 * 1024 * 1024);
         defer self.allocator.free(data);
 
         var lines = std.mem.splitSequence(u8, data, "\n");
         while (lines.next()) |line| {
             if (line.len == 0) continue;
 
-            // Format: path|mtime|size|start_pos|end_pos|content_file
+            // Format: path|mtime|size|cache_filename
             var parts = std.mem.splitSequence(u8, line, "|");
             const path = parts.next() orelse continue;
             const mtime_str = parts.next() orelse continue;
             const size_str = parts.next() orelse continue;
-            const start_str = parts.next() orelse continue;
-            const end_str = parts.next() orelse continue;
-            const content_file = parts.next() orelse continue;
+            const cache_filename = parts.next() orelse continue;
 
             const mtime = std.fmt.parseInt(u64, mtime_str, 10) catch continue;
             const size = std.fmt.parseInt(usize, size_str, 10) catch continue;
-            const start_pos = std.fmt.parseInt(usize, start_str, 10) catch continue;
-            const end_pos = std.fmt.parseInt(usize, end_str, 10) catch continue;
-
-            const content_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.cache_dir, content_file });
-            defer self.allocator.free(content_path);
-
-            const content = std.fs.cwd().readFileAlloc(self.allocator, content_path, 100 * 1024 * 1024) catch continue;
 
             const path_copy = try self.allocator.dupe(u8, path);
+            const filename_copy = try self.allocator.dupe(u8, cache_filename);
+
             try self.memory_cache.put(path_copy, .{
                 .mtime = mtime,
                 .size = size,
-                .content = content,
-                .start_pos = start_pos,
-                .end_pos = end_pos,
+                .cache_filename = filename_copy,
             });
         }
     }
@@ -96,31 +100,28 @@ pub const FileCache = struct {
         defer file.close();
 
         var it = self.memory_cache.iterator();
-        var counter: usize = 0;
         while (it.next()) |entry| {
-            const content_filename = try std.fmt.allocPrint(self.allocator, "content_{d}", .{counter});
-            defer self.allocator.free(content_filename);
-
-            const content_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{ self.cache_dir, content_filename });
-            defer self.allocator.free(content_path);
-
-            var content_file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
-            defer content_file.close();
-            try content_file.writeAll(entry.value_ptr.content);
-
-            const line = try std.fmt.allocPrint(self.allocator, "{s}|{d}|{d}|{d}|{d}|{s}\n", .{
+            const line = try std.fmt.allocPrint(self.allocator, "{s}|{d}|{d}|{s}\n", .{
                 entry.key_ptr.*,
                 entry.value_ptr.mtime,
                 entry.value_ptr.size,
-                entry.value_ptr.start_pos,
-                entry.value_ptr.end_pos,
-                content_filename,
+                entry.value_ptr.cache_filename,
             });
             defer self.allocator.free(line);
             try file.writeAll(line);
-
-            counter += 1;
         }
+    }
+
+    /// Generate a safe filename from a path
+    fn pathToFilename(self: *Self, path: []const u8) ![]u8 {
+        var result = try self.allocator.alloc(u8, path.len);
+        for (path, 0..) |c, i| {
+            result[i] = switch (c) {
+                '/', '\\', ':', '*', '?', '"', '<', '>', '|' => '_',
+                else => c,
+            };
+        }
+        return result;
     }
 
     pub fn isCached(self: *Self, path: []const u8, mtime: u64, size: usize, _: ?[32]u8) !bool {
@@ -131,35 +132,68 @@ pub const FileCache = struct {
         return entry.mtime == mtime and entry.size == size;
     }
 
-    pub fn getCachedEntry(self: *Self, path: []const u8) !?CacheEntry {
+    /// Get content from cache - returns owned slice that caller must free
+    pub fn getCachedContent(self: *Self, path: []const u8) ![]u8 {
         self.mutex.lock();
-        defer self.mutex.unlock();
+        const entry = self.memory_cache.get(path) orelse {
+            self.mutex.unlock();
+            return error.NotCached;
+        };
+        const cache_filename = entry.cache_filename;
+        self.mutex.unlock();
 
-        return self.memory_cache.get(path);
+        const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
+            self.files_dir,
+            cache_filename,
+        });
+        defer self.allocator.free(cached_path);
+
+        return try std.fs.cwd().readFileAlloc(self.allocator, cached_path, 100 * 1024 * 1024);
     }
 
-    pub fn update(self: *Self, path: []const u8, _: ?[32]u8, mtime: u64, size: usize, content: []const u8, start_pos: usize, end_pos: usize) !void {
+    /// Update cache - copies file content to cache
+    pub fn update(self: *Self, path: []const u8, _: ?[32]u8, mtime: u64, size: usize, content: []const u8) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
+        // Get or create cache filename
+        var cache_filename: []u8 = undefined;
+        var need_to_free_filename = false;
+
         if (self.memory_cache.getPtr(path)) |entry_ptr| {
-            self.allocator.free(entry_ptr.content);
-            const content_copy = try self.allocator.dupe(u8, content);
+            // Update existing entry
+            cache_filename = entry_ptr.cache_filename;
             entry_ptr.mtime = mtime;
             entry_ptr.size = size;
-            entry_ptr.content = content_copy;
-            entry_ptr.start_pos = start_pos;
-            entry_ptr.end_pos = end_pos;
         } else {
+            // New entry - generate filename
+            cache_filename = try self.pathToFilename(path);
+            need_to_free_filename = true;
+
             const path_copy = try self.allocator.dupe(u8, path);
-            const content_copy = try self.allocator.dupe(u8, content);
+            errdefer self.allocator.free(path_copy);
+
             try self.memory_cache.put(path_copy, .{
                 .mtime = mtime,
                 .size = size,
-                .content = content_copy,
-                .start_pos = start_pos,
-                .end_pos = end_pos,
+                .cache_filename = cache_filename,
             });
+            need_to_free_filename = false; // Now owned by hashmap
+        }
+
+        // Write content to cache file
+        const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
+            self.files_dir,
+            cache_filename,
+        });
+        defer self.allocator.free(cached_path);
+
+        var file = try std.fs.cwd().createFile(cached_path, .{ .truncate = true });
+        defer file.close();
+        try file.writeAll(content);
+
+        if (need_to_free_filename) {
+            self.allocator.free(cache_filename);
         }
     }
 
@@ -167,19 +201,31 @@ pub const FileCache = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
+        // Free memory cache
         var it = self.memory_cache.iterator();
         while (it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.content);
+            self.allocator.free(entry.value_ptr.cache_filename);
         }
         self.memory_cache.clearAndFree();
 
+        // Delete all cache files
         var dir = try std.fs.cwd().openDir(self.cache_dir, .{ .iterate = true });
         defer dir.close();
 
         var dir_it = dir.iterate();
         while (try dir_it.next()) |entry| {
-            dir.deleteFile(entry.name) catch {};
+            if (entry.kind == .directory) {
+                var subdir = try dir.openDir(entry.name, .{ .iterate = true });
+                defer subdir.close();
+
+                var subdir_it = subdir.iterate();
+                while (try subdir_it.next()) |subentry| {
+                    subdir.deleteFile(subentry.name) catch {};
+                }
+            } else {
+                dir.deleteFile(entry.name) catch {};
+            }
         }
     }
 
@@ -195,9 +241,10 @@ pub const FileCache = struct {
         var it = self.memory_cache.iterator();
         while (it.next()) |entry| {
             self.allocator.free(entry.key_ptr.*);
-            self.allocator.free(entry.value_ptr.content);
+            self.allocator.free(entry.value_ptr.cache_filename);
         }
         self.memory_cache.deinit();
         self.allocator.free(self.cache_dir);
+        self.allocator.free(self.files_dir);
     }
 };
