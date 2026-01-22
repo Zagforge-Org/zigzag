@@ -194,6 +194,16 @@ pub fn exec(cfg: *const Config, cache: *FileCache) !void {
     const allocator = std.heap.page_allocator;
 
     var file_ctx = Context{ .ignore_list = .{} };
+    defer file_ctx.ignore_list.deinit(allocator);
+
+    // Initialize ignore list from config
+    if (cfg.ignore_patterns.len != 0) {
+        var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
+        while (it.next()) |pattern| {
+            const owned_pattern = try allocator.dupe(u8, pattern);
+            try file_ctx.ignore_list.append(allocator, owned_pattern);
+        }
+    }
 
     var pool = Pool{};
     try pool.init(.{
@@ -218,6 +228,8 @@ pub fn exec(cfg: *const Config, cache: *FileCache) !void {
 
     const walker = try walk.init(allocator);
     const walk_ctx: ?*Context = @ptrCast(@alignCast(&walker_ctx));
+
+    std.log.info("Config path: {s}", .{cfg.path});
 
     try walker.walkDir(cfg.path, walkCallback, walk_ctx);
 
