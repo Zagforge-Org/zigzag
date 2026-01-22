@@ -33,8 +33,13 @@ fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
     return false;
 }
 
-fn processChunk(_: []const u8) void {
-    // Process the chunk of data here
+fn processChunk(_: *Context, chunk: []const u8) void {
+    // Process the chunk data here
+    std.log.info("Processing chunk of size: {d} bytes", .{chunk.len});
+
+    // Optional: Show preview of content
+    const preview_len = @min(chunk.len, 50);
+    std.log.debug("Preview: {s}", .{chunk[0..preview_len]});
 }
 
 /// Stats for tracking cache performance
@@ -128,6 +133,7 @@ fn processFileJob(job: FileJob) anyerror!void {
 
     if (is_cached) {
         // File hasn't changed, skip processing
+        std.log.debug("Cached (skipping): {s}", .{path});
         _ = stats.cached_files.fetchAdd(1, .monotonic);
         return;
     }
@@ -138,18 +144,26 @@ fn processFileJob(job: FileJob) anyerror!void {
 
     // Process the file
     // readFileAuto opens and closes its own file handle
-    var result = fs.readFileAuto(allocator, path, processChunk) catch |err| {
+    var result = fs.readFileAuto(allocator, path, processChunk, ctx.?) catch |err| {
         std.log.debug("Failed to process file {s}: {}", .{ path, err });
         return;
     };
+
     switch (result) {
         .Alloc => |data| {
+            std.log.debug("Read {s} via allocation ({d} bytes)", .{ path, data.len });
+            processChunk(ctx.?, data);
             defer allocator.free(data);
         },
         .Mapped => |*mapped| {
+            std.log.debug("Read {s} via mmap ({d} bytes)", .{ path, mapped.len });
+            processChunk(ctx.?, mapped.data);
             defer mapped.deinit();
         },
-        .Chunked => {},
+        .Chunked => {
+            std.log.debug("Read {s} via chunking", .{path});
+            // Already processed via chunks in readFileChunked
+        },
     }
 
     // Update cache after successful processing
@@ -193,8 +207,30 @@ fn walkCallback(path: []const u8, ctx: ?*Context) anyerror!void {
 pub fn exec(cfg: *const Config, cache: *FileCache) !void {
     const allocator = std.heap.page_allocator;
 
-    var file_ctx = Context{ .ignore_list = .{} };
+    // Build Markdown path relative to cfg.path
+    const md_path = try std.fs.path.join(allocator, &.{
+        cfg.path,
+        "report.md",
+    });
+    defer allocator.free(md_path);
+
+    var md_file = try std.fs.cwd().createFile(md_path, .{
+        .truncate = true,
+    });
+    defer md_file.close();
+
+    var mutex = std.Thread.Mutex{};
+
+    var file_ctx = Context{
+        .ignore_list = .{},
+        .md = &md_file,
+        .md_mutex = &mutex,
+    };
     defer file_ctx.ignore_list.deinit(allocator);
+
+    // Ignore generated Markdown file
+    const owned_md_path = try allocator.dupe(u8, md_path);
+    try file_ctx.ignore_list.append(allocator, owned_md_path);
 
     // Initialize ignore list from config
     if (cfg.ignore_patterns.len != 0) {

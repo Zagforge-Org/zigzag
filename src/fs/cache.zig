@@ -109,10 +109,11 @@ pub const FileCache = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        // Check if we need to allocate a new path
-        if (self.memory_cache.get(path)) |_| {
-            // Path already exists, just update the entry
-            try self.memory_cache.put(path, .{ .mtime = mtime, .size = size });
+        // Try to get existing entry
+        if (self.memory_cache.getPtr(path)) |entry_ptr| {
+            // Path already exists, just update the values in place
+            entry_ptr.mtime = mtime;
+            entry_ptr.size = size;
         } else {
             // New path, need to allocate
             const path_copy = try self.allocator.dupe(u8, path);
