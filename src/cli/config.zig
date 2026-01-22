@@ -16,7 +16,7 @@ pub const Config = struct {
     mmap_threshold: usize,
     skip_git: bool,
     skip_cache: bool,
-    print_strategy: bool,
+    // print_strategy: bool,
     ignore_patterns: []const u8,
     n_threads: usize,
     version: []const u8 = VERSION,
@@ -30,7 +30,7 @@ pub const Config = struct {
             .mmap_threshold = 16 << 20,
             .skip_git = false,
             .skip_cache = false,
-            .print_strategy = false,
+            // .print_strategy = false,
             .ignore_patterns = "",
             .n_threads = std.Thread.getCpuCount() catch 1,
         };
