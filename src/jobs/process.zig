@@ -71,6 +71,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     };
 
+    // stat.mtime is i128 in nanoseconds
     const mtime = stat.mtime;
     const size = stat.size;
 
@@ -91,8 +92,9 @@ pub fn processFileJob(job: Job) anyerror!void {
         };
     }
 
-    const mtime_u64: u64 = @intCast(mtime);
-    const is_cached = cache.isCached(path, mtime_u64, size, hash) catch false;
+    // Convert mtime to u64 seconds for cache operations
+    const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
+    const is_cached = cache.isCached(path, mtime_seconds, size, hash) catch false;
 
     var content: []u8 = undefined;
 
@@ -109,7 +111,7 @@ pub fn processFileJob(job: Job) anyerror!void {
                 return;
             };
 
-            cache.update(path, hash, mtime_u64, size, original_content) catch |update_err| {
+            cache.update(path, hash, mtime_seconds, size, original_content) catch |update_err| {
                 std.log.warn("Failed to update cache after fallback for {s}: {}", .{ path, update_err });
             };
 
@@ -125,12 +127,12 @@ pub fn processFileJob(job: Job) anyerror!void {
             return;
         };
 
-        cache.update(path, hash, mtime_u64, size, content) catch |err| {
+        cache.update(path, hash, mtime_seconds, size, content) catch |err| {
             std.log.err("Failed to update cache for {s}: {} - cache may be inconsistent", .{ path, err });
         };
     }
 
-    // Store for report generation with metadata
+    // Store for report generation with metadata - keep mtime as i128 nanoseconds
     entries_mutex.lock();
     defer entries_mutex.unlock();
 
@@ -142,7 +144,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         .path = path_copy,
         .content = content,
         .size = size,
-        .mtime = mtime,
+        .mtime = mtime, // Keep as i128 nanoseconds
         .extension = ext_copy,
     });
 }

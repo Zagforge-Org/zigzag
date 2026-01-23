@@ -42,31 +42,51 @@ pub const JobEntry = struct {
     /// If timezone_offset is provided, converts from UTC to local time
     /// timezone_offset is in seconds (e.g., 3600 for UTC+1)
     pub fn formatMtime(self: *const Self, allocator: std.mem.Allocator, timezone_offset: ?i64) ![]u8 {
-        var timestamp: i64 = @intCast(@divFloor(self.mtime, std.time.ns_per_s));
+        // mtime is in nanoseconds since epoch (i128)
+        const timestamp_seconds: i64 = @intCast(@divFloor(self.mtime, std.time.ns_per_s));
 
-        // Apply timezone offset if provided
-        if (timezone_offset) |offset| {
-            timestamp += offset;
-        }
+        // DEBUG: Log what we're working with
+        std.log.debug("formatMtime DEBUG:", .{});
+        std.log.debug("  mtime (ns): {d}", .{self.mtime});
+        std.log.debug("  timestamp_seconds: {d}", .{timestamp_seconds});
+        std.log.debug("  timezone_offset: {?d}", .{timezone_offset});
 
-        const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(timestamp) };
+        // Apply timezone offset to convert UTC to local time
+        const local_timestamp = if (timezone_offset) |offset| blk: {
+            const adjusted = timestamp_seconds + offset;
+            std.log.debug("  adjusted timestamp: {d}", .{adjusted});
+            break :blk adjusted;
+        } else timestamp_seconds;
+
+        const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_timestamp) };
         const day_seconds = epoch_seconds.getDaySeconds();
         const epoch_day = epoch_seconds.getEpochDay();
         const year_day = epoch_day.calculateYearDay();
         const month_day = year_day.calculateMonthDay();
 
+        // Format timezone suffix
         const tz_suffix = if (timezone_offset) |offset| blk: {
-            const hours = @divFloor(offset, 3600);
-            const mins = @mod(@divFloor(@abs(offset), 60), 60);
-            if (hours >= 0) {
-                break :blk try std.fmt.allocPrint(allocator, " (UTC+{d}:{d:0>2})", .{ hours, mins });
+            const abs_offset: i64 = if (offset < 0) -offset else offset;
+            const hours = @divFloor(abs_offset, 3600);
+            const mins = @mod(@divFloor(abs_offset, 60), 60);
+
+            if (offset >= 0) {
+                if (mins == 0) {
+                    break :blk try std.fmt.allocPrint(allocator, " (UTC+{d})", .{hours});
+                } else {
+                    break :blk try std.fmt.allocPrint(allocator, " (UTC+{d}:{d:0>2})", .{ hours, mins });
+                }
             } else {
-                break :blk try std.fmt.allocPrint(allocator, " (UTC{d}:{d:0>2})", .{ hours, mins });
+                if (mins == 0) {
+                    break :blk try std.fmt.allocPrint(allocator, " (UTC-{d})", .{hours});
+                } else {
+                    break :blk try std.fmt.allocPrint(allocator, " (UTC-{d}:{d:0>2})", .{ hours, mins });
+                }
             }
-        } else "";
+        } else " (UTC)";
         defer if (timezone_offset != null) allocator.free(tz_suffix);
 
-        return std.fmt.allocPrint(
+        const result = try std.fmt.allocPrint(
             allocator,
             "{d}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}{s}",
             .{
@@ -79,5 +99,8 @@ pub const JobEntry = struct {
                 tz_suffix,
             },
         );
+
+        std.log.debug("  formatted result: {s}", .{result});
+        return result;
     }
 };

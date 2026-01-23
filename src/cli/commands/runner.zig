@@ -147,17 +147,29 @@ fn processPath(
     var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
 
-    // Write header with path information
+    // Get current time in the configured timezone
+    const now = std.time.timestamp();
+    const local_now = if (cfg.timezone_offset) |offset| now + offset else now;
+
+    const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_now) };
+    const day_seconds = epoch_seconds.getDaySeconds();
+    const epoch_day = epoch_seconds.getEpochDay();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+
     const header = try std.fmt.allocPrint(
         allocator,
         "# Code Report for: `{s}`\n\n" ++
-            "Generated on: {d}-{d:0>2}-{d:0>2}\n\n" ++
+            "Generated on: {d}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}\n\n" ++
             "---\n\n",
         .{
             path,
-            @as(i32, @intCast(@divFloor(std.time.timestamp(), 31536000) + 1970)),
-            @as(u8, @intCast(@mod(@divFloor(std.time.timestamp(), 2628000), 12) + 1)),
-            @as(u8, @intCast(@mod(@divFloor(std.time.timestamp(), 86400), 30) + 1)),
+            year_day.year,
+            month_day.month.numeric(),
+            month_day.day_index + 1,
+            day_seconds.getHoursIntoDay(),
+            day_seconds.getMinutesIntoHour(),
+            day_seconds.getSecondsIntoMinute(),
         },
     );
     defer allocator.free(header);
