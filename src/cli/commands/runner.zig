@@ -76,18 +76,6 @@ fn processPath(
 ) !void {
     std.log.info("Processing path: {s}", .{path});
 
-    // _ = std.fs.cwd().statFile(path) catch |err| {
-    //     switch (err) {
-    //         error.FileNotFound => {
-    //             std.log.err("zig-zag: path not found: {s}", .{path});
-    //         },
-    //         else => {
-    //             std.log.err("zig-zag: filesystem error for {s}: {s}", .{ path, @errorName(err) });
-    //         },
-    //     }
-    //     return;
-    // };
-    //
     var dir = std.fs.cwd().openDir(path, .{}) catch |err| {
         std.log.err("zig-zag: failed to open directory {s}: {s}", .{ path, @errorName(err) });
         return;
