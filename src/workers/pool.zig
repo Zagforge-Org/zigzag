@@ -74,7 +74,7 @@ pub const Pool = struct {
 
         if (self.threads.len > 0) {
             self.allocator.free(self.threads);
-            self.threads = &[_]std.Thread{};
+            self.threads = &.{};
         }
     }
 
