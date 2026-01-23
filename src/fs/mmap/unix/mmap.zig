@@ -1,10 +1,5 @@
 const std = @import("std");
-
-const FileError = error{
-    EmptyFile,
-    MapViewFailed,
-    MMapFailed,
-};
+const FileError = @import("../common.zig").FileError;
 
 pub const UnixMMap = struct {
     const Self = @This();

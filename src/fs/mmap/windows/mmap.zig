@@ -1,12 +1,7 @@
 const std = @import("std");
-const windows_api = @import("../../api/win.zig");
+const api = @import("../../../platform/windows/api.zig");
 const windows = std.os.windows;
-
-const FileError = error{
-    EmptyFile,
-    MapViewFailed,
-    MMapFailed,
-};
+const FileError = @import("../common.zig").FileError;
 
 pub const WinMMap = struct {
     data: []const u8,
@@ -21,10 +16,10 @@ pub const WinMMap = struct {
         const size = try file.getEndPos();
         if (size == 0) return Self{ .data = &[_]u8{}, .mapping = null };
 
-        const mapping = windows_api.CreateFileMappingW(
+        const mapping = api.CreateFileMappingW(
             file.handle,
             null,
-            windows_api.PAGE_READONLY,
+            api.PAGE_READONLY,
             @intCast(size >> 32),
             @intCast(size & 0xffffffff),
             null,
@@ -34,16 +29,16 @@ pub const WinMMap = struct {
             return error.MMapFailed;
         }
 
-        const view = windows_api.MapViewOfFile(
+        const view = api.MapViewOfFile(
             mapping,
-            windows_api.FILE_MAP_READ,
+            api.FILE_MAP_READ,
             0,
             0,
             0,
         );
         // if (view == null) return error.MapViewFailed;
         if (@intFromPtr(view) == 0) {
-            _ = windows_api.CloseHandle(mapping);
+            _ = api.CloseHandle(mapping);
             return error.MapViewFailed;
         }
 
@@ -57,11 +52,11 @@ pub const WinMMap = struct {
 
     pub fn close(self: *WinMMap) !void {
         if (self.data.len != 0) {
-            _ = windows_api.UnmapViewOfFile(self.data.ptr);
+            _ = api.UnmapViewOfFile(self.data.ptr);
             self.data = &[_]u8{};
         }
         if (self.mapping != null) {
-            _ = windows_api.CloseHandle(self.mapping);
+            _ = api.CloseHandle(self.mapping);
             self.mapping = null;
         }
     }

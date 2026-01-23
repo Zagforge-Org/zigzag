@@ -1,6 +1,6 @@
 const std = @import("std");
 const Config = @import("config.zig").Config;
-const handler = @import("handler.zig");
+const handler = @import("handlers.zig");
 
 pub const OptionHandler = struct {
     name: []const u8,

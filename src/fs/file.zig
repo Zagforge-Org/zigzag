@@ -1,9 +1,9 @@
 const std = @import("std");
-const winMmap = @import("./mmap/win.zig").WinMMap;
-const unixMmap = @import("./mmap/unix.zig").UnixMMap;
-const windows_api = @import("../api/win.zig");
+const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
+const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
+const api = @import("../platform/windows/api.zig");
 const Context = @import("../cli/context.zig").Context;
-const TProcessChunk = @import("../cli/process_chunk.zig").TProcessChunk;
+const TProcessChunk = @import("../cli/writer.zig").TProcessChunk;
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
@@ -31,7 +31,7 @@ pub const MappedFile = struct {
             switch (builtin.os.tag) {
                 .windows => _ = {
                     const ptr: *anyopaque = @ptrCast(@constCast(self.data.ptr));
-                    _ = windows_api.UnmapViewOfFile(ptr);
+                    _ = api.UnmapViewOfFile(ptr);
                 },
                 else => _ = std.os.linux.munmap(self.data.ptr, self.len),
             }

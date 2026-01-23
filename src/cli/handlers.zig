@@ -44,23 +44,11 @@ pub fn handlePath(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8
     cfg.path = value.?;
 }
 
-// pub fn handleSkipGit(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
-//     _ = allocator;
-//     _ = value;
-//     cfg.skip_git = true;
-// }
-
 pub fn handleSkipCache(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
     cfg.skip_cache = true;
 }
-
-// pub fn handleStrategy(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
-//     _ = allocator;
-//     _ = value;
-//     // cfg.print_strategy = true;
-// }
 
 pub fn handleSmall(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;

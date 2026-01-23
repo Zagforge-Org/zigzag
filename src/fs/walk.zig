@@ -1,6 +1,6 @@
 const std = @import("std");
-const Context = @import("../cli/context.zig").Context;
-const TProcessChunk = @import("../cli/process_chunk.zig").TProcessChunk;
+const FileContext = @import("../cli/context.zig").FileContext;
+const TProcessWriter = @import("../cli/writer.zig").TProcessWriter;
 
 pub const WalkError = error{
     NotADictionary,
@@ -20,8 +20,8 @@ pub const Walk = struct {
     pub fn walkDir(
         self: Self,
         path: []const u8,
-        callback: TProcessChunk,
-        ctx: ?*Context,
+        callback: TProcessWriter,
+        ctx: ?*FileContext,
     ) !void {
         try self.walkDirInternal(path, callback, ctx);
     }
@@ -29,8 +29,8 @@ pub const Walk = struct {
     fn walkDirInternal(
         self: Self,
         path: []const u8,
-        callback: TProcessChunk,
-        ctx: ?*Context,
+        callback: TProcessWriter,
+        ctx: ?*FileContext,
     ) !void {
         var dir = try std.fs.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true });
         defer dir.close();

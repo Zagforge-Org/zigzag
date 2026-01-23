@@ -1,7 +1,7 @@
 const std = @import("std");
 const config = @import("./cli/config.zig");
 const runner = @import("./cli/runner.zig");
-const FileCache = @import("./fs/cache.zig").FileCache;
+const CacheImpl = @import("cache/impl.zig").CacheImpl;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -31,7 +31,7 @@ pub fn main() !void {
 
             // Initialize cache with 64KB threshold for small files
             // Small files use path-based caching, large files use hash-based caching
-            var cache = try FileCache.init(allocator, cache_path, typedCfg.small_threshold);
+            var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
             defer cache.deinit();
 
             if (typedCfg.skip_cache) {

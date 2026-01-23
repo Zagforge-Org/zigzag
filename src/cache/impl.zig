@@ -1,12 +1,7 @@
 const std = @import("std");
+const CacheEntry = @import("entry.zig").CacheEntry;
 
-const CacheEntry = struct {
-    mtime: u64,
-    size: usize,
-    cache_filename: []u8, // Just the filename in .cache/files/
-};
-
-pub const FileCache = struct {
+pub const CacheImpl = struct {
     allocator: std.mem.Allocator,
     cache_dir: []const u8,
     files_dir: []const u8,
