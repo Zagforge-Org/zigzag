@@ -2,7 +2,7 @@ const std = @import("std");
 
 const FileContext = @import("../cli/context.zig").FileContext;
 const CacheImpl = @import("../cache/impl.zig").CacheImpl;
-const ProcessStats = @import("../cli/stats.zig").ProcessStats;
+const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;
 const JobEntry = @import("entry.zig").JobEntry;
 
 pub const Job = struct {

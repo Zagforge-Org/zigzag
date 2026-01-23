@@ -1,6 +1,6 @@
 const std = @import("std");
 const FileContext = @import("../cli/context.zig").FileContext;
-const TProcessWriter = @import("../cli/writer.zig").TProcessWriter;
+const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
 
 pub const WalkError = error{
     NotADictionary,

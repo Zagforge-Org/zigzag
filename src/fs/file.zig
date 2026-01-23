@@ -3,7 +3,7 @@ const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
 const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
 const api = @import("../platform/windows/api.zig");
 const Context = @import("../cli/context.zig").Context;
-const TProcessChunk = @import("../cli/writer.zig").TProcessChunk;
+const TProcessChunk = @import("../cli/commands/writer.zig").TProcessChunk;
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)

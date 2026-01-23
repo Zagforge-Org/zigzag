@@ -1,6 +1,6 @@
 const std = @import("std");
-const config = @import("./cli/config.zig");
-const runner = @import("./cli/runner.zig");
+const config = @import("./cli/commands/config.zig");
+const runner = @import("./cli/commands/runner.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 
 pub fn main() !void {

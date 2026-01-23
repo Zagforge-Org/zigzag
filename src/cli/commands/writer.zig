@@ -1,4 +1,4 @@
-const FileContext = @import("context.zig").FileContext;
+const FileContext = @import("../context.zig").FileContext;
 
 pub const TProcessWriter = fn (*FileContext, []const u8) anyerror!void;
 

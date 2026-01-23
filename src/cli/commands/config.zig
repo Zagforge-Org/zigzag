@@ -1,5 +1,5 @@
 const std = @import("std");
-const options = @import("options.zig").options;
+const options = @import("../options.zig").options;
 
 pub const VERSION = "0.1.0"; // Bump accordingly
 

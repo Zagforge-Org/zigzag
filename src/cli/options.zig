@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("config.zig").Config;
+const Config = @import("./commands/config.zig").Config;
 const handler = @import("handlers.zig");
 
 pub const OptionHandler = struct {

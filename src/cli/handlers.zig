@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("config.zig").Config;
+const Config = @import("./commands/config.zig").Config;
 
 pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
