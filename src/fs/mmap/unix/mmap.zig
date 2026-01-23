@@ -1,6 +1,7 @@
 const std = @import("std");
 const FileError = @import("../common.zig").FileError;
 
+/// UnixMMap represents a memory-mapped file on Unix-like systems.
 pub const UnixMMap = struct {
     const Self = @This();
     data: []u8,

@@ -3,6 +3,7 @@ const options = @import("../options.zig").options;
 
 pub const VERSION = "0.1.0"; // Bump accordingly
 
+/// ConfigParseResult represents the result of parsing a configuration.
 pub const ConfigParseResult = union(enum) {
     Success: Config,
     MissingValue: []const u8,
@@ -10,6 +11,7 @@ pub const ConfigParseResult = union(enum) {
     Other: []const u8,
 };
 
+/// Config represents the configuration for the application.
 pub const Config = struct {
     path: []const u8,
     small_threshold: usize,
@@ -22,6 +24,7 @@ pub const Config = struct {
 
     const Self = @This();
 
+    /// Initializes a default configuration.
     fn initDefault() Self {
         return Self{
             .path = ".",
@@ -34,6 +37,7 @@ pub const Config = struct {
         };
     }
 
+    /// Parses command-line arguments and returns a ConfigParseResult.
     pub fn parse(args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
         var cfg = Self.initDefault();
 

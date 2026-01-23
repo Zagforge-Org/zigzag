@@ -1,6 +1,11 @@
 const std = @import("std");
+
 const fs = @import("../../fs/file.zig");
 const walk = @import("../../fs/walk.zig").Walk;
+
+const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
+const processFileJob = @import("../../jobs/process.zig").processFileJob;
+
 const Config = @import("../commands/config.zig").Config;
 const FileContext = @import("../context.zig").FileContext;
 const Pool = @import("../../workers/pool.zig").Pool;
@@ -11,9 +16,7 @@ const Job = @import("../../jobs/job.zig").Job;
 const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 
-const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
-const processFileJob = @import("../../jobs/process.zig").processFileJob;
-
+/// Executes the runner command.
 pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
     const allocator = std.heap.page_allocator;
 

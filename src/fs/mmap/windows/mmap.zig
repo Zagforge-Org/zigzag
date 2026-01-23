@@ -3,6 +3,7 @@ const api = @import("../../../platform/windows/api.zig");
 const windows = std.os.windows;
 const FileError = @import("../common.zig").FileError;
 
+/// WinMMap represents a memory-mapped file on Windows.
 pub const WinMMap = struct {
     data: []const u8,
     mapping: ?windows.HANDLE,

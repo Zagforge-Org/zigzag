@@ -1,6 +1,7 @@
 const std = @import("std");
 const Config = @import("./commands/config.zig").Config;
 
+/// printVersion prints version information.
 pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
@@ -12,6 +13,7 @@ pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const 
     , .{cfg.version});
 }
 
+/// printHelp prints help information.
 pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = cfg;
     _ = allocator;
@@ -34,22 +36,26 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     , .{});
 }
 
+/// handleIgnore handles the ignore option.
 pub fn handleIgnore(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     cfg.ignore_patterns = value.?;
 }
 
+/// handlePath handles the path option.
 pub fn handlePath(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     cfg.path = value.?;
 }
 
+/// handleSkipCache handles the skip-cache option.
 pub fn handleSkipCache(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
     cfg.skip_cache = true;
 }
 
+/// handleSmall handles the small option.
 pub fn handleSmall(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     if (value) |v| {
@@ -57,6 +63,7 @@ pub fn handleSmall(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u
     }
 }
 
+/// handleMmap handles the mmap option.
 pub fn handleMmap(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     if (value) |v| {

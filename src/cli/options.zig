@@ -2,6 +2,7 @@ const std = @import("std");
 const Config = @import("./commands/config.zig").Config;
 const handler = @import("handlers.zig");
 
+///  OptionHandler represents a command-line option.
 pub const OptionHandler = struct {
     name: []const u8,
     takes_value: bool,

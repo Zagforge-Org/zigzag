@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// ProcessStats processes statistics about the files processed by the runner.
 pub const ProcessStats = struct {
     cached_files: std.atomic.Value(usize),
     processed_files: std.atomic.Value(usize),

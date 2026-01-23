@@ -7,7 +7,7 @@ const TProcessChunk = @import("../cli/commands/writer.zig").TProcessChunk;
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
-pub const MMAP_THRESHOLD: usize = 16 << 20; // 16 MiB
+const MMAP_THRESHOLD: usize = 16 << 20; // 16 MiB
 
 const FileError = error{
     NotAFile,
@@ -119,6 +119,6 @@ pub fn readFileAuto(
     }
 
     // Very large files → stream in chunks
-    try readFileChunked(path, process, ctx); // ⚠ missing ctx here
+    try readFileChunked(path, process, ctx);
     return .{ .Chunked = {} };
 }
