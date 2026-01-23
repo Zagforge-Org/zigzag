@@ -65,11 +65,25 @@ pub const CacheImpl = struct {
             const path = entry.key_ptr.*;
 
             // Check if file still exists
-            const stat = std.fs.cwd().statFile(path) catch {
-                // File no longer exists - mark for removal
-                const path_copy = try self.allocator.dupe(u8, path);
-                try invalid_entries.append(self.allocator, path_copy);
-                continue;
+            // const stat = std.fs.cwd().statFile(path) catch {
+            //     // File no longer exists - mark for removal
+            //     const path_copy = try self.allocator.dupe(u8, path);
+            //     try invalid_entries.append(self.allocator, path_copy);
+            //     continue;
+            // };
+            //
+
+            const stat = std.fs.cwd().statFile(path) catch |err| switch (err) {
+                error.FileNotFound => {
+                    // File genuinely gone → mark for removal
+                    const path_copy = try self.allocator.dupe(u8, path);
+                    try invalid_entries.append(self.allocator, path_copy);
+                    continue;
+                },
+                else => {
+                    // Unexpected filesystem error → propagate
+                    return err;
+                },
             };
 
             const mtime = @as(u64, @intCast(stat.mtime));
