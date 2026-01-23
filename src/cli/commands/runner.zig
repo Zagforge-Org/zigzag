@@ -13,6 +13,59 @@ const Job = @import("../../jobs/job.zig").Job;
 const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 
+/// Write a single file entry to the report with metadata
+fn writeFileEntry(
+    md_file: *std.fs.File,
+    entry: *const JobEntry,
+    allocator: std.mem.Allocator,
+    timezone_offset: ?i64,
+) !void {
+    // Format metadata
+    const size_str = try entry.formatSize(allocator);
+    defer allocator.free(size_str);
+
+    const mtime_str = try entry.formatMtime(allocator, timezone_offset);
+    defer allocator.free(mtime_str);
+
+    const lang = entry.getLanguage();
+
+    // Write file header with metadata
+    const header = try std.fmt.allocPrint(
+        allocator,
+        "## File: `{s}`\n\n" ++
+            "**Metadata:**\n" ++
+            "- **Size:** {s}\n" ++
+            "- **Language:** {s}\n" ++
+            "- **Last Modified:** {s}\n\n",
+        .{
+            entry.path,
+            size_str,
+            if (lang.len > 0) lang else "unknown",
+            mtime_str,
+        },
+    );
+    defer allocator.free(header);
+
+    try md_file.writeAll(header);
+
+    // Write code block with language identifier
+    const code_fence_start = if (lang.len > 0)
+        try std.fmt.allocPrint(allocator, "```{s}\n", .{lang})
+    else
+        try allocator.dupe(u8, "```\n");
+    defer allocator.free(code_fence_start);
+
+    try md_file.writeAll(code_fence_start);
+    try md_file.writeAll(entry.content);
+
+    // Ensure content ends with newline before closing fence
+    if (entry.content.len > 0 and entry.content[entry.content.len - 1] != '\n') {
+        try md_file.writeAll("\n");
+    }
+
+    try md_file.writeAll("```\n\n");
+}
+
 /// Process a single directory path
 fn processPath(
     cfg: *const Config,
@@ -65,6 +118,7 @@ fn processPath(
         while (it.next()) |entry| {
             allocator.free(entry.value_ptr.path);
             allocator.free(entry.value_ptr.content);
+            allocator.free(entry.value_ptr.extension);
         }
         file_entries.deinit();
     }
@@ -94,13 +148,72 @@ fn processPath(
     defer md_file.close();
 
     // Write header with path information
-    const header = try std.fmt.allocPrint(allocator, "# Report for: {s}\n\n", .{path});
+    const header = try std.fmt.allocPrint(
+        allocator,
+        "# Code Report for: `{s}`\n\n" ++
+            "Generated on: {d}-{d:0>2}-{d:0>2}\n\n" ++
+            "---\n\n",
+        .{
+            path,
+            @as(i32, @intCast(@divFloor(std.time.timestamp(), 31536000) + 1970)),
+            @as(u8, @intCast(@mod(@divFloor(std.time.timestamp(), 2628000), 12) + 1)),
+            @as(u8, @intCast(@mod(@divFloor(std.time.timestamp(), 86400), 30) + 1)),
+        },
+    );
     defer allocator.free(header);
     try md_file.writeAll(header);
 
+    // Write table of contents
+    try md_file.writeAll("## Table of Contents\n\n");
+
+    var toc_list: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (toc_list.items) |item| {
+            allocator.free(item);
+        }
+        toc_list.deinit(allocator);
+    }
+
     var it = file_entries.iterator();
     while (it.next()) |entry| {
-        try md_file.writeAll(entry.value_ptr.content);
+        const toc_entry = try std.fmt.allocPrint(allocator, "- [{s}](#{s})\n", .{
+            entry.value_ptr.path,
+            entry.value_ptr.path,
+        });
+        try toc_list.append(allocator, toc_entry);
+    }
+
+    // Sort TOC entries for consistent output
+    std.mem.sort([]const u8, toc_list.items, {}, struct {
+        fn lessThan(_: void, a: []const u8, b: []const u8) bool {
+            return std.mem.lessThan(u8, a, b);
+        }
+    }.lessThan);
+
+    for (toc_list.items) |toc_entry| {
+        try md_file.writeAll(toc_entry);
+    }
+
+    try md_file.writeAll("\n---\n\n");
+
+    // Write file entries with metadata
+    var sorted_entries: std.ArrayList(JobEntry) = .empty;
+    defer sorted_entries.deinit(allocator);
+
+    it = file_entries.iterator();
+    while (it.next()) |entry| {
+        try sorted_entries.append(allocator, entry.value_ptr.*);
+    }
+
+    // Sort entries by path for consistent output
+    std.mem.sort(JobEntry, sorted_entries.items, {}, struct {
+        fn lessThan(_: void, a: JobEntry, b: JobEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    for (sorted_entries.items) |*entry| {
+        try writeFileEntry(&md_file, entry, allocator, cfg.timezone_offset);
     }
 
     std.log.info("=== Summary for {s} ===", .{path});

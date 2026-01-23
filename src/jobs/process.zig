@@ -11,6 +11,18 @@ fn basename(path: []const u8) []const u8 {
     return path[lastSlash..];
 }
 
+fn getExtension(path: []const u8) []const u8 {
+    const name = basename(path);
+    var i: usize = name.len;
+    while (i > 0) {
+        i -= 1;
+        if (name[i] == '.') {
+            return name[i..];
+        }
+    }
+    return "";
+}
+
 fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
     const name = basename(file);
     if (std.mem.indexOf(u8, file, ".cache") != null) return true;
@@ -48,7 +60,7 @@ pub fn processFileJob(job: Job) anyerror!void {
 
     const allocator = std.heap.page_allocator;
 
-    // Check if file still exists (it may have been moved/deleted)
+    // Check if file still exists
     const stat = std.fs.cwd().statFile(path) catch |err| {
         if (err == error.FileNotFound) {
             std.log.debug("File not found (may have been moved/deleted): {s}", .{path});
@@ -59,7 +71,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     };
 
-    const mtime = @as(u64, @intCast(stat.mtime));
+    const mtime = stat.mtime;
     const size = stat.size;
 
     // Skip empty files
@@ -79,38 +91,33 @@ pub fn processFileJob(job: Job) anyerror!void {
         };
     }
 
-    const is_cached = cache.isCached(path, mtime, size, hash) catch false;
+    const mtime_u64: u64 = @intCast(mtime);
+    const is_cached = cache.isCached(path, mtime_u64, size, hash) catch false;
 
     var content: []u8 = undefined;
 
     if (is_cached) {
-        // Read from cache
         std.log.debug("Cached (reading from .cache): {s}", .{path});
         _ = stats.cached_files.fetchAdd(1, .monotonic);
-
         content = cache.getCachedContent(path) catch blk: {
             std.log.warn("Cache hit but failed to read cache for {s}, reading original", .{path});
             _ = stats.cached_files.fetchSub(1, .monotonic);
             _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-            // Fallback to reading original file
             const original_content = fs.readFileAlloc(allocator, path) catch |read_err| {
                 std.log.err("Failed to read original file {s} after cache miss: {}", .{ path, read_err });
                 return;
             };
 
-            // Try to update cache with the content we just read
-            cache.update(path, hash, mtime, size, original_content) catch |update_err| {
+            cache.update(path, hash, mtime_u64, size, original_content) catch |update_err| {
                 std.log.warn("Failed to update cache after fallback for {s}: {}", .{ path, update_err });
             };
 
             break :blk original_content;
         };
     } else {
-        // Read original file and update cache
         std.log.info("Processing (reading original): {s}", .{path});
         _ = stats.processed_files.fetchAdd(1, .monotonic);
-
         content = fs.readFileAlloc(allocator, path) catch |err| {
             std.log.debug("Failed to read file {s}: {}", .{ path, err });
             _ = stats.processed_files.fetchSub(1, .monotonic);
@@ -118,20 +125,24 @@ pub fn processFileJob(job: Job) anyerror!void {
             return;
         };
 
-        // Update cache
-        cache.update(path, hash, mtime, size, content) catch |err| {
+        cache.update(path, hash, mtime_u64, size, content) catch |err| {
             std.log.err("Failed to update cache for {s}: {} - cache may be inconsistent", .{ path, err });
-            // Continue anyway - we still have the content in memory
         };
     }
 
-    // Store for report generation
+    // Store for report generation with metadata
     entries_mutex.lock();
     defer entries_mutex.unlock();
 
     const path_copy = try allocator.dupe(u8, path);
+    const extension = getExtension(path);
+    const ext_copy = try allocator.dupe(u8, extension);
+
     try file_entries.put(path_copy, .{
         .path = path_copy,
-        .content = content, // Transfer ownership
+        .content = content,
+        .size = size,
+        .mtime = mtime,
+        .extension = ext_copy,
     });
 }

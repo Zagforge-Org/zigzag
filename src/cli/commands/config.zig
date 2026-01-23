@@ -13,14 +13,15 @@ pub const ConfigParseResult = union(enum) {
 
 /// Config represents the configuration for the application.
 pub const Config = struct {
-    paths: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
+    paths: std.ArrayList([]const u8),
     small_threshold: usize,
     mmap_threshold: usize,
     skip_git: bool,
     skip_cache: bool,
     ignore_patterns: []const u8,
     n_threads: usize,
+    timezone_offset: ?i64, // Offset in seconds from UTC (e.g., 3600 for UTC+1)
     version: []const u8 = VERSION,
 
     const Self = @This();
@@ -28,14 +29,15 @@ pub const Config = struct {
     /// Initializes a default configuration.
     fn initDefault(allocator: std.mem.Allocator) Self {
         return Self{
-            .paths = .empty,
             .allocator = allocator,
+            .paths = .empty,
             .small_threshold = 1 << 20,
             .mmap_threshold = 16 << 20,
             .skip_git = false,
             .skip_cache = false,
             .ignore_patterns = "",
             .n_threads = std.Thread.getCpuCount() catch 1,
+            .timezone_offset = null, // Default to UTC
         };
     }
 

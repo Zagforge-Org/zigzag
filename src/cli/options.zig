@@ -17,4 +17,5 @@ pub const options = [_]OptionHandler{
     .{ .name = "--mmap", .takes_value = true, .handler = &handler.handleMmap },
     .{ .name = "--path", .takes_value = true, .handler = &handler.handlePath },
     .{ .name = "--ignore", .takes_value = true, .handler = &handler.handleIgnore },
+    .{ .name = "--timezone", .takes_value = true, .handler = &handler.handleTimezone },
 };
