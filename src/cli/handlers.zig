@@ -7,7 +7,7 @@ pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const 
     _ = value;
 
     std.debug.print(
-        \\ai-proj
+        \\zig-zag
         \\version {s}
         \\
     , .{cfg.version});
@@ -20,7 +20,7 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     _ = value;
 
     std.debug.print(
-        \\Usage: ai-proj [OPTIONS]
+        \\Usage: zig-zag [OPTIONS]
         \\
         \\Options:
         \\  --help                 Print this help message
