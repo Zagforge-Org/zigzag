@@ -25,12 +25,13 @@ pub fn main() !void {
 
     // Parse config from arguments
     const result = config.Config.parse(list.items, allocator);
+
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
             var typedCfg: config.Config = cfg;
+            defer typedCfg.deinit();
 
-            // Initialize cache with 64KB threshold for small files
-            // Small files use path-based caching, large files use hash-based caching
+            // Initialize cache with configured threshold
             var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
             defer cache.deinit();
 
@@ -46,7 +47,7 @@ pub fn main() !void {
                         std.log.err("zig-zag: path not found", .{});
                     },
                     else => {
-                        std.log.err("zig-zag: error executing runner", .{});
+                        std.log.err("zig-zag: error executing runner: {s}", .{@errorName(err)});
                     },
                 }
             };

@@ -1,11 +1,8 @@
 const std = @import("std");
-
 const fs = @import("../../fs/file.zig");
 const walk = @import("../../fs/walk.zig").Walk;
-
 const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../jobs/process.zig").processFileJob;
-
 const Config = @import("../commands/config.zig").Config;
 const FileContext = @import("../context.zig").FileContext;
 const Pool = @import("../../workers/pool.zig").Pool;
@@ -16,26 +13,29 @@ const Job = @import("../../jobs/job.zig").Job;
 const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 
-/// Executes the runner command.
-pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
-    const allocator = std.heap.page_allocator;
+/// Process a single directory path
+fn processPath(
+    cfg: *const Config,
+    cache: *CacheImpl,
+    path: []const u8,
+    pool: *Pool,
+    allocator: std.mem.Allocator,
+) !void {
+    std.log.info("Processing path: {s}", .{path});
 
-    _ = std.fs.cwd().statFile(cfg.path) catch |err| {
+    _ = std.fs.cwd().statFile(path) catch |err| {
         switch (err) {
             error.FileNotFound => {
-                std.log.err("zig-zag: path not found", .{});
+                std.log.err("zig-zag: path not found: {s}", .{path});
             },
             else => {
-                std.log.err("zig-zag: filesystem error: {s}", .{@errorName(err)});
+                std.log.err("zig-zag: filesystem error for {s}: {s}", .{ path, @errorName(err) });
             },
         }
         return;
     };
 
-    const md_path = try std.fs.path.join(allocator, &.{
-        cfg.path,
-        "report.md",
-    });
+    const md_path = try std.fs.path.join(allocator, &.{ path, "report.md" });
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
@@ -56,13 +56,6 @@ pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
         }
     }
 
-    var pool = Pool{};
-    try pool.init(.{
-        .allocator = allocator,
-        .n_jobs = cfg.n_threads,
-    });
-    defer pool.deinit();
-
     var wg = WaitGroup.init();
     var stats = ProcessStats.init();
 
@@ -79,7 +72,7 @@ pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
     var entries_mutex = std.Thread.Mutex{};
 
     var walker_ctx = WalkerCtx{
-        .pool = &pool,
+        .pool = pool,
         .wg = &wg,
         .file_ctx = &file_ctx,
         .cache = cache,
@@ -92,21 +85,44 @@ pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
     const walker = try walk.init(allocator);
     const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
 
-    std.log.info("Config path: {s}", .{cfg.path});
-
-    try walker.walkDir(cfg.path, walkerCallback, walk_ctx);
+    try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
 
     // Build report.md from all collected files
-    std.log.info("Building report.md...", .{});
-
+    std.log.info("Building report.md for {s}...", .{path});
     var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
+
+    // Write header with path information
+    const header = try std.fmt.allocPrint(allocator, "# Report for: {s}\n\n", .{path});
+    defer allocator.free(header);
+    try md_file.writeAll(header);
 
     var it = file_entries.iterator();
     while (it.next()) |entry| {
         try md_file.writeAll(entry.value_ptr.content);
     }
 
+    std.log.info("=== Summary for {s} ===", .{path});
     stats.printSummary();
+}
+
+/// Executes the runner command for all configured paths.
+pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
+    const allocator = std.heap.page_allocator;
+
+    var pool = Pool{};
+    try pool.init(.{
+        .allocator = allocator,
+        .n_jobs = cfg.n_threads,
+    });
+    defer pool.deinit();
+
+    std.log.info("Processing {d} path(s)...", .{cfg.paths.items.len});
+
+    for (cfg.paths.items) |path| {
+        try processPath(cfg, cache, path, &pool, allocator);
+    }
+
+    std.log.info("All paths processed successfully!", .{});
 }

@@ -5,7 +5,6 @@ const Config = @import("./commands/config.zig").Config;
 pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
-
     std.debug.print(
         \\zig-zag
         \\version {s}
@@ -18,20 +17,23 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     _ = cfg;
     _ = allocator;
     _ = value;
-
     std.debug.print(
         \\Usage: zig-zag [OPTIONS]
         \\
         \\Options:
-        \\  --help                 Print this help message
-        \\  --path <path>           Path to the project directory (default: current directory)
-        \\  --version              Print version information
-        \\  --ignore <pattern>     Ignore files matching the given pattern
-        \\  --skip-git             Skip git operations
-        \\  --skip-cache           Skip cache operations
-        \\  --strategy             Print strategy
-        \\  --small <bytes>        Small threshold (default: 1 MiB)
-        \\  --mmap <bytes>         Mmap threshold (default: 16 MiB)
+        \\  --help        Print this help message
+        \\  --path        Path to a project directory (can be used multiple times)
+        \\  --version     Print version information
+        \\  --ignore      Ignore files matching the given pattern
+        \\  --skip-git    Skip git operations
+        \\  --skip-cache  Skip cache operations
+        \\  --strategy    Print strategy
+        \\  --small       Small threshold (default: 1 MiB)
+        \\  --mmap        Mmap threshold (default: 16 MiB)
+        \\
+        \\Examples:
+        \\  zig-zag --path ./project1 --path ./project2
+        \\  zig-zag --path ./src --ignore "*.test.zig"
         \\
     , .{});
 }
@@ -42,10 +44,12 @@ pub fn handleIgnore(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const 
     cfg.ignore_patterns = value.?;
 }
 
-/// handlePath handles the path option.
+/// handlePath handles the path option (can be called multiple times).
 pub fn handlePath(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
-    _ = allocator;
-    cfg.path = value.?;
+    if (value) |path| {
+        const owned_path = try allocator.dupe(u8, path);
+        try cfg.paths.append(allocator, owned_path);
+    }
 }
 
 /// handleSkipCache handles the skip-cache option.
