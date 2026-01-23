@@ -125,20 +125,6 @@ const std = @import("std");
 
 # Architecture
 
-## Core Components
-
-src/  
-├── main.zig # Entry point and CLI parsing  
-├── cache/ # Persistent caching system  
-├── cli/ # Command-line interface  
-├── fs/ # File system operations  
-│ ├── file.zig # File reading strategies  
-│ ├── mmap/ # Memory-mapped I/O (OS-specific)  
-│ └── walk.zig # Directory traversal  
-├── jobs/ # File processing jobs  
-├── workers/ # Thread pool and synchronization  
-└── walker/ # Directory walker with callbacks
-
 ## Processing Pipeline
 1. **Argument Parsing** → Configuration
 2. **Cache Initialization** → Load/validate cache
