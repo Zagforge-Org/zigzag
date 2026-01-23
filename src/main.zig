@@ -40,18 +40,27 @@ pub fn main() !void {
                 std.log.info("Cache cleared", .{});
             }
 
-            try runner.exec(&typedCfg, &cache);
+            _ = runner.exec(&typedCfg, &cache) catch |err| {
+                switch (err) {
+                    error.ErrorNotFound => {
+                        std.log.err("zig-zag: path not found", .{});
+                    },
+                    else => {
+                        std.log.err("zig-zag: error executing runner", .{});
+                    },
+                }
+            };
         },
         config.ConfigParseResult.MissingValue => |opt| {
-            std.log.err("ai-proj: missing value for option: {s}", .{opt});
+            std.log.err("zig-zag: missing value for option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.UnknownOption => |opt| {
-            std.log.err("ai-proj: unknown option: {s}", .{opt});
+            std.log.err("zig-zag: unknown option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.Other => |err_name| {
-            std.log.err("ai-proj: handler failed: {s}", .{err_name});
+            std.log.err("zig-zag: handler failed: {s}", .{err_name});
             return;
         },
     }
