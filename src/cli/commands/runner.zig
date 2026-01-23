@@ -20,6 +20,18 @@ const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
     const allocator = std.heap.page_allocator;
 
+    _ = std.fs.cwd().statFile(cfg.path) catch |err| {
+        switch (err) {
+            error.FileNotFound => {
+                std.log.err("zig-zag: path not found", .{});
+            },
+            else => {
+                std.log.err("zig-zag: filesystem error: {s}", .{@errorName(err)});
+            },
+        }
+        return;
+    };
+
     const md_path = try std.fs.path.join(allocator, &.{
         cfg.path,
         "report.md",
