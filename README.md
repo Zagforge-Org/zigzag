@@ -2,7 +2,6 @@
 
 <img src="assets/logo.png" alt="zig-zag logo" width="64" height="64">
 
-
 ### A high-performance Zig-based tool for generating comprehensive markdown reports of source code directories with intelligent caching and parallel processing.
 
 ## Overview
@@ -12,26 +11,18 @@
 ## Features
 
 - **Smart file reading strategies** optimized for different file sizes
-    
 - **Persistent caching system** with automatic validation and atomic updates
-    
 - **Parallel processing** with configurable thread pooling
-    
 - **Cross-platform compatibility** including Windows and Unix/Linux systems
-    
 - **Timezone-aware timestamps** with configurable offsets
-    
 - **Multi-path support** for processing multiple directories simultaneously
-    
 - **File ignoring patterns** for flexible exclusion rules
-    
 
 ## Installation
 
 ### Prerequisites
 
-- Zig compiler version 0.12.0 or later
-    
+- Zig compiler version 0.15.2 or later
 
 ### Building from Source
 
@@ -83,8 +74,7 @@ zig-zag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
 
 Each processed directory contains a `report.md` file with the following structure:
 
-```md
-
+````md
 # Code Report for: `./src`
 
 Generated on: 2026-02-17
@@ -92,13 +82,15 @@ Generated on: 2026-02-17
 ---
 
 ## Table of Contents
+
 - [./src/main.zig](#./src/main.zig)
 - [./src/utils.zig](#./src/utils.zig)
-...
+  ...
 
 ## File: `./src/main.zig`
 
 **Metadata:**
+
 - **Size:** 2.28 KB
 - **Language:** zig
 - **Last Modified:** 2026-01-23 10:38:54 (UTC+1)
@@ -109,23 +101,25 @@ const std = @import("std");
 
 ...
 ```
+````
 
 # Configuration Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--path` | Path to process (can be used multiple times) | Current directory |
-| `--ignore` | Ignore files matching pattern (e.g., "*.test.zig") | None |
-| `--timezone` | Timezone offset from UTC (e.g., +1, -5, +5:30) | UTC |
-| `--small` | Threshold for small files (bytes) | 1048576 (1MB) |
-| `--mmap` | Threshold for memory-mapped files (bytes) | 16777216 (16MB) |
-| `--skip-cache` | Skip cache operations | false |
-| `--help` | Show help message | |
-| `--version` | Show version information | |
+| Option         | Description                                         | Default           |
+| -------------- | --------------------------------------------------- | ----------------- |
+| `--path`       | Path to process (can be used multiple times)        | Current directory |
+| `--ignore`     | Ignore files matching pattern (e.g., "\*.test.zig") | None              |
+| `--timezone`   | Timezone offset from UTC (e.g., +1, -5, +5:30)      | UTC               |
+| `--small`      | Threshold for small files (bytes)                   | 1048576 (1MB)     |
+| `--mmap`       | Threshold for memory-mapped files (bytes)           | 16777216 (16MB)   |
+| `--skip-cache` | Skip cache operations                               | false             |
+| `--help`       | Show help message                                   |                   |
+| `--version`    | Show version information                            |                   |
 
 # Architecture
 
 ## Processing Pipeline
+
 1. **Argument Parsing** → Configuration
 2. **Cache Initialization** → Load/validate cache
 3. **Thread Pool Setup** → Configure parallel workers
@@ -165,15 +159,10 @@ zig build run-benchmark
 # Contributing
 
 1. Fork the repository
-    
 2. Create a feature branch (`git checkout -b feature/amazing`)
-    
 3. Commit changes (`git commit -m 'Add amazing feature'`)
-    
 4. Push to branch (`git push origin feature/amazing`)
-    
 5. Open a Pull Request
-    
 
 ## Development Setup
 
@@ -197,7 +186,5 @@ MIT License - see LICENSE file for details.
 ## Acknowledgments
 
 - Built with the Zig programming language
-    
 - Inspired by code documentation and reporting tools
-    
 - Thanks to all contributors and testers
