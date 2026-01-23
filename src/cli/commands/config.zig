@@ -1,7 +1,7 @@
 const std = @import("std");
 const options = @import("../options.zig").options;
 
-pub const VERSION = "0.1.0";
+pub const VERSION = "0.9.0";
 
 /// ConfigParseResult represents the result of parsing a configuration.
 pub const ConfigParseResult = union(enum) {
