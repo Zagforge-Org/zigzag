@@ -46,7 +46,65 @@ pub const CacheImpl = struct {
         };
 
         try cache.loadFromDisk();
+        try cache.validateCache(); // NEW: Validate cache on startup
         return cache;
+    }
+
+    /// NEW: Validate cache entries against actual filesystem
+    fn validateCache(self: *Self) !void {
+        var invalid_entries: std.ArrayList([]const u8) = .empty;
+        defer {
+            for (invalid_entries.items) |path| {
+                self.allocator.free(path);
+            }
+            invalid_entries.deinit(self.allocator);
+        }
+
+        var it = self.memory_cache.iterator();
+        while (it.next()) |entry| {
+            const path = entry.key_ptr.*;
+
+            // Check if file still exists
+            const stat = std.fs.cwd().statFile(path) catch {
+                // File no longer exists - mark for removal
+                const path_copy = try self.allocator.dupe(u8, path);
+                try invalid_entries.append(self.allocator, path_copy);
+                continue;
+            };
+
+            const mtime = @as(u64, @intCast(stat.mtime));
+            const size = stat.size;
+
+            // Check if file has been modified
+            if (entry.value_ptr.mtime != mtime or entry.value_ptr.size != size) {
+                // File has changed - mark for removal
+                const path_copy = try self.allocator.dupe(u8, path);
+                try invalid_entries.append(self.allocator, path_copy);
+            }
+        }
+
+        // Remove invalid entries
+        for (invalid_entries.items) |path| {
+            if (self.memory_cache.fetchRemove(path)) |kv| {
+                std.log.debug("Invalidating cache for: {s}", .{path});
+
+                // Delete cached file
+                const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
+                    self.files_dir,
+                    kv.value.cache_filename,
+                });
+                defer self.allocator.free(cached_path);
+                std.fs.cwd().deleteFile(cached_path) catch {};
+
+                // Free memory
+                self.allocator.free(kv.key);
+                self.allocator.free(kv.value.cache_filename);
+            }
+        }
+
+        if (invalid_entries.items.len > 0) {
+            std.log.info("Invalidated {d} stale cache entries", .{invalid_entries.items.len});
+        }
     }
 
     fn loadFromDisk(self: *Self) !void {
@@ -91,7 +149,11 @@ pub const CacheImpl = struct {
         const cache_index_path = try std.fmt.allocPrint(self.allocator, "{s}/index", .{self.cache_dir});
         defer self.allocator.free(cache_index_path);
 
-        var file = try std.fs.cwd().createFile(cache_index_path, .{ .truncate = true });
+        // Write to temporary file first for atomic update
+        const temp_path = try std.fmt.allocPrint(self.allocator, "{s}.tmp", .{cache_index_path});
+        defer self.allocator.free(temp_path);
+
+        var file = try std.fs.cwd().createFile(temp_path, .{ .truncate = true });
         defer file.close();
 
         var it = self.memory_cache.iterator();
@@ -105,18 +167,35 @@ pub const CacheImpl = struct {
             defer self.allocator.free(line);
             try file.writeAll(line);
         }
+
+        // Atomic rename
+        try std.fs.cwd().rename(temp_path, cache_index_path);
     }
 
-    /// Generate a safe filename from a path
+    /// Generate a safe filename from a path (now includes hash for uniqueness)
     fn pathToFilename(self: *Self, path: []const u8) ![]u8 {
-        var result = try self.allocator.alloc(u8, path.len);
-        for (path, 0..) |c, i| {
-            result[i] = switch (c) {
-                '/', '\\', ':', '*', '?', '"', '<', '>', '|' => '_',
+        // Use a hash to ensure uniqueness even if sanitized paths collide
+        var hasher = std.hash.Wyhash.init(0);
+        hasher.update(path);
+        const hash = hasher.final();
+
+        // Create sanitized path component (limited length)
+        var sanitized: std.ArrayList(u8) = .empty;
+        defer sanitized.deinit(self.allocator);
+
+        const max_path_len = 128;
+        const path_to_use = if (path.len > max_path_len) path[path.len - max_path_len ..] else path;
+
+        for (path_to_use) |c| {
+            const safe_c = switch (c) {
+                '/', '\\', ':', '*', '?', '"', '<', '>', '|', ' ' => '_',
                 else => c,
             };
+            try sanitized.append(self.allocator, safe_c);
         }
-        return result;
+
+        // Combine sanitized path with hash for uniqueness
+        return std.fmt.allocPrint(self.allocator, "{s}_{x}", .{ sanitized.items, hash });
     }
 
     pub fn isCached(self: *Self, path: []const u8, mtime: u64, size: usize, _: ?[32]u8) !bool {
@@ -124,6 +203,20 @@ pub const CacheImpl = struct {
         defer self.mutex.unlock();
 
         const entry = self.memory_cache.get(path) orelse return false;
+
+        // Verify the cached file still exists
+        const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
+            self.files_dir,
+            entry.cache_filename,
+        });
+        defer self.allocator.free(cached_path);
+
+        std.fs.cwd().access(cached_path, .{}) catch {
+            // Cache file is missing - invalidate entry
+            std.log.debug("Cache file missing for {s}, invalidating", .{path});
+            return false;
+        };
+
         return entry.mtime == mtime and entry.size == size;
     }
 
@@ -143,7 +236,13 @@ pub const CacheImpl = struct {
         });
         defer self.allocator.free(cached_path);
 
-        return try std.fs.cwd().readFileAlloc(self.allocator, cached_path, 100 * 1024 * 1024);
+        const content = std.fs.cwd().readFileAlloc(self.allocator, cached_path, 100 * 1024 * 1024) catch |err| {
+            std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
+            return err;
+        };
+
+        std.log.debug("Successfully read {d} bytes from cache: {s}", .{ content.len, cache_filename });
+        return content;
     }
 
     /// Update cache - copies file content to cache
@@ -154,6 +253,7 @@ pub const CacheImpl = struct {
         // Get or create cache filename
         var cache_filename: []u8 = undefined;
         var need_to_free_filename = false;
+        var is_new_entry = false;
 
         if (self.memory_cache.getPtr(path)) |entry_ptr| {
             // Update existing entry
@@ -164,6 +264,7 @@ pub const CacheImpl = struct {
             // New entry - generate filename
             cache_filename = try self.pathToFilename(path);
             need_to_free_filename = true;
+            is_new_entry = true;
 
             const path_copy = try self.allocator.dupe(u8, path);
             errdefer self.allocator.free(path_copy);
@@ -183,9 +284,42 @@ pub const CacheImpl = struct {
         });
         defer self.allocator.free(cached_path);
 
-        var file = try std.fs.cwd().createFile(cached_path, .{ .truncate = true });
+        // Ensure we can write the file
+        var file = std.fs.cwd().createFile(cached_path, .{ .truncate = true }) catch |err| {
+            std.log.err("Failed to create cache file {s}: {}", .{ cached_path, err });
+
+            // If we just added this entry, remove it from the cache
+            if (is_new_entry) {
+                if (self.memory_cache.fetchRemove(path)) |kv| {
+                    self.allocator.free(kv.key);
+                    self.allocator.free(kv.value.cache_filename);
+                }
+            }
+            return err;
+        };
         defer file.close();
-        try file.writeAll(content);
+
+        file.writeAll(content) catch |err| {
+            std.log.err("Failed to write cache file {s}: {}", .{ cached_path, err });
+
+            // Clean up the partial file
+            std.fs.cwd().deleteFile(cached_path) catch {};
+
+            // If we just added this entry, remove it from the cache
+            if (is_new_entry) {
+                if (self.memory_cache.fetchRemove(path)) |kv| {
+                    self.allocator.free(kv.key);
+                    self.allocator.free(kv.value.cache_filename);
+                }
+            }
+            return err;
+        };
+
+        if (is_new_entry) {
+            std.log.info("Cached new file: {s} -> {s}", .{ path, cache_filename });
+        } else {
+            std.log.debug("Updated cache for: {s}", .{path});
+        }
 
         if (need_to_free_filename) {
             self.allocator.free(cache_filename);
@@ -231,7 +365,14 @@ pub const CacheImpl = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.saveToDisk() catch {};
+        self.saveToDisk() catch |err| {
+            std.log.err("Failed to save cache to disk: {}", .{err});
+        };
+
+        // Verify cache consistency before shutting down
+        self.verifyCacheConsistency() catch |err| {
+            std.log.warn("Cache consistency check failed: {}", .{err});
+        };
 
         var it = self.memory_cache.iterator();
         while (it.next()) |entry| {
@@ -241,5 +382,34 @@ pub const CacheImpl = struct {
         self.memory_cache.deinit();
         self.allocator.free(self.cache_dir);
         self.allocator.free(self.files_dir);
+    }
+
+    /// NEW: Verify cache consistency - checks that all index entries have corresponding files
+    fn verifyCacheConsistency(self: *Self) !void {
+        var missing_count: usize = 0;
+
+        var it = self.memory_cache.iterator();
+        while (it.next()) |entry| {
+            const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
+                self.files_dir,
+                entry.value_ptr.cache_filename,
+            });
+            defer self.allocator.free(cached_path);
+
+            std.fs.cwd().access(cached_path, .{}) catch {
+                std.log.warn("Cache inconsistency: index has {s} but file {s} is missing", .{
+                    entry.key_ptr.*,
+                    entry.value_ptr.cache_filename,
+                });
+                missing_count += 1;
+            };
+        }
+
+        if (missing_count > 0) {
+            std.log.warn("Cache has {d} missing files out of {d} total entries", .{
+                missing_count,
+                self.memory_cache.count(),
+            });
+        }
     }
 };

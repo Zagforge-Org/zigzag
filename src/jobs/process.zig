@@ -6,7 +6,7 @@ fn basename(path: []const u8) []const u8 {
     var lastSlash: usize = 0;
     var i: usize = 0;
     while (i < path.len) : (i += 1) {
-        if (path[i] == '/') lastSlash = i + 1;
+        if (path[i] == '/' or path[i] == '\\') lastSlash = i + 1;
     }
     return path[lastSlash..];
 }
@@ -48,13 +48,26 @@ pub fn processFileJob(job: Job) anyerror!void {
 
     const allocator = std.heap.page_allocator;
 
+    // Check if file still exists (it may have been moved/deleted)
     const stat = std.fs.cwd().statFile(path) catch |err| {
-        std.log.debug("Failed to stat file {s}: {}", .{ path, err });
+        if (err == error.FileNotFound) {
+            std.log.debug("File not found (may have been moved/deleted): {s}", .{path});
+            _ = stats.ignored_files.fetchAdd(1, .monotonic);
+        } else {
+            std.log.debug("Failed to stat file {s}: {}", .{ path, err });
+        }
         return;
     };
 
     const mtime = @as(u64, @intCast(stat.mtime));
     const size = stat.size;
+
+    // Skip empty files
+    if (size == 0) {
+        std.log.debug("Skipping empty file: {s}", .{path});
+        _ = stats.ignored_files.fetchAdd(1, .monotonic);
+        return;
+    }
 
     const small_file_threshold = cache.small_file_threshold;
     var hash: ?[32]u8 = null;
@@ -76,9 +89,22 @@ pub fn processFileJob(job: Job) anyerror!void {
         _ = stats.cached_files.fetchAdd(1, .monotonic);
 
         content = cache.getCachedContent(path) catch blk: {
-            std.log.debug("Failed to read cache for {s}, reading original", .{path});
+            std.log.warn("Cache hit but failed to read cache for {s}, reading original", .{path});
+            _ = stats.cached_files.fetchSub(1, .monotonic);
+            _ = stats.processed_files.fetchAdd(1, .monotonic);
+
             // Fallback to reading original file
-            break :blk fs.readFileAlloc(allocator, path) catch return;
+            const original_content = fs.readFileAlloc(allocator, path) catch |read_err| {
+                std.log.err("Failed to read original file {s} after cache miss: {}", .{ path, read_err });
+                return;
+            };
+
+            // Try to update cache with the content we just read
+            cache.update(path, hash, mtime, size, original_content) catch |update_err| {
+                std.log.warn("Failed to update cache after fallback for {s}: {}", .{ path, update_err });
+            };
+
+            break :blk original_content;
         };
     } else {
         // Read original file and update cache
@@ -87,12 +113,15 @@ pub fn processFileJob(job: Job) anyerror!void {
 
         content = fs.readFileAlloc(allocator, path) catch |err| {
             std.log.debug("Failed to read file {s}: {}", .{ path, err });
+            _ = stats.processed_files.fetchSub(1, .monotonic);
+            _ = stats.ignored_files.fetchAdd(1, .monotonic);
             return;
         };
 
         // Update cache
         cache.update(path, hash, mtime, size, content) catch |err| {
-            std.log.debug("Failed to update cache for {s}: {}", .{ path, err });
+            std.log.err("Failed to update cache for {s}: {} - cache may be inconsistent", .{ path, err });
+            // Continue anyway - we still have the content in memory
         };
     }
 
