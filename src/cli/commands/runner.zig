@@ -74,7 +74,9 @@ fn processPath(
     pool: *Pool,
     allocator: std.mem.Allocator,
 ) !void {
-    std.log.info("Processing path: {s}", .{path});
+    if (path.len != 0) {
+        std.log.info("Processing path: {s}", .{path});
+    }
 
     var dir = std.fs.cwd().openDir(path, .{}) catch |err| {
         std.log.err("zig-zag: failed to open directory {s}: {s}", .{ path, @errorName(err) });
@@ -228,6 +230,10 @@ fn processPath(
 
 /// Executes the runner command for all configured paths.
 pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
+    if (cfg.paths.items.len == 0) {
+        return;
+    }
+
     const allocator = std.heap.page_allocator;
 
     var pool = Pool{};

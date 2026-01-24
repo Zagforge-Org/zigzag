@@ -78,11 +78,11 @@ pub const Config = struct {
         }
 
         // If no paths were specified, add current directory
-        if (cfg.paths.items.len == 0) {
-            cfg.paths.append(allocator, ".") catch {
-                return ConfigParseResult{ .Other = "OutOfMemory" };
-            };
-        }
+        // if (cfg.paths.items.len == 0) {
+        //     cfg.paths.append(allocator, ".") catch {
+        //         return ConfigParseResult{ .Other = "OutOfMemory" };
+        //     };
+        // }
 
         return ConfigParseResult{ .Success = cfg };
     }
