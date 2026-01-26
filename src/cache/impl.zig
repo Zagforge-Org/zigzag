@@ -46,11 +46,10 @@ pub const CacheImpl = struct {
         };
 
         try cache.loadFromDisk();
-        try cache.validateCache(); // NEW: Validate cache on startup
+        try cache.validateCache();
         return cache;
     }
 
-    /// NEW: Validate cache entries against actual filesystem
     fn validateCache(self: *Self) !void {
         var invalid_entries: std.ArrayList([]const u8) = .empty;
         defer {
@@ -64,15 +63,6 @@ pub const CacheImpl = struct {
         while (it.next()) |entry| {
             const path = entry.key_ptr.*;
 
-            // Check if file still exists
-            // const stat = std.fs.cwd().statFile(path) catch {
-            //     // File no longer exists - mark for removal
-            //     const path_copy = try self.allocator.dupe(u8, path);
-            //     try invalid_entries.append(self.allocator, path_copy);
-            //     continue;
-            // };
-            //
-
             const stat = std.fs.cwd().statFile(path) catch |err| switch (err) {
                 error.FileNotFound => {
                     // File genuinely gone → mark for removal
@@ -81,7 +71,6 @@ pub const CacheImpl = struct {
                     continue;
                 },
                 else => {
-                    // Unexpected filesystem error → propagate
                     return err;
                 },
             };
