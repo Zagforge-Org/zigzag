@@ -27,7 +27,7 @@ pub const Config = struct {
     const Self = @This();
 
     /// Initializes a default configuration.
-    fn initDefault(allocator: std.mem.Allocator) Self {
+    pub fn initDefault(allocator: std.mem.Allocator) Self {
         return Self{
             .allocator = allocator,
             .paths = .empty,
@@ -88,6 +88,9 @@ pub const Config = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        for (self.paths.items) |path| {
+            self.allocator.free(path);
+        }
         self.paths.deinit(self.allocator);
     }
 };
