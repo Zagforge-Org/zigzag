@@ -3,4 +3,5 @@ const std = @import("std");
 
 test {
     _ = @import("./cli/handlers.zig");
+    _ = @import("./fs/directory_test.zig");
 }
