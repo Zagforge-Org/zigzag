@@ -44,24 +44,24 @@ pub fn main() !void {
             _ = runner.exec(&typedCfg, &cache) catch |err| {
                 switch (err) {
                     error.ErrorNotFound => {
-                        std.log.err("zig-zag: path not found", .{});
+                        std.log.err("zigzag: path not found", .{});
                     },
                     else => {
-                        std.log.err("zig-zag: error executing runner: {s}", .{@errorName(err)});
+                        std.log.err("zigzag: error executing runner: {s}", .{@errorName(err)});
                     },
                 }
             };
         },
         config.ConfigParseResult.MissingValue => |opt| {
-            std.log.err("zig-zag: missing value for option: {s}", .{opt});
+            std.log.err("zigzag: missing value for option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.UnknownOption => |opt| {
-            std.log.err("zig-zag: unknown option: {s}", .{opt});
+            std.log.err("zigzag: unknown option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.Other => |err_name| {
-            std.log.err("zig-zag: handler failed: {s}", .{err_name});
+            std.log.err("zigzag: handler failed: {s}", .{err_name});
             return;
         },
     }

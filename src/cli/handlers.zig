@@ -17,7 +17,7 @@ pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const 
     _ = allocator;
     _ = value;
     std.debug.print(
-        \\zig-zag
+        \\zigzag
         \\version {s}
         \\
     , .{cfg.version});
@@ -37,7 +37,7 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     _ = allocator;
     _ = value;
     std.debug.print(
-        \\Usage: zig-zag [OPTIONS]
+        \\Usage: zigzag [OPTIONS]
         \\
         \\Options:
         \\  --help        Print this help message
@@ -52,9 +52,9 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  --timezone    Timezone offset from UTC (e.g., +1, -5, +5:30)
         \\
         \\Examples:
-        \\  zig-zag --path ./project1 --path ./project2
-        \\  zig-zag --path ./src --ignore "*.test.zig"
-        \\  zig-zag --path ./src --timezone +1
+        \\  zigzag --path ./project1 --path ./project2
+        \\  zigzag --path ./src --ignore "*.test.zig"
+        \\  zigzag --path ./src --timezone +1
         \\
     , .{});
 }

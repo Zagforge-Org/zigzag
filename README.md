@@ -1,4 +1,4 @@
-# Zig-Zag
+# ZigZag
 
 <img src="assets/logo.png" alt="zig-zag logo" width="64" height="64">
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-<b>Zig-Zag</b> recursively scans directories and generates detailed markdown reports containing all source code with metadata. Each report includes a table of contents, syntax-highlighted code blocks with language detection, and file metadata including size, modification time (with timezone support), and language identification.
+<b>ZigZag</b> recursively scans directories and generates detailed markdown reports containing all source code with metadata. Each report includes a table of contents, syntax-highlighted code blocks with language detection, and file metadata including size, modification time (with timezone support), and language identification.
 
 ## Features
 
@@ -28,12 +28,12 @@
 
 ```bash
 
-git clone https://github.com/LegationPro/zig-zag.git
-cd zig-zag
+git clone https://github.com/LegationPro/zigzag.git
+cd zigzag
 zig build -Doptimize=ReleaseFast
 ```
 
-The executable will be available at `zig-out/bin/zig-zag`.
+The executable will be available at `zig-out/bin/zigzag`.
 
 # Quick Start
 
@@ -42,16 +42,16 @@ The executable will be available at `zig-out/bin/zig-zag`.
 ```bash
 
 # Generate report for current directory
-zig-zag
+zigzag
 
 # Generate report for specific directories
-zig-zag --path ./src --path ./lib
+zigzag --path ./src --path ./lib
 
 # Generate report with custom timezone (UTC+1)
-zig-zag --path ./project --timezone +1
+zigzag --path ./project --timezone +1
 
 # Skip cache operations
-zig-zag --path ./project --skip-cache
+zigzag --path ./project --skip-cache
 ```
 
 ### Advanced Examples
@@ -60,14 +60,14 @@ bash
 
 ```
 # Multiple paths with ignore patterns
-zig-zag --path ./backend --path ./frontend --ignore "*.test.*"
+zigzag --path ./backend --path ./frontend --ignore "*.test.*"
 
 # Tune performance thresholds (in KB)
-zig-zag --path ./src --small 512 --mmap 8192
+zigzag --path ./src --small 512 --mmap 8192
 
 # Generate report with specific timezone offset
-zig-zag --path ./src --timezone -5    # UTC-5 (Eastern Time)
-zig-zag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
+zigzag --path ./src --timezone -5    # UTC-5 (Eastern Time)
+zigzag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
 ```
 
 ## Output Format
@@ -130,7 +130,7 @@ const std = @import("std");
 
 # Cache System
 
-<b>Zig-Zag</b> includes a smart caching system that:
+<b>ZigZag</b> includes a smart caching system that:
 
 - Persists between runs in `.cache/files/`
 - Validates on startup to remove stale entries
@@ -170,7 +170,7 @@ zig build run-benchmark
 bash
 
 # Clone with submodules (if any)
-git clone --recursive https://github.com/yourusername/zig-zag.git
+git clone --recursive https://github.com/LegationPro/zigzag.git
 
 # Build in development mode
 zig build

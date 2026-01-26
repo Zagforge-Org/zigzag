@@ -79,7 +79,7 @@ fn processPath(
     }
 
     var dir = std.fs.cwd().openDir(path, .{}) catch |err| {
-        std.log.err("zig-zag: failed to open directory {s}: {s}", .{ path, @errorName(err) });
+        std.log.err("zigzag: failed to open directory {s}: {s}", .{ path, @errorName(err) });
         return;
     };
     defer dir.close();
