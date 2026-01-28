@@ -78,9 +78,8 @@ fn processPath(
         std.log.info("Processing path: {s}", .{path});
     }
 
-    var dir = std.fs.cwd().openDir(path, .{}) catch |err| {
-        std.log.err("zigzag: failed to open directory {s}: {s}", .{ path, @errorName(err) });
-        return;
+    var dir = std.fs.cwd().openDir(path, .{}) catch {
+        return error.NotADirectory;
     };
     defer dir.close();
 
@@ -246,7 +245,17 @@ pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
     std.log.info("Processing {d} path(s)...", .{cfg.paths.items.len});
 
     for (cfg.paths.items) |path| {
-        try processPath(cfg, cache, path, &pool, allocator);
+        processPath(cfg, cache, path, &pool, allocator) catch |err| {
+            switch (err) {
+                error.NotADirectory => {
+                    std.log.err("Path '{s}' is not a directory", .{path});
+                    return error.ErrorNotFound;
+                },
+                else => {
+                    std.log.err("Unexpected error: {s}", .{@errorName(err)});
+                },
+            }
+        };
     }
 
     std.log.info("All paths processed successfully!", .{});

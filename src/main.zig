@@ -56,7 +56,7 @@ pub fn main() !void {
             _ = runner.exec(&typedCfg, &cache) catch |err| {
                 switch (err) {
                     error.ErrorNotFound => {
-                        std.log.err("zigzag: path not found", .{});
+                        return;
                     },
                     else => {
                         std.log.err("zigzag: error executing runner: {s}", .{@errorName(err)});
