@@ -3,7 +3,7 @@ const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
 
 pub const WalkError = error{
-    NotADictionary,
+    NotADirectory,
 };
 
 pub const Walk = struct {
