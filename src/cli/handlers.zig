@@ -1,7 +1,11 @@
 const std = @import("std");
 const Config = @import("./commands/config.zig").Config;
 const testing = std.testing;
+const colorCode = @import("colors.zig").colorCode;
+const colors = @import("colors.zig");
 const VERSION = @import("../cli/commands/config.zig").VERSION;
+const ascii_logo = @import("logo.zig").ascii_logo;
+const stdoutPrint = @import("../fs/stdout.zig").stdoutPrint;
 
 pub const TimezoneError = error{
     InvalidTimezoneMinutes,
@@ -12,15 +16,29 @@ fn makeTestConfig(allocator: std.mem.Allocator) Config {
     return Config.initDefault(allocator);
 }
 
+pub fn printAsciiLogo() anyerror!void {
+    try stdoutPrint("{s}{s}{s}", .{
+        colors.colorCode(colors.Color.Yellow),
+        ascii_logo,
+        colors.colorCode(colors.Color.Reset),
+    });
+}
+
 /// printVersion prints version information.
 pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
-    std.debug.print(
-        \\zigzag
+
+    try stdoutPrint(
+        \\{s}{s}{s}
         \\version {s}
         \\
-    , .{cfg.version});
+    , .{
+        colors.colorCode(colors.Color.Yellow),
+        ascii_logo,
+        colors.colorCode(colors.Color.Reset),
+        cfg.version,
+    });
 }
 
 test "printVersion should print version information" {
@@ -36,7 +54,8 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     _ = cfg;
     _ = allocator;
     _ = value;
-    std.debug.print(
+
+    try stdoutPrint(
         \\Usage: zigzag [OPTIONS]
         \\
         \\Options:

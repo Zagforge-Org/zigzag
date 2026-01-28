@@ -2,16 +2,13 @@ const std = @import("std");
 const config = @import("./cli/commands/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
+const printAsciiLogo = @import("./cli/handlers.zig").printAsciiLogo;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
 
-    // Create cache directory path (./.cache)
-    const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
-    defer allocator.free(cache_path);
-
     // Create list to hold command-line arguments
-    var list = std.ArrayList([]const u8){};
+    var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
 
     var args = try std.process.argsWithAllocator(allocator);
@@ -19,9 +16,24 @@ pub fn main() !void {
 
     _ = args.skip(); // skip program name
 
+    var param_count: usize = 0;
     while (args.next()) |arg| {
+        if (std.mem.startsWith(u8, arg, "--")) {
+            param_count += 1;
+        }
+
         try list.append(allocator, arg);
     }
+
+    if (param_count == 0) {
+        // Print CLI and usage information
+        try printAsciiLogo();
+        return;
+    }
+
+    // Create cache directory path (./.cache)
+    const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
+    defer allocator.free(cache_path);
 
     // Parse config from arguments
     const result = config.Config.parse(list.items, allocator);
