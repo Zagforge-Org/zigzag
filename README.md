@@ -42,7 +42,7 @@ The executable will be available at `zig-out/bin/zigzag`.
 ```bash
 
 # Generate report for current directory
-zigzag
+zigzag --path .
 
 # Generate report for specific directories
 zigzag --path ./src --path ./lib
