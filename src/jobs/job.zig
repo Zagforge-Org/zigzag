@@ -8,7 +8,7 @@ const JobEntry = @import("entry.zig").JobEntry;
 pub const Job = struct {
     path: []const u8,
     file_ctx: ?*FileContext,
-    cache: *CacheImpl,
+    cache: ?*CacheImpl,
     stats: *ProcessStats,
     file_entries: *std.StringHashMap(JobEntry),
     entries_mutex: *std.Thread.Mutex,

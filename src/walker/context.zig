@@ -11,7 +11,7 @@ pub const WalkerCtx = struct {
     pool: *Pool,
     wg: *WaitGroup,
     file_ctx: *FileContext,
-    cache: *CacheImpl,
+    cache: ?*CacheImpl,
     stats: *ProcessStats,
     file_entries: *std.StringHashMap(JobEntry),
     entries_mutex: *std.Thread.Mutex,

@@ -46,7 +46,7 @@ pub fn processFileJob(job: Job) anyerror!void {
 
     const path = job.path;
     const file_ctx = job.file_ctx;
-    const cache = job.cache;
+    const cache_opt = job.cache; // ?*CacheImpl
     const stats = job.stats;
     const file_entries = job.file_entries;
     const entries_mutex = job.entries_mutex;
@@ -63,15 +63,20 @@ pub fn processFileJob(job: Job) anyerror!void {
     // Check if file still exists
     const stat = std.fs.cwd().statFile(path) catch |err| {
         if (err == error.FileNotFound) {
-            std.log.debug("File not found (may have been moved/deleted): {s}", .{path});
+            std.log.debug(
+                "File not found (may have been moved/deleted): {s}",
+                .{path},
+            );
             _ = stats.ignored_files.fetchAdd(1, .monotonic);
         } else {
-            std.log.debug("Failed to stat file {s}: {}", .{ path, err });
+            std.log.debug(
+                "Failed to stat file {s}: {}",
+                .{ path, err },
+            );
         }
         return;
     };
 
-    // stat.mtime is i128 in nanoseconds
     const mtime = stat.mtime;
     const size = stat.size;
 
@@ -82,57 +87,126 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     }
 
-    const small_file_threshold = cache.small_file_threshold;
+    const mtime_seconds: u64 =
+        @intCast(@divFloor(mtime, std.time.ns_per_s));
+
     var hash: ?[32]u8 = null;
-
-    if (size > small_file_threshold) {
-        hash = cache.hashFileContent(path) catch |err| {
-            std.log.debug("Failed to hash file {s}: {}", .{ path, err });
-            return;
-        };
-    }
-
-    // Convert mtime to u64 seconds for cache operations
-    const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
-    const is_cached = cache.isCached(path, mtime_seconds, size, hash) catch false;
-
     var content: []u8 = undefined;
 
-    if (is_cached) {
-        std.log.debug("Cached (reading from .cache): {s}", .{path});
-        _ = stats.cached_files.fetchAdd(1, .monotonic);
-        content = cache.getCachedContent(path) catch blk: {
-            std.log.warn("Cache hit but failed to read cache for {s}, reading original", .{path});
-            _ = stats.cached_files.fetchSub(1, .monotonic);
-            _ = stats.processed_files.fetchAdd(1, .monotonic);
+    // =========================
+    // CACHE MODE
+    // =========================
+    if (cache_opt) |cache| {
+        const small_file_threshold = cache.small_file_threshold;
 
-            const original_content = fs.readFileAlloc(allocator, path) catch |read_err| {
-                std.log.err("Failed to read original file {s} after cache miss: {}", .{ path, read_err });
+        if (size > small_file_threshold) {
+            hash = cache.hashFileContent(path) catch |err| {
+                std.log.debug(
+                    "Failed to hash file {s}: {}",
+                    .{ path, err },
+                );
                 return;
             };
+        }
 
-            cache.update(path, hash, mtime_seconds, size, original_content) catch |update_err| {
-                std.log.warn("Failed to update cache after fallback for {s}: {}", .{ path, update_err });
+        const is_cached =
+            cache.isCached(path, mtime_seconds, size, hash) catch false;
+
+        if (is_cached) {
+            std.log.debug(
+                "Cached (reading from .cache): {s}",
+                .{path},
+            );
+
+            _ = stats.cached_files.fetchAdd(1, .monotonic);
+
+            content = cache.getCachedContent(path) catch blk: {
+                std.log.warn(
+                    "Cache hit but failed for {s}, reading original",
+                    .{path},
+                );
+
+                _ = stats.cached_files.fetchSub(1, .monotonic);
+                _ = stats.processed_files.fetchAdd(1, .monotonic);
+
+                const original =
+                    fs.readFileAlloc(allocator, path) catch |read_err| {
+                        std.log.err(
+                            "Failed to read {s}: {}",
+                            .{ path, read_err },
+                        );
+                        return;
+                    };
+
+                cache.update(
+                    path,
+                    hash,
+                    mtime_seconds,
+                    size,
+                    original,
+                ) catch {};
+
+                break :blk original;
             };
+        } else {
+            std.log.info(
+                "Processing (reading original): {s}",
+                .{path},
+            );
 
-            break :blk original_content;
-        };
-    } else {
-        std.log.info("Processing (reading original): {s}", .{path});
+            _ = stats.processed_files.fetchAdd(1, .monotonic);
+
+            content =
+                fs.readFileAlloc(allocator, path) catch |err| {
+                    std.log.debug(
+                        "Failed to read {s}: {}",
+                        .{ path, err },
+                    );
+                    _ = stats.processed_files.fetchSub(1, .monotonic);
+                    _ = stats.ignored_files.fetchAdd(1, .monotonic);
+                    return;
+                };
+
+            cache.update(
+                path,
+                hash,
+                mtime_seconds,
+                size,
+                content,
+            ) catch |err| {
+                std.log.err(
+                    "Cache update failed for {s}: {}",
+                    .{ path, err },
+                );
+            };
+        }
+    }
+    // =========================
+    // NO CACHE MODE
+    // =========================
+    else {
+        std.log.info(
+            "Processing (no cache): {s}",
+            .{path},
+        );
+
         _ = stats.processed_files.fetchAdd(1, .monotonic);
-        content = fs.readFileAlloc(allocator, path) catch |err| {
-            std.log.debug("Failed to read file {s}: {}", .{ path, err });
-            _ = stats.processed_files.fetchSub(1, .monotonic);
-            _ = stats.ignored_files.fetchAdd(1, .monotonic);
-            return;
-        };
 
-        cache.update(path, hash, mtime_seconds, size, content) catch |err| {
-            std.log.err("Failed to update cache for {s}: {} - cache may be inconsistent", .{ path, err });
-        };
+        content =
+            fs.readFileAlloc(allocator, path) catch |err| {
+                std.log.debug(
+                    "Failed to read {s}: {}",
+                    .{ path, err },
+                );
+                _ = stats.processed_files.fetchSub(1, .monotonic);
+                _ = stats.ignored_files.fetchAdd(1, .monotonic);
+                return;
+            };
     }
 
-    // Store for report generation with metadata - keep mtime as i128 nanoseconds
+    // =========================
+    // Store result
+    // =========================
     entries_mutex.lock();
     defer entries_mutex.unlock();
 
@@ -144,7 +218,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         .path = path_copy,
         .content = content,
         .size = size,
-        .mtime = mtime, // Keep as i128 nanoseconds
+        .mtime = mtime,
         .extension = ext_copy,
     });
 }

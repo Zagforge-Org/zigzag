@@ -69,7 +69,7 @@ fn writeFileEntry(
 /// Process a single directory path
 fn processPath(
     cfg: *const Config,
-    cache: *CacheImpl,
+    cache: ?*CacheImpl,
     path: []const u8,
     pool: *Pool,
     allocator: std.mem.Allocator,
@@ -228,7 +228,7 @@ fn processPath(
 }
 
 /// Executes the runner command for all configured paths.
-pub fn exec(cfg: *const Config, cache: *CacheImpl) !void {
+pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
     if (cfg.paths.items.len == 0) {
         return;
     }

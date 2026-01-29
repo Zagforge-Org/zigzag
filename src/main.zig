@@ -21,7 +21,6 @@ pub fn main() !void {
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
         }
-
         try list.append(allocator, arg);
     }
 
@@ -31,38 +30,40 @@ pub fn main() !void {
         return;
     }
 
-    // Create cache directory path (./.cache)
-    const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
-    defer allocator.free(cache_path);
-
     // Parse config from arguments
     const result = config.Config.parse(list.items, allocator);
-
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
 
-            // Initialize cache with configured threshold
-            var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
-            defer cache.deinit();
+            // Only initialize cache if --path was provided
+            if (typedCfg.paths.items.len > 0) {
+                // Create cache directory path (./.cache)
+                const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
+                defer allocator.free(cache_path);
 
-            if (typedCfg.skip_cache) {
-                std.log.info("Clearing cache directory: {s}", .{cache_path});
-                try cache.cleanup();
-                std.log.info("Cache cleared", .{});
-            }
+                // Initialize cache with configured threshold
+                var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
+                defer cache.deinit();
 
-            _ = runner.exec(&typedCfg, &cache) catch |err| {
-                switch (err) {
-                    error.ErrorNotFound => {
-                        return;
-                    },
-                    else => {
-                        std.log.err("zigzag: error executing runner: {s}", .{@errorName(err)});
-                    },
+                if (typedCfg.skip_cache) {
+                    std.log.info("Clearing cache directory: {s}", .{cache_path});
+                    try cache.cleanup();
+                    std.log.info("Cache cleared", .{});
                 }
-            };
+
+                _ = runner.exec(&typedCfg, &cache) catch |err| {
+                    switch (err) {
+                        error.ErrorNotFound => {
+                            return;
+                        },
+                        else => {
+                            std.log.err("zigzag: error executing runner: {s}", .{@errorName(err)});
+                        },
+                    }
+                };
+            }
         },
         config.ConfigParseResult.MissingValue => |opt| {
             std.log.err("zigzag: missing value for option: {s}", .{opt});
