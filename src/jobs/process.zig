@@ -23,18 +23,116 @@ fn getExtension(path: []const u8) []const u8 {
     return "";
 }
 
-fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
-    const name = basename(file);
-    if (std.mem.indexOf(u8, file, ".cache") != null) return true;
+/// Check if a file is binary by examining its extension and/or content
+fn isBinaryFile(path: []const u8, content: []const u8) bool {
+    const ext = getExtension(path);
 
-    for (ignore_list.items) |pattern| {
-        if (pattern.len >= 2 and pattern[0] == '*' and pattern[1] == '.') {
-            const ext = pattern[1..];
-            if (name.len >= ext.len and std.mem.eql(u8, name[name.len - ext.len ..], ext)) return true;
-        } else {
-            if (std.mem.indexOf(u8, file, pattern) != null) return true;
+    // Common binary file extensions
+    const binary_extensions = [_][]const u8{
+        ".png", ".jpg", ".jpeg",  ".gif",   ".bmp", ".ico",  ".webp",
+        ".pdf", ".zip", ".tar",   ".gz",    ".7z",  ".rar",  ".exe",
+        ".dll", ".so",  ".dylib", ".bin",   ".dat", ".db",   ".sqlite",
+        ".mp3", ".mp4", ".avi",   ".mov",   ".mkv", ".woff", ".woff2",
+        ".ttf", ".otf", ".eot",   ".class", ".jar", ".war",  ".o",
+        ".a",   ".lib", ".pyc",   ".pyo",
+    };
+
+    // Check extension first (faster)
+    for (binary_extensions) |binary_ext| {
+        if (std.ascii.eqlIgnoreCase(ext, binary_ext)) {
+            return true;
         }
     }
+
+    // Heuristic: check for null bytes or high ratio of non-printable characters
+    // Only check first 512 bytes for performance
+    const check_len = @min(content.len, 512);
+    var non_printable: usize = 0;
+
+    for (content[0..check_len]) |byte| {
+        if (byte == 0) return true; // Null byte = binary
+        if (byte < 32 and byte != '\n' and byte != '\r' and byte != '\t') {
+            non_printable += 1;
+        }
+    }
+
+    // If more than 30% non-printable, consider it binary
+    if (check_len > 0 and (non_printable * 100 / check_len) > 30) {
+        return true;
+    }
+
+    return false;
+}
+
+/// Improved pattern matching for ignore patterns
+fn matchesPattern(path: []const u8, pattern: []const u8) bool {
+    const filename = basename(path);
+
+    // Wildcard extension pattern: *.ext
+    if (pattern.len >= 2 and pattern[0] == '*' and pattern[1] == '.') {
+        const ext = getExtension(filename);
+        return std.ascii.eqlIgnoreCase(ext, pattern[1..]);
+    }
+
+    // Wildcard prefix pattern: prefix*
+    if (pattern.len >= 2 and pattern[pattern.len - 1] == '*') {
+        const prefix = pattern[0 .. pattern.len - 1];
+        return std.mem.startsWith(u8, filename, prefix);
+    }
+
+    // Wildcard suffix pattern: *suffix
+    if (pattern.len >= 2 and pattern[0] == '*') {
+        const suffix = pattern[1..];
+        return std.mem.endsWith(u8, filename, suffix);
+    }
+
+    // Exact filename match
+    if (std.mem.eql(u8, filename, pattern)) {
+        return true;
+    }
+
+    // Path contains pattern (for directories like node_modules, .cache, etc.)
+    if (std.mem.indexOf(u8, path, pattern) != null) {
+        return true;
+    }
+
+    return false;
+}
+
+fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
+Ï
+    // Always ignore .cache directory
+    if (std.mem.indexOf(u8, file, ".cache") != null) return true;
+
+    // Always ignore common binary/hidden/build directories
+    const auto_ignore = [_][]const u8{
+        "node_modules",
+        ".git",
+        ".svn",
+        ".hg",
+        "__pycache__",
+        ".pytest_cache",
+        "target",
+        "build",
+        "dist",
+        ".idea",
+        ".vscode",
+        ".DS_Store",
+    };
+
+    for (auto_ignore) |pattern| {
+        if (std.mem.indexOf(u8, file, pattern) != null) {
+            return true;
+        }
+    }
+
+    // Check user-provided ignore patterns
+    for (ignore_list.items) |pattern| {
+        if (matchesPattern(file, pattern)) {
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -46,7 +144,7 @@ pub fn processFileJob(job: Job) anyerror!void {
 
     const path = job.path;
     const file_ctx = job.file_ctx;
-    const cache_opt = job.cache; // ?*CacheImpl
+    const cache_opt = job.cache;
     const stats = job.stats;
     const file_entries = job.file_entries;
     const entries_mutex = job.entries_mutex;
@@ -87,9 +185,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     }
 
-    const mtime_seconds: u64 =
-        @intCast(@divFloor(mtime, std.time.ns_per_s));
-
+    const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
     var hash: ?[32]u8 = null;
     var content: []u8 = undefined;
 
@@ -109,15 +205,13 @@ pub fn processFileJob(job: Job) anyerror!void {
             };
         }
 
-        const is_cached =
-            cache.isCached(path, mtime_seconds, size, hash) catch false;
+        const is_cached = cache.isCached(path, mtime_seconds, size, hash) catch false;
 
         if (is_cached) {
             std.log.debug(
                 "Cached (reading from .cache): {s}",
                 .{path},
             );
-
             _ = stats.cached_files.fetchAdd(1, .monotonic);
 
             content = cache.getCachedContent(path) catch blk: {
@@ -125,18 +219,16 @@ pub fn processFileJob(job: Job) anyerror!void {
                     "Cache hit but failed for {s}, reading original",
                     .{path},
                 );
-
                 _ = stats.cached_files.fetchSub(1, .monotonic);
                 _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-                const original =
-                    fs.readFileAlloc(allocator, path) catch |read_err| {
-                        std.log.err(
-                            "Failed to read {s}: {}",
-                            .{ path, read_err },
-                        );
-                        return;
-                    };
+                const original = fs.readFileAlloc(allocator, path) catch |read_err| {
+                    std.log.err(
+                        "Failed to read {s}: {}",
+                        .{ path, read_err },
+                    );
+                    return;
+                };
 
                 cache.update(
                     path,
@@ -153,19 +245,17 @@ pub fn processFileJob(job: Job) anyerror!void {
                 "Processing (reading original): {s}",
                 .{path},
             );
-
             _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-            content =
-                fs.readFileAlloc(allocator, path) catch |err| {
-                    std.log.debug(
-                        "Failed to read {s}: {}",
-                        .{ path, err },
-                    );
-                    _ = stats.processed_files.fetchSub(1, .monotonic);
-                    _ = stats.ignored_files.fetchAdd(1, .monotonic);
-                    return;
-                };
+            content = fs.readFileAlloc(allocator, path) catch |err| {
+                std.log.debug(
+                    "Failed to read {s}: {}",
+                    .{ path, err },
+                );
+                _ = stats.processed_files.fetchSub(1, .monotonic);
+                _ = stats.ignored_files.fetchAdd(1, .monotonic);
+                return;
+            };
 
             cache.update(
                 path,
@@ -189,19 +279,29 @@ pub fn processFileJob(job: Job) anyerror!void {
             "Processing (no cache): {s}",
             .{path},
         );
-
         _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-        content =
-            fs.readFileAlloc(allocator, path) catch |err| {
-                std.log.debug(
-                    "Failed to read {s}: {}",
-                    .{ path, err },
-                );
-                _ = stats.processed_files.fetchSub(1, .monotonic);
-                _ = stats.ignored_files.fetchAdd(1, .monotonic);
-                return;
-            };
+        content = fs.readFileAlloc(allocator, path) catch |err| {
+            std.log.debug(
+                "Failed to read {s}: {}",
+                .{ path, err },
+            );
+            _ = stats.processed_files.fetchSub(1, .monotonic);
+            _ = stats.ignored_files.fetchAdd(1, .monotonic);
+            return;
+        };
+    }
+
+    // =========================
+    // Binary file detection
+    // =========================
+    if (isBinaryFile(path, content)) {
+        std.log.info("Skipping binary file: {s}", .{path});
+        allocator.free(content);
+        _ = stats.ignored_files.fetchAdd(1, .monotonic);
+        // Adjust stats - we counted it as processed, but it's actually ignored
+        _ = stats.processed_files.fetchSub(1, .monotonic);
+        return;
     }
 
     // =========================
