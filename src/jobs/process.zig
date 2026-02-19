@@ -100,7 +100,6 @@ fn matchesPattern(path: []const u8, pattern: []const u8) bool {
 }
 
 fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
-Ï
     // Always ignore .cache directory
     if (std.mem.indexOf(u8, file, ".cache") != null) return true;
 
