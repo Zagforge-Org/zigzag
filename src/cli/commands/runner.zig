@@ -83,7 +83,8 @@ fn processPath(
     };
     defer dir.close();
 
-    const md_path = try std.fs.path.join(allocator, &.{ path, "report.md" });
+    const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
+    const md_path = try std.fs.path.join(allocator, &.{ path, output_filename });
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
@@ -137,8 +138,8 @@ fn processPath(
     try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
 
-    // Build report.md from all collected files
-    std.log.info("Building report.md for {s}...", .{path});
+    // Build output file from all collected files
+    std.log.info("Building {s} for {s}...", .{ output_filename, path });
     var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
 
