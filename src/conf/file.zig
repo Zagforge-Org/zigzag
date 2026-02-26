@@ -19,20 +19,20 @@ pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
 
 /// Returns the default zig.conf.json content as a static string.
 pub fn defaultContent() []const u8 {
-    return
-        \\{
-        \\  "paths": [],
-        \\  "ignore_patterns": [],
-        \\  "skip_cache": false,
-        \\  "skip_git": false,
-        \\  "small_threshold": 1048576,
-        \\  "mmap_threshold": 16777216,
-        \\  "timezone": null,
-        \\  "output": "report.md",
-        \\  "watch": false,
-        \\  "watch_interval_ms": 1000
-        \\}
-        \\
+    return 
+    \\{
+    \\  "paths": [],
+    \\  "ignore_patterns": [],
+    \\  "skip_cache": false,
+    \\  "skip_git": false,
+    \\  "small_threshold": 1048576,
+    \\  "mmap_threshold": 16777216,
+    \\  "timezone": null,
+    \\  "output": "report.md",
+    \\  "watch": false,
+    \\  "watch_interval_ms": 1000
+    \\}
+    \\
     ;
 }
 
