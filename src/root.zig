@@ -3,5 +3,7 @@ const std = @import("std");
 
 test {
     _ = @import("./cli/handlers.zig");
+    _ = @import("./cli/commands/config.zig");
+    _ = @import("./conf/file.zig");
     _ = @import("./fs/directory_test.zig");
 }
