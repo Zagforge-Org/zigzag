@@ -1,5 +1,7 @@
 const std = @import("std");
 const Config = @import("./commands/config.zig").Config;
+const defaultContent = @import("../conf/file.zig").defaultContent;
+const DEFAULT_CONF_FILENAME = @import("../conf/file.zig").DEFAULT_CONF_FILENAME;
 const testing = std.testing;
 const colorCode = @import("colors.zig").colorCode;
 const colors = @import("colors.zig");
@@ -53,20 +55,27 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
     _ = allocator;
     _ = value;
     try stdoutPrint(
-        \\Usage: zigzag [OPTIONS]
+        \\Usage: zigzag [COMMAND] [OPTIONS]
+        \\
+        \\Commands:
+        \\  init            Initialize a new project (creates zig.conf.json)
+        \\  run             Run using zig.conf.json (flags override config file)
         \\
         \\Options:
         \\  --help           Print this help message
         \\  --path           Path to a project directory (can be used multiple times)
         \\  --version        Print version information
-        \\  --ignore         Ignore files matching the given pattern (can be used multiple times)
+        \\  --ignore         Ignore files matching the given pattern
         \\                   Supports: exact filenames, *.ext, prefix*, *suffix, directory names
         \\  --skip-git       Skip git operations
         \\  --skip-cache     Skip cache operations
         \\  --strategy       Print strategy
-        \\  --small          Small threshold (default: 1 MiB)
-        \\  --mmap           Mmap threshold (default: 16 MiB)
+        \\  --small          Small threshold in bytes (default: 1 MiB)
+        \\  --mmap           Mmap threshold in bytes (default: 16 MiB)
         \\  --timezone       Timezone offset from UTC (e.g., +1, -5, +5:30)
+        \\  --output         Output filename (default: report.md)
+        \\  --watch          Watch for file changes and regenerate output
+        \\  --watch-interval Watch polling interval in milliseconds (default: 1000)
         \\
         \\Ignore Pattern Examples:
         \\  --ignore "*.png"              Ignore all PNG files
@@ -79,8 +88,10 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  - node_modules, .git, .cache, __pycache__, etc.
         \\
         \\Examples:
+        \\  zigzag run
+        \\  zigzag run --path ./src --ignore "*.test.zig"
+        \\  zigzag run --watch --watch-interval 500
         \\  zigzag --path ./project1 --path ./project2
-        \\  zigzag --path ./src --ignore "*.test.zig" --ignore "*.png"
         \\  zigzag --path ./src --timezone +1
         \\
     , .{});
@@ -93,45 +104,93 @@ test "printHelp runs without error" {
     try printHelp(&cfg, allocator, null);
 }
 
-/// handleIgnore handles the ignore option - can be called multiple times
+/// handleIgnore handles the ignore option - can be called multiple times.
+/// When called via CLI, the first invocation replaces any file-config patterns.
+/// Subsequent CLI invocations accumulate additional patterns.
 pub fn handleIgnore(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     if (value) |pattern| {
-        // Trim whitespace
         const trimmed = std.mem.trim(u8, pattern, " \t\n\r");
         if (trimmed.len == 0) return;
 
-        // If this is the first ignore pattern, clear the default empty string
-        if (cfg.ignore_patterns.len == 0) {
-            cfg.ignore_patterns = try allocator.dupe(u8, trimmed);
-        } else {
-            // Append to existing patterns with comma separator
-            const new_patterns = try std.fmt.allocPrint(
-                allocator,
-                "{s},{s}",
-                .{ cfg.ignore_patterns, trimmed },
-            );
-            allocator.free(cfg.ignore_patterns);
-            cfg.ignore_patterns = new_patterns;
+        // First CLI --ignore call: replace file-loaded patterns (CLI overrides file config)
+        if (!cfg._patterns_set_by_cli) {
+            cfg._patterns_set_by_cli = true;
+            cfg.clearIgnorePatterns(allocator);
         }
+
+        try cfg.appendIgnorePattern(allocator, trimmed);
     }
 }
 
-test "handleIgnore handles ignore option" {
+test "handleIgnore handles single pattern" {
     const allocator = std.testing.allocator;
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
     try handleIgnore(&cfg, allocator, "*.png");
     try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.png") != null);
+}
 
+test "handleIgnore accumulates multiple patterns" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleIgnore(&cfg, allocator, "*.png");
     try handleIgnore(&cfg, allocator, "*.jpg");
     try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.png") != null);
     try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.jpg") != null);
 }
 
+test "handleIgnore trims whitespace from pattern" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleIgnore(&cfg, allocator, "  *.png  ");
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.png") != null);
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, " ") == null);
+}
+
+test "handleIgnore ignores empty pattern" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleIgnore(&cfg, allocator, "   ");
+    try testing.expectEqualStrings("", cfg.ignore_patterns);
+}
+
+test "handleIgnore CLI overrides file-loaded patterns" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    // Simulate file-loaded patterns
+    try cfg.appendIgnorePattern(allocator, "*.from_file");
+
+    // First CLI call should replace file patterns
+    try handleIgnore(&cfg, allocator, "*.from_cli");
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.from_file") == null);
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.from_cli") != null);
+
+    // Second CLI call accumulates
+    try handleIgnore(&cfg, allocator, "*.also_cli");
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.from_cli") != null);
+    try testing.expect(std.mem.indexOf(u8, cfg.ignore_patterns, "*.also_cli") != null);
+}
+
 /// handlePath handles the path option (can be called multiple times).
+/// When called via CLI, the first invocation replaces any file-config paths.
 pub fn handlePath(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     if (value) |path| {
+        // First CLI --path call: replace file-loaded paths (CLI overrides file config)
+        if (!cfg._paths_set_by_cli) {
+            cfg._paths_set_by_cli = true;
+            for (cfg.paths.items) |p| allocator.free(p);
+            cfg.paths.clearRetainingCapacity();
+        }
+
         const owned_path = try allocator.dupe(u8, path);
         try cfg.paths.append(allocator, owned_path);
     }
@@ -143,6 +202,37 @@ test "handlePath handles path option" {
     defer cfg.deinit();
     try handlePath(&cfg, allocator, "path");
     try testing.expectEqualStrings("path", cfg.paths.items[0]);
+}
+
+test "handlePath accumulates multiple paths" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handlePath(&cfg, allocator, "./src");
+    try handlePath(&cfg, allocator, "./lib");
+    try testing.expectEqual(@as(usize, 2), cfg.paths.items.len);
+    try testing.expectEqualStrings("./src", cfg.paths.items[0]);
+    try testing.expectEqualStrings("./lib", cfg.paths.items[1]);
+}
+
+test "handlePath CLI overrides file-loaded paths" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    // Simulate file-loaded path
+    const file_path = try allocator.dupe(u8, "./from_file");
+    try cfg.paths.append(allocator, file_path);
+
+    // First CLI --path should replace file paths
+    try handlePath(&cfg, allocator, "./from_cli");
+    try testing.expectEqual(@as(usize, 1), cfg.paths.items.len);
+    try testing.expectEqualStrings("./from_cli", cfg.paths.items[0]);
+
+    // Second CLI --path accumulates
+    try handlePath(&cfg, allocator, "./also_cli");
+    try testing.expectEqual(@as(usize, 2), cfg.paths.items.len);
 }
 
 /// handleSkipCache handles the skip-cache option.
@@ -198,28 +288,7 @@ pub fn handleTimezone(cfg: *Config, allocator: std.mem.Allocator, value: ?[]cons
     _ = allocator;
     const tz_str = value orelse return;
     if (tz_str.len == 0) return;
-
-    const is_negative = tz_str[0] == '-';
-    const start_idx: usize = if (tz_str[0] == '+' or tz_str[0] == '-') 1 else 0;
-
-    var hours: i64 = 0;
-    var minutes: i64 = 0;
-
-    if (std.mem.indexOf(u8, tz_str, ":")) |colon_pos| {
-        hours = try std.fmt.parseInt(i64, tz_str[start_idx..colon_pos], 10);
-        minutes = try std.fmt.parseInt(i64, tz_str[colon_pos + 1 ..], 10);
-
-        if (minutes < 0 or minutes > 59) return error.InvalidTimezoneMinutes;
-        if (hours < 0 or hours > 14) return error.InvalidTimezoneHours;
-    } else {
-        hours = try std.fmt.parseInt(i64, tz_str[start_idx..], 10);
-        if (hours < 0 or hours > 14) return error.InvalidTimezoneHours;
-    }
-
-    var offset_seconds = hours * 3600 + minutes * 60;
-    if (is_negative) offset_seconds = -offset_seconds;
-
-    cfg.timezone_offset = offset_seconds;
+    cfg.timezone_offset = try Config.parseTimezoneStr(tz_str);
 }
 
 test "handleTimezone handles timezone option" {
@@ -244,4 +313,165 @@ test "handleTimezone handles invalid timezone option" {
 
     const result_invalid_format = handleTimezone(&cfg, allocator, "-3:30:00");
     try testing.expectError(error.InvalidCharacter, result_invalid_format);
+}
+
+/// handleWatch enables watch mode.
+pub fn handleWatch(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    _ = allocator;
+    _ = value;
+    cfg.watch = true;
+}
+
+test "handleWatch enables watch mode" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try testing.expect(!cfg.watch);
+    try handleWatch(&cfg, allocator, null);
+    try testing.expect(cfg.watch);
+}
+
+/// handleWatchInterval sets the watch polling interval in milliseconds.
+pub fn handleWatchInterval(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    _ = allocator;
+    if (value) |v| {
+        cfg.watch_interval_ms = try std.fmt.parseInt(u64, v, 10);
+    }
+}
+
+test "handleWatchInterval sets watch interval" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleWatchInterval(&cfg, allocator, "500");
+    try testing.expectEqual(@as(u64, 500), cfg.watch_interval_ms);
+}
+
+test "handleWatchInterval returns error for invalid value" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    const result = handleWatchInterval(&cfg, allocator, "not_a_number");
+    try testing.expectError(error.InvalidCharacter, result);
+}
+
+/// handleOutput sets the output filename for the generated report.
+pub fn handleOutput(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    if (value) |filename| {
+        const trimmed = std.mem.trim(u8, filename, " \t\n\r");
+        if (trimmed.len == 0) return;
+
+        if (cfg.output) |existing| allocator.free(existing);
+        cfg.output = try allocator.dupe(u8, trimmed);
+    }
+}
+
+test "handleOutput sets output filename" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutput(&cfg, allocator, "custom.md");
+    try testing.expectEqualStrings("custom.md", cfg.output.?);
+}
+
+test "handleOutput trims whitespace" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutput(&cfg, allocator, "  output.md  ");
+    try testing.expectEqualStrings("output.md", cfg.output.?);
+}
+
+test "handleOutput ignores empty filename" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutput(&cfg, allocator, "   ");
+    try testing.expect(cfg.output == null);
+}
+
+test "handleOutput replaces previous output value" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutput(&cfg, allocator, "first.md");
+    try handleOutput(&cfg, allocator, "second.md");
+    try testing.expectEqualStrings("second.md", cfg.output.?);
+}
+
+/// handleInit creates the zig.conf.json configuration file with default values.
+/// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
+pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
+    _ = allocator;
+
+    const file = dir.createFile(DEFAULT_CONF_FILENAME, .{
+        .read = true,
+        .exclusive = true,
+    }) catch |err| switch (err) {
+        error.PathAlreadyExists => {
+            std.log.info("zigzag: {s} already exists", .{DEFAULT_CONF_FILENAME});
+            return;
+        },
+        else => return err,
+    };
+    defer file.close();
+
+    try file.writeAll(defaultContent());
+    std.log.info("zigzag: created {s}", .{DEFAULT_CONF_FILENAME});
+}
+
+test "handleInit creates file with default content" {
+    const allocator = std.testing.allocator;
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    try handleInit(allocator, tmp_dir.dir);
+
+    // Verify file was created with valid default JSON
+    const content = try tmp_dir.dir.readFileAlloc(allocator, DEFAULT_CONF_FILENAME, 1 << 20);
+    defer allocator.free(content);
+
+    try testing.expect(content.len > 0);
+
+    const parsed = try std.json.parseFromSlice(
+        @import("../conf/file.zig").FileConf,
+        allocator,
+        content,
+        .{ .ignore_unknown_fields = true },
+    );
+    defer parsed.deinit();
+
+    try testing.expect(parsed.value.watch.? == false);
+    try testing.expectEqual(@as(u64, 1000), parsed.value.watch_interval_ms.?);
+    try testing.expectEqualStrings("report.md", parsed.value.output.?);
+}
+
+test "handleInit does not overwrite existing file" {
+    const allocator = std.testing.allocator;
+
+    var tmp_dir = std.testing.tmpDir(.{});
+    defer tmp_dir.cleanup();
+
+    // Create the file with custom content first
+    {
+        const f = try tmp_dir.dir.createFile(DEFAULT_CONF_FILENAME, .{});
+        defer f.close();
+        try f.writeAll("{\"watch\": true}");
+    }
+
+    // handleInit should not overwrite
+    try handleInit(allocator, tmp_dir.dir);
+
+    const content = try tmp_dir.dir.readFileAlloc(allocator, DEFAULT_CONF_FILENAME, 1 << 20);
+    defer allocator.free(content);
+
+    try testing.expectEqualStrings("{\"watch\": true}", content);
 }
