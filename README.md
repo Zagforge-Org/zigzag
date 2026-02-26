@@ -476,7 +476,7 @@ zig fmt src/
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see `LICENSE.md` file for details.
 
 ## Acknowledgments
 
