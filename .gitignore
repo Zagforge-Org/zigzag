@@ -5,3 +5,4 @@ test_data
 report.md
 zig-out
 root
+zig.conf.json
