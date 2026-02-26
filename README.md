@@ -19,6 +19,9 @@
 - **Timezone-aware timestamps** with configurable offsets
 - **Multi-path support** for processing multiple directories simultaneously
 - **Auto-ignore common directories** (node_modules, .git, build artifacts)
+- **JSON config file** (`zig.conf.json`) for project-level defaults
+- **Watch mode** for continuous report regeneration on file changes
+- **Configurable output filename** for the generated report
 
 ## Installation
 
@@ -38,17 +41,38 @@ The executable will be available at `zig-out/bin/zigzag`.
 
 ## Quick Start
 
-### Basic Usage
+### Initialize a project
 
 ```bash
-# Generate report for current directory
-zigzag --path .
+# Create zig.conf.json with default values in the current directory
+zigzag init
+```
 
-# Generate report for specific directories
-zigzag --path ./src --path ./lib
+### Run from config file
+
+```bash
+# Run using paths and options from zig.conf.json
+zigzag run
+
+# Run from config file, overriding specific options via CLI flags
+zigzag run --path ./src --ignore "*.test.zig"
+zigzag run --watch --watch-interval 500
+```
+
+### Basic ad-hoc usage
+
+```bash
+# Generate report for a specific directory
+zigzag --path ./src
+
+# Multiple paths with ignore patterns
+zigzag --path ./backend --path ./frontend --ignore "*.test.*"
 
 # Generate report with custom timezone (UTC+1)
 zigzag --path ./project --timezone +1
+
+# Custom output filename
+zigzag --path ./src --output context.md
 
 # Skip cache operations
 zigzag --path ./project --skip-cache
@@ -63,16 +87,86 @@ zigzag --path ./src --ignore "*.png" --ignore "*.svg" --ignore "*.jpg"
 # Ignore specific files
 zigzag --path ./src --ignore "test.txt" --ignore "config.json"
 
-# Multiple paths with ignore patterns
-zigzag --path ./backend --path ./frontend --ignore "*.test.*" --ignore "node_modules"
-
 # Tune performance thresholds (in bytes)
 zigzag --path ./src --small 524288 --mmap 8388608
 
 # Generate report with specific timezone offset
 zigzag --path ./src --timezone -5    # UTC-5 (Eastern Time)
 zigzag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
+
+# Watch mode — re-generate every 2 seconds
+zigzag --path ./src --watch --watch-interval 2000
 ```
+
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `init`  | Creates `zig.conf.json` with default values in the current directory. No-ops if the file already exists. |
+| `run`   | Loads `zig.conf.json` as the base config, then applies any CLI flags on top. Useful for project-level defaults. |
+
+Without a subcommand, ZigZag applies CLI flags directly (no file config is loaded).
+
+## Configuration File (`zig.conf.json`)
+
+Running `zigzag init` creates a `zig.conf.json` in the current directory:
+
+```json
+{
+  "paths": [],
+  "ignore_patterns": [],
+  "skip_cache": false,
+  "skip_git": false,
+  "small_threshold": 1048576,
+  "mmap_threshold": 16777216,
+  "timezone": null,
+  "output": "report.md",
+  "watch": false,
+  "watch_interval_ms": 1000
+}
+```
+
+### Config Fields
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `paths` | `string[]` | `[]` | Directories to scan |
+| `ignore_patterns` | `string[]` | `[]` | Ignore patterns (same syntax as `--ignore`) |
+| `skip_cache` | `bool` | `false` | Skip cache operations and clear cache |
+| `skip_git` | `bool` | `false` | Skip git operations |
+| `small_threshold` | `number` | `1048576` | Small file threshold in bytes (1 MiB) |
+| `mmap_threshold` | `number` | `16777216` | Memory-mapped file threshold in bytes (16 MiB) |
+| `timezone` | `string\|null` | `null` | Timezone offset string (e.g. `"+1"`, `"-5:30"`) |
+| `output` | `string` | `"report.md"` | Output filename for the generated report |
+| `watch` | `bool` | `false` | Enable watch mode |
+| `watch_interval_ms` | `number` | `1000` | Watch polling interval in milliseconds |
+
+### Config Loading Priority
+
+Settings are applied from lowest to highest priority (later values win):
+
+1. Hard-coded defaults
+2. `zig.conf.json` (when using `zigzag run`)
+3. CLI flags (always override file config)
+
+When the first `--path` CLI flag is encountered, all file-loaded paths are replaced. Same for `--ignore`. Scalar fields (skip_cache, watch, etc.) always take the last CLI value.
+
+## CLI Options
+
+| Option | Description | Default | Example |
+|--------|-------------|---------|---------|
+| `--path` | Path to process (repeatable) | — | `--path ./src --path ./lib` |
+| `--ignore` | Ignore pattern (repeatable) | — | `--ignore "*.png" --ignore "test.txt"` |
+| `--output` | Output filename | `report.md` | `--output context.md` |
+| `--timezone` | Timezone offset from UTC | UTC (0) | `--timezone +1` or `--timezone -5:30` |
+| `--small` | Threshold for small files (bytes) | 1048576 (1 MiB) | `--small 524288` |
+| `--mmap` | Threshold for memory-mapped files (bytes) | 16777216 (16 MiB) | `--mmap 8388608` |
+| `--skip-cache` | Skip cache operations and clear cache | false | `--skip-cache` |
+| `--skip-git` | Skip git operations | false | `--skip-git` |
+| `--watch` | Watch for file changes and regenerate output | false | `--watch` |
+| `--watch-interval` | Watch polling interval in milliseconds | 1000 | `--watch-interval 500` |
+| `--help` | Show help message with examples | — | `--help` |
+| `--version` | Show version information | — | `--version` |
 
 ## Ignore Patterns
 
@@ -147,7 +241,7 @@ zigzag --path ./monorepo \
 
 ## Output Format
 
-Each processed directory contains a `report.md` file with the following structure:
+Each processed directory contains a `report.md` file (or your custom `--output` filename) with the following structure:
 
 ````md
 # Code Report for: `./src`
@@ -179,31 +273,36 @@ const std = @import("std");
 ...
 ````
 
-## Configuration Options
+## Watch Mode
 
-| Option | Description | Default | Example |
-|--------|-------------|---------|---------|
-| `--path` | Path to process (can be used multiple times) | Current directory | `--path ./src --path ./lib` |
-| `--ignore` | Ignore pattern (can be used multiple times) | None | `--ignore "*.png" --ignore "test.txt"` |
-| `--timezone` | Timezone offset from UTC | UTC (0) | `--timezone +1` or `--timezone -5:30` |
-| `--small` | Threshold for small files (bytes) | 1048576 (1 MiB) | `--small 524288` |
-| `--mmap` | Threshold for memory-mapped files (bytes) | 16777216 (16 MiB) | `--mmap 8388608` |
-| `--skip-cache` | Skip cache operations and clear cache | false | `--skip-cache` |
-| `--help` | Show help message with examples | - | `--help` |
-| `--version` | Show version information | - | `--version` |
+Watch mode continuously regenerates the report whenever the polling interval elapses:
+
+```bash
+# Watch with default 1-second interval
+zigzag --path ./src --watch
+
+# Watch with a custom interval (milliseconds)
+zigzag --path ./src --watch --watch-interval 2000
+
+# Watch mode via config file
+zigzag run --watch --watch-interval 500
+```
+
+The cache ensures unchanged files are not reprocessed on each cycle. Press `Ctrl+C` to stop.
 
 ## Architecture
 
 ### Processing Pipeline
 
 1. **Argument Parsing** → Configuration with ignore patterns
-2. **Cache Initialization** → Load/validate cache, remove stale entries
-3. **Thread Pool Setup** → Configure parallel workers
-4. **Directory Traversal** → Walk each specified path
-5. **File Filtering** → Apply ignore patterns and binary detection
-6. **File Processing** → Read, cache, and collect metadata
-7. **Report Generation** → Generate markdown with TOC and metadata
-8. **Cleanup** → Save cache, free resources
+2. **Config File Loading** → `zig.conf.json` applied as base (when using `run`)
+3. **Cache Initialization** → Load/validate cache, remove stale entries
+4. **Thread Pool Setup** → Configure parallel workers
+5. **Directory Traversal** → Walk each specified path
+6. **File Filtering** → Apply ignore patterns and binary detection
+7. **File Processing** → Read, cache, and collect metadata
+8. **Report Generation** → Generate markdown with TOC and metadata
+9. **Cleanup** → Save cache, free resources
 
 ### File Processing Decision Tree
 
@@ -224,7 +323,6 @@ File Encountered
 - Persists between runs in `.cache/files/`
 - Validates on startup to remove stale entries
 - Uses file metadata (mtime, size) for change detection
-- Supports large files with content hashing
 - Performs atomic updates to prevent corruption
 - Verifies cache consistency before shutdown
 
@@ -286,6 +384,7 @@ zig test src/cli/handlers.zig --summary all
 - Binary file detection
 - Cache operations and consistency
 - Directory traversal
+- Config file loading and CLI override behavior
 
 ## Processing Statistics
 
@@ -326,6 +425,9 @@ Ignored: 2
 **Q: Timezone not displaying correctly**
 - A: Use format `+H` or `+H:MM`. Examples: `+1`, `-5`, `+5:30`
 
+**Q: zig.conf.json settings not being picked up**
+- A: Use `zigzag run` (not `zigzag --path ...`) to load the config file. Plain flags bypass file config.
+
 ## Contributing
 
 1. Fork the repository
@@ -349,6 +451,9 @@ zig build run -- --path ./src
 
 # Run tests
 zig build test
+
+# Format code
+zig fmt src/
 ```
 
 ### Code Style
@@ -360,7 +465,6 @@ zig build test
 
 ## Roadmap
 
-- [ ] Support for `.zigzagignore` file (like `.gitignore`)
 - [ ] Regex-based ignore patterns
 - [ ] Glob pattern support (`**/*.png`)
 - [ ] MIME type detection for binary files
