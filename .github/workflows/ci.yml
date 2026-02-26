@@ -1,54 +1,54 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
 
 jobs:
-  fmt:
-    name: Format check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: "0.15.2"
-      - name: Check formatting
-        run: zig fmt --check src/
+    fmt:
+        name: Format check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: mlugg/setup-zig@v2
+              with:
+                  version: "0.15.2"
+            - name: Check formatting
+              run: zig fmt src/
 
-  test:
-    name: Tests (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: "0.15.2"
-      - name: Run tests
-        run: zig test src/root.zig
+    test:
+        name: Tests (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+        steps:
+            - uses: actions/checkout@v4
+            - uses: mlugg/setup-zig@v2
+              with:
+                  version: "0.15.2"
+            - name: Run tests
+              run: zig test src/root.zig
 
-  build:
-    name: Build (${{ matrix.target }})
-    runs-on: ubuntu-latest
-    needs: [fmt, test]
-    strategy:
-      matrix:
-        target:
-          - x86_64-linux-gnu
-          - aarch64-linux-gnu
-          - x86_64-macos
-          - aarch64-macos
-          - x86_64-windows
-    steps:
-      - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v2
-        with:
-          version: "0.15.2"
-      - name: Build release binary
-        run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
+    build:
+        name: Build (${{ matrix.target }})
+        runs-on: ubuntu-latest
+        needs: [fmt, test]
+        strategy:
+            matrix:
+                target:
+                    - x86_64-linux-gnu
+                    - aarch64-linux-gnu
+                    - x86_64-macos
+                    - aarch64-macos
+                    - x86_64-windows
+        steps:
+            - uses: actions/checkout@v4
+            - uses: mlugg/setup-zig@v2
+              with:
+                  version: "0.15.2"
+            - name: Build release binary
+              run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
