@@ -31,7 +31,7 @@ jobs:
         with:
           version: "0.15.2"
       - name: Run tests
-        run: zig build test --summary all
+        run: zig test src/root.zig --summary all
 
   build:
     name: Build (${{ matrix.target }})
