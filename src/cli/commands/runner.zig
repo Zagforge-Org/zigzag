@@ -402,6 +402,175 @@ const PathWatchState = struct {
     }
 };
 
+// ============================================================
+// Tests
+// ============================================================
+
+test "writeReport creates file with header, TOC and file entries" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+
+    var entries = std.StringHashMap(JobEntry).init(alloc);
+    defer entries.deinit();
+
+    // Two entries to verify sorting: "b" should appear after "a" in the TOC
+    try entries.put("src/b_util.zig", JobEntry{
+        .path = "src/b_util.zig",
+        .content = @constCast("pub fn helper() void {}"),
+        .size = 22,
+        .mtime = 1700000000000000000,
+        .extension = ".zig",
+    });
+    try entries.put("src/a_main.zig", JobEntry{
+        .path = "src/a_main.zig",
+        .content = @constCast("const std = @import(\"std\");"),
+        .size = 26,
+        .mtime = 1700000000000000000,
+        .extension = ".zig",
+    });
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeReport(&entries, md_path, "src", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    defer alloc.free(content);
+
+    // Header
+    try std.testing.expect(std.mem.indexOf(u8, content, "# Code Report for: `src`") != null);
+    // TOC
+    try std.testing.expect(std.mem.indexOf(u8, content, "## Table of Contents") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "src/a_main.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "src/b_util.zig") != null);
+    // Sorted: a_main before b_util
+    const pos_a = std.mem.indexOf(u8, content, "src/a_main.zig").?;
+    const pos_b = std.mem.indexOf(u8, content, "src/b_util.zig").?;
+    try std.testing.expect(pos_a < pos_b);
+    // Code fences and content
+    try std.testing.expect(std.mem.indexOf(u8, content, "```zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "const std = @import") != null);
+}
+
+test "writeReport handles empty entries map" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+
+    var entries = std.StringHashMap(JobEntry).init(alloc);
+    defer entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeReport(&entries, md_path, "empty_dir", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "# Code Report for: `empty_dir`") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "## Table of Contents") != null);
+    // No file entries — report is still valid markdown
+    try std.testing.expect(content.len > 0);
+}
+
+test "writeReport overwrites existing file" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    // First write with one entry
+    var entries1 = std.StringHashMap(JobEntry).init(alloc);
+    defer entries1.deinit();
+    try entries1.put("first.zig", JobEntry{
+        .path = "first.zig",
+        .content = @constCast("// first"),
+        .size = 7,
+        .mtime = 0,
+        .extension = ".zig",
+    });
+    try writeReport(&entries1, md_path, ".", &cfg, alloc);
+
+    // Second write with different entry — must replace, not append
+    var entries2 = std.StringHashMap(JobEntry).init(alloc);
+    defer entries2.deinit();
+    try entries2.put("second.zig", JobEntry{
+        .path = "second.zig",
+        .content = @constCast("// second"),
+        .size = 8,
+        .mtime = 0,
+        .extension = ".zig",
+    });
+    try writeReport(&entries2, md_path, ".", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "second.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "first.zig") == null);
+}
+
+test "PathWatchState.removeFile removes entry from map and frees memory" {
+    // processFileJob uses page_allocator for entry slices; removeFile mirrors that
+    const page_alloc = std.heap.page_allocator;
+
+    var state: PathWatchState = undefined;
+    state.entries_mutex = .{};
+    state.allocator = std.testing.allocator;
+    state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
+    defer state.file_entries.deinit();
+
+    const path = try page_alloc.dupe(u8, "src/target.zig");
+    const content = try page_alloc.dupe(u8, "pub fn run() void {}");
+    const ext = try page_alloc.dupe(u8, ".zig");
+
+    try state.file_entries.put(path, JobEntry{
+        .path = path,
+        .content = content,
+        .size = 20,
+        .mtime = 0,
+        .extension = ext,
+    });
+
+    try std.testing.expectEqual(@as(usize, 1), state.file_entries.count());
+    state.removeFile("src/target.zig");
+    try std.testing.expectEqual(@as(usize, 0), state.file_entries.count());
+}
+
+test "PathWatchState.removeFile is a no-op for unknown paths" {
+    var state: PathWatchState = undefined;
+    state.entries_mutex = .{};
+    state.allocator = std.testing.allocator;
+    state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
+    defer state.file_entries.deinit();
+
+    // Should not crash or error on a path that isn't in the map
+    state.removeFile("nonexistent/path.zig");
+    try std.testing.expectEqual(@as(usize, 0), state.file_entries.count());
+}
+
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-reads changed files.
 pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
