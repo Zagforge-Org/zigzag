@@ -3,7 +3,7 @@ const options = @import("../options.zig").options;
 const FileConf = @import("../../conf/file.zig").FileConf;
 const loadFileConf = @import("../../conf/file.zig").load;
 
-pub const VERSION = "0.9.0";
+pub const VERSION = "0.10.0";
 
 const DEFAULT_SMALL_THRESHOLD = 1 << 20; // 1 MiB
 const DEFAULT_MMAP_THRESHOLD = 16 << 20; // 16 MiB
@@ -29,7 +29,6 @@ pub const Config = struct {
     timezone_offset: ?i64, // Offset in seconds from UTC (e.g., 3600 for UTC+1)
     version: []const u8 = VERSION,
     watch: bool,
-    watch_interval_ms: u64,
     output: ?[]u8, // Output filename; null means "report.md"
 
     // Internal tracking for memory management and CLI override behavior.
@@ -54,7 +53,6 @@ pub const Config = struct {
             .n_threads = std.Thread.getCpuCount() catch 1,
             .timezone_offset = null,
             .watch = false,
-            .watch_interval_ms = 1000,
             .output = null,
             ._ignore_patterns_allocated = false,
             ._paths_set_by_cli = false,
@@ -136,7 +134,6 @@ pub const Config = struct {
         if (conf.small_threshold) |v| self.small_threshold = v;
         if (conf.mmap_threshold) |v| self.mmap_threshold = v;
         if (conf.watch) |v| self.watch = v;
-        if (conf.watch_interval_ms) |v| self.watch_interval_ms = v;
 
         // Apply timezone
         if (conf.timezone) |tz| {
@@ -241,7 +238,6 @@ test "Config.initDefault has expected defaults" {
     try std.testing.expect(!cfg.skip_cache);
     try std.testing.expect(!cfg.skip_git);
     try std.testing.expect(!cfg.watch);
-    try std.testing.expectEqual(@as(u64, 1000), cfg.watch_interval_ms);
     try std.testing.expect(cfg.output == null);
     try std.testing.expect(cfg.timezone_offset == null);
     try std.testing.expectEqual(@as(usize, 0), cfg.paths.items.len);
@@ -330,7 +326,6 @@ test "Config.applyFileConf applies scalar values" {
         .skip_cache = true,
         .skip_git = true,
         .watch = true,
-        .watch_interval_ms = 500,
         .small_threshold = 2048,
         .mmap_threshold = 4096,
     };
@@ -339,7 +334,6 @@ test "Config.applyFileConf applies scalar values" {
     try std.testing.expect(cfg.skip_cache);
     try std.testing.expect(cfg.skip_git);
     try std.testing.expect(cfg.watch);
-    try std.testing.expectEqual(@as(u64, 500), cfg.watch_interval_ms);
     try std.testing.expectEqual(@as(usize, 2048), cfg.small_threshold);
     try std.testing.expectEqual(@as(usize, 4096), cfg.mmap_threshold);
 }
