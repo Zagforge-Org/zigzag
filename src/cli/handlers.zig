@@ -75,7 +75,6 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  --timezone       Timezone offset from UTC (e.g., +1, -5, +5:30)
         \\  --output         Output filename (default: report.md)
         \\  --watch          Watch for file changes and regenerate output
-        \\  --watch-interval Watch polling interval in milliseconds (default: 1000)
         \\
         \\Ignore Pattern Examples:
         \\  --ignore "*.png"              Ignore all PNG files
@@ -90,7 +89,7 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\Examples:
         \\  zigzag run
         \\  zigzag run --path ./src --ignore "*.test.zig"
-        \\  zigzag run --watch --watch-interval 500
+        \\  zigzag run --watch
         \\  zigzag --path ./project1 --path ./project2
         \\  zigzag --path ./src --timezone +1
         \\
@@ -332,31 +331,6 @@ test "handleWatch enables watch mode" {
     try testing.expect(cfg.watch);
 }
 
-/// handleWatchInterval sets the watch polling interval in milliseconds.
-pub fn handleWatchInterval(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
-    _ = allocator;
-    if (value) |v| {
-        cfg.watch_interval_ms = try std.fmt.parseInt(u64, v, 10);
-    }
-}
-
-test "handleWatchInterval sets watch interval" {
-    const allocator = std.testing.allocator;
-    var cfg = makeTestConfig(allocator);
-    defer cfg.deinit();
-
-    try handleWatchInterval(&cfg, allocator, "500");
-    try testing.expectEqual(@as(u64, 500), cfg.watch_interval_ms);
-}
-
-test "handleWatchInterval returns error for invalid value" {
-    const allocator = std.testing.allocator;
-    var cfg = makeTestConfig(allocator);
-    defer cfg.deinit();
-
-    const result = handleWatchInterval(&cfg, allocator, "not_a_number");
-    try testing.expectError(error.InvalidCharacter, result);
-}
 
 /// handleOutput sets the output filename for the generated report.
 pub fn handleOutput(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
@@ -450,7 +424,6 @@ test "handleInit creates file with default content" {
     defer parsed.deinit();
 
     try testing.expect(parsed.value.watch.? == false);
-    try testing.expectEqual(@as(u64, 1000), parsed.value.watch_interval_ms.?);
     try testing.expectEqualStrings("report.md", parsed.value.output.?);
 }
 
