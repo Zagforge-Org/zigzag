@@ -65,17 +65,9 @@ pub fn main() !void {
                 }
 
                 if (typedCfg.watch) {
-                    // Watch mode: run continuously, re-generating on each interval
-                    std.log.info("Watch mode enabled (interval: {d}ms). Press Ctrl+C to stop.", .{typedCfg.watch_interval_ms});
-                    while (true) {
-                        _ = runner.exec(&typedCfg, &cache) catch |err| {
-                            switch (err) {
-                                error.ErrorNotFound => {},
-                                else => std.log.err("zigzag: error during watch cycle: {s}", .{@errorName(err)}),
-                            }
-                        };
-                        std.Thread.sleep(typedCfg.watch_interval_ms * std.time.ns_per_ms);
-                    }
+                    runner.execWatch(&typedCfg, &cache) catch |err| {
+                        std.log.err("zigzag: watch error: {s}", .{@errorName(err)});
+                    };
                 } else {
                     _ = runner.exec(&typedCfg, &cache) catch |err| {
                         switch (err) {
