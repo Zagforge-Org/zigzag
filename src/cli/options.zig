@@ -19,6 +19,5 @@ pub const options = [_]OptionHandler{
     .{ .name = "--ignore", .takes_value = true, .handler = &handler.handleIgnore },
     .{ .name = "--timezone", .takes_value = true, .handler = &handler.handleTimezone },
     .{ .name = "--watch", .takes_value = false, .handler = &handler.handleWatch },
-    .{ .name = "--watch-interval", .takes_value = true, .handler = &handler.handleWatchInterval },
     .{ .name = "--output", .takes_value = true, .handler = &handler.handleOutput },
 };
