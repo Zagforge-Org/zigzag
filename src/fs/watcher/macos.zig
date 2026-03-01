@@ -1,5 +1,6 @@
 const std = @import("std");
 const posix = std.posix;
+const c = std.c;
 
 pub const WatchEventKind = enum { modified, created, deleted };
 pub const WatchEvent = struct {
@@ -55,9 +56,9 @@ pub const Watcher = struct {
 
         const kev = posix.Kevent{
             .ident = @intCast(fd),
-            .filter = posix.EVFILT_VNODE,
-            .flags = posix.EV_ADD | posix.EV_CLEAR | posix.EV_ENABLE,
-            .fflags = posix.NOTE_WRITE | posix.NOTE_DELETE | posix.NOTE_RENAME,
+            .filter = c.EVFILT.VNODE,
+            .flags = c.EV.ADD | c.EV.CLEAR | c.EV.ENABLE,
+            .fflags = c.NOTE.WRITE | c.NOTE.DELETE | c.NOTE.RENAME,
             .data = 0,
             .udata = 0,
         };
@@ -90,8 +91,8 @@ pub const Watcher = struct {
         var ts_storage: posix.timespec = undefined;
         const ts_ptr: ?*const posix.timespec = if (timeout_ms >= 0) blk: {
             ts_storage = .{
-                .tv_sec = @intCast(@divFloor(timeout_ms, 1000)),
-                .tv_nsec = @intCast(@mod(timeout_ms, 1000) * std.time.ns_per_ms),
+                .sec = @intCast(@divFloor(timeout_ms, 1000)),
+                .nsec = @intCast(@mod(timeout_ms, 1000) * std.time.ns_per_ms),
             };
             break :blk &ts_storage;
         } else null;
