@@ -93,6 +93,11 @@ src/
     walk.zig                # Walk — recursive directory traversal
     file.zig                # File reading strategies (alloc/mmap/chunked)
     mmap/                   # Platform-specific mmap (unix/, windows/)
+    watcher.zig             # Platform-switched Watcher public API
+    watcher/
+      linux.zig             # inotify implementation
+      macos.zig             # kqueue implementation (macOS/BSD)
+      windows.zig           # ReadDirectoryChangesW (background thread)
     directory.zig           # Directory utilities
     directory_test.zig      # Directory tests
     stdout.zig              # stdoutPrint helper
@@ -109,6 +114,7 @@ src/
     wait_group.zig          # WaitGroup for synchronization
   platform/
     windows/api.zig         # Windows-specific platform API
+    windows/watch.zig       # ReadDirectoryChangesW extern declarations
   benchmarks/
     file_benchmark.zig      # Benchmark suite
 ```

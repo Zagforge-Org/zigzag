@@ -56,7 +56,7 @@ zigzag run
 
 # Run from config file, overriding specific options via CLI flags
 zigzag run --path ./src --ignore "*.test.zig"
-zigzag run --watch --watch-interval 500
+zigzag run --watch
 ```
 
 ### Basic ad-hoc usage
@@ -94,8 +94,8 @@ zigzag --path ./src --small 524288 --mmap 8388608
 zigzag --path ./src --timezone -5    # UTC-5 (Eastern Time)
 zigzag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
 
-# Watch mode — re-generate every 2 seconds
-zigzag --path ./src --watch --watch-interval 2000
+# Watch mode — react instantly to file changes
+zigzag --path ./src --watch
 ```
 
 ## Subcommands
@@ -121,8 +121,7 @@ Running `zigzag init` creates a `zig.conf.json` in the current directory:
   "mmap_threshold": 16777216,
   "timezone": null,
   "output": "report.md",
-  "watch": false,
-  "watch_interval_ms": 1000
+  "watch": false
 }
 ```
 
@@ -139,7 +138,6 @@ Running `zigzag init` creates a `zig.conf.json` in the current directory:
 | `timezone` | `string\|null` | `null` | Timezone offset string (e.g. `"+1"`, `"-5:30"`) |
 | `output` | `string` | `"report.md"` | Output filename for the generated report |
 | `watch` | `bool` | `false` | Enable watch mode |
-| `watch_interval_ms` | `number` | `1000` | Watch polling interval in milliseconds |
 
 ### Config Loading Priority
 
@@ -164,7 +162,6 @@ When the first `--path` CLI flag is encountered, all file-loaded paths are repla
 | `--skip-cache` | Skip cache operations and clear cache | false | `--skip-cache` |
 | `--skip-git` | Skip git operations | false | `--skip-git` |
 | `--watch` | Watch for file changes and regenerate output | false | `--watch` |
-| `--watch-interval` | Watch polling interval in milliseconds | 1000 | `--watch-interval 500` |
 | `--help` | Show help message with examples | — | `--help` |
 | `--version` | Show version information | — | `--version` |
 
@@ -275,20 +272,17 @@ const std = @import("std");
 
 ## Watch Mode
 
-Watch mode continuously regenerates the report whenever the polling interval elapses:
+Watch mode uses OS-level filesystem events (inotify on Linux, kqueue on macOS/BSD, ReadDirectoryChangesW on Windows) to detect changes instantly. Only the changed file is re-read from disk; the report is rebuilt from the in-memory state of all other files.
 
 ```bash
-# Watch with default 1-second interval
+# Watch a directory — reacts within ~50 ms of any file change
 zigzag --path ./src --watch
 
-# Watch with a custom interval (milliseconds)
-zigzag --path ./src --watch --watch-interval 2000
-
 # Watch mode via config file
-zigzag run --watch --watch-interval 500
+zigzag run --watch
 ```
 
-The cache ensures unchanged files are not reprocessed on each cycle. Press `Ctrl+C` to stop.
+Events are debounced: rapid changes within a 50 ms window are batched into a single report write. Press `Ctrl+C` to stop.
 
 ## Architecture
 
