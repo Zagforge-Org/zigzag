@@ -12,7 +12,6 @@ pub const FileConf = struct {
     timezone: ?[]const u8 = null,
     output: ?[]const u8 = null,
     watch: ?bool = null,
-    watch_interval_ms: ?u64 = null,
 };
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
@@ -29,8 +28,7 @@ pub fn defaultContent() []const u8 {
     \\  "mmap_threshold": 16777216,
     \\  "timezone": null,
     \\  "output": "report.md",
-    \\  "watch": false,
-    \\  "watch_interval_ms": 1000
+    \\  "watch": false
     \\}
     \\
     ;
@@ -92,7 +90,7 @@ test "loadFromPath parses valid JSON with all fields" {
         const f = try std.fs.cwd().createFile(tmp_path, .{});
         defer f.close();
         try f.writeAll(
-            \\{"paths": ["./src"], "skip_cache": true, "watch": false, "watch_interval_ms": 500}
+            \\{"paths": ["./src"], "skip_cache": true, "watch": false}
         );
     }
     defer std.fs.cwd().deleteFile(tmp_path) catch {};
@@ -108,7 +106,6 @@ test "loadFromPath parses valid JSON with all fields" {
     try std.testing.expectEqualStrings("./src", parsed.value.paths.?[0]);
     try std.testing.expect(parsed.value.skip_cache.? == true);
     try std.testing.expect(parsed.value.watch.? == false);
-    try std.testing.expectEqual(@as(u64, 500), parsed.value.watch_interval_ms.?);
 }
 
 test "loadFromPath handles empty JSON object" {
@@ -171,7 +168,6 @@ test "defaultContent is valid parseable JSON" {
     try std.testing.expectEqual(@as(usize, 0), parsed.value.paths.?.len);
     try std.testing.expect(parsed.value.skip_cache.? == false);
     try std.testing.expect(parsed.value.watch.? == false);
-    try std.testing.expectEqual(@as(u64, 1000), parsed.value.watch_interval_ms.?);
     try std.testing.expectEqualStrings("report.md", parsed.value.output.?);
 }
 
