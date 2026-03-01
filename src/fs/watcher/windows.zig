@@ -92,11 +92,12 @@ fn watchThread(ctx: *WatchCtx) void {
             )[0 .. info.FileNameLength / @sizeOf(u16)];
 
             var name_buf: [std.fs.max_path_bytes]u8 = undefined;
-            const name_utf8 = std.unicode.utf16LeToUtf8(&name_buf, name_u16) catch {
+            const name_len = std.unicode.utf16LeToUtf8(&name_buf, name_u16) catch {
                 if (info.NextEntryOffset == 0) break;
                 offset += info.NextEntryOffset;
                 continue;
             };
+            const name_utf8 = name_buf[0..name_len];
 
             if (std.fs.path.join(ctx.allocator, &.{ ctx.path, name_utf8 })) |full_path| {
                 const kind: WatchEventKind = switch (info.Action) {
