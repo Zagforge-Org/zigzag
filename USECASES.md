@@ -42,8 +42,7 @@ Generated `zig.conf.json`:
   "mmap_threshold": 16777216,
   "timezone": null,
   "output": "report.md",
-  "watch": false,
-  "watch_interval_ms": 1000
+  "watch": false
 }
 ```
 
@@ -192,7 +191,7 @@ zigzag run
 
 ## Watch Mode
 
-Watch mode polls the directory every N milliseconds and regenerates the report whenever files change. The cache ensures only modified files are reprocessed.
+Watch mode uses OS-level filesystem events — inotify on Linux, kqueue on macOS/BSD, ReadDirectoryChangesW on Windows — to react instantly to changes. Only the file that changed is re-read from disk; the rest of the report is rebuilt from in-memory state. Events within a 50 ms window are batched together before the report is rewritten.
 
 ### Enable via flag
 
@@ -205,8 +204,7 @@ zigzag --path ./src --watch
 ```json
 {
   "paths": ["./src"],
-  "watch": true,
-  "watch_interval_ms": 500
+  "watch": true
 }
 ```
 
@@ -214,31 +212,16 @@ zigzag --path ./src --watch
 zigzag run
 ```
 
-### Adjust polling interval
-
-Default is 1000 ms (1 second). For tighter feedback during active development:
-
-```bash
-zigzag --path ./src --watch --watch-interval 250
-```
-
-For a battery-friendly background scan:
-
-```bash
-zigzag --path ./src --watch --watch-interval 5000
-```
-
 ### Override watch settings from the CLI
 
 Config file enables watch by default, but you want a one-off run:
 
 ```bash
-# --watch is not passed, so the flag from the file is overridden to false
-# (boolean flags work differently: pass the flag to set true, omit to leave file setting)
+# --watch is not passed, so watch stays false (only a single run)
 zigzag run --path ./src
 ```
 
-> **Note:** Watching runs until you press `Ctrl+C`. The report is guaranteed to be fully written at the end of each cycle before the next cycle starts.
+> **Note:** Watching runs until you press `Ctrl+C`. The report is fully written before the watcher resumes listening.
 
 ---
 
@@ -401,12 +384,11 @@ zigzag run \
   --output full-review.md
 ```
 
-### Live watch with custom interval and output, skipping cache
+### Live watch with custom output, skipping cache
 
 ```bash
 zigzag --path ./src \
        --watch \
-       --watch-interval 300 \
        --output live.md \
        --skip-cache
 ```
