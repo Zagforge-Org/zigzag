@@ -3,7 +3,7 @@ const options = @import("../options.zig").options;
 const FileConf = @import("../../conf/file.zig").FileConf;
 const loadFileConf = @import("../../conf/file.zig").load;
 
-pub const VERSION = "0.10.0";
+pub const VERSION = "0.11.0";
 
 const DEFAULT_SMALL_THRESHOLD = 1 << 20; // 1 MiB
 const DEFAULT_MMAP_THRESHOLD = 16 << 20; // 16 MiB
