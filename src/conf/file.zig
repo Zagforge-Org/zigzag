@@ -12,6 +12,7 @@ pub const FileConf = struct {
     timezone: ?[]const u8 = null,
     output: ?[]const u8 = null,
     watch: ?bool = null,
+    json_output: ?bool = null,
 };
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
@@ -28,7 +29,8 @@ pub fn defaultContent() []const u8 {
     \\  "mmap_threshold": 16777216,
     \\  "timezone": null,
     \\  "output": "report.md",
-    \\  "watch": false
+    \\  "watch": false,
+    \\  "json_output": false
     \\}
     \\
     ;
@@ -169,6 +171,52 @@ test "defaultContent is valid parseable JSON" {
     try std.testing.expect(parsed.value.skip_cache.? == false);
     try std.testing.expect(parsed.value.watch.? == false);
     try std.testing.expectEqualStrings("report.md", parsed.value.output.?);
+}
+
+test "defaultContent includes json_output field set to false" {
+    const allocator = std.testing.allocator;
+    const content = defaultContent();
+    const parsed = try std.json.parseFromSlice(FileConf, allocator, content, .{
+        .ignore_unknown_fields = true,
+    });
+    defer parsed.deinit();
+
+    try std.testing.expect(parsed.value.json_output != null);
+    try std.testing.expect(parsed.value.json_output.? == false);
+}
+
+test "loadFromPath parses json_output true" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_json_output_true.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"json_output\": true}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value.json_output.? == true);
+}
+
+test "loadFromPath sets json_output to null when field is absent" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_json_output_absent.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"skip_cache\": true}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value.json_output == null);
 }
 
 test "loadFromPath ignores unknown JSON fields" {
