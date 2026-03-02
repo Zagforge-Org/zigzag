@@ -7,3 +7,4 @@ zig-out
 root
 zig.conf.json
 zigzag
+report.json
