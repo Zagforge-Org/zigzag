@@ -50,7 +50,7 @@ zig build run-benchmark
 1. Creates a `WalkerCtx` holding shared state (thread pool, wait group, cache, stats, file entries map, mutex)
 2. `Walk.walkDir()` (`src/fs/walk.zig`) recursively traverses the directory
 3. For each file, `walkerCallback` (`src/walker/callback.zig`) spawns a `processFileJob` on the thread pool
-4. After `wg.wait()`, the runner sorts and writes all collected entries to `report.md`
+4. After `wg.wait()`, the runner calls `report.writeReport()` to write the markdown, and `report.writeJsonReport()` when `json_output` is enabled
 
 ### Job Processing (`src/jobs/process.zig`)
 
@@ -81,7 +81,9 @@ src/
     handlers.zig            # Handler functions + tests for each CLI option
     commands/
       config.zig            # Config struct, parse(), VERSION constant
-      runner.zig            # processPath(), writeFileEntry(), exec()
+      runner.zig            # processPath(), exec() — orchestrates per-path work
+      watch.zig             # execWatch() — watch-mode event loop
+      report.zig            # writeReport() (markdown), writeJsonReport() (JSON), deriveJsonPath()
       stats.zig             # ProcessStats with atomic counters
       writer.zig            # TProcessWriter type alias for callback
     context.zig             # FileContext (ignore list, md file, mutex)
@@ -104,7 +106,7 @@ src/
     utils.zig               # Misc fs utilities
   jobs/
     job.zig                 # Job struct passed to thread pool
-    entry.zig               # JobEntry (path, content, size, mtime, extension)
+    entry.zig               # JobEntry (path, content, size, mtime, extension, line_count) + BinaryEntry
     process.zig             # processFileJob — ignore, cache, binary detect, store
   walker/
     callback.zig            # walkerCallback — spawns jobs onto pool
@@ -126,5 +128,7 @@ src/
 - **Ignore patterns** are stored as a comma-joined string in `Config.ignore_patterns` and split in `processPath()` before being passed around. Pattern matching (`matchesPattern`) supports `*.ext`, `prefix*`, `*suffix`, and exact/path-contains matches.
 
 - **Thread safety**: file entries are collected into a `StringHashMap` protected by `std.Thread.Mutex`. Stats use atomic operations (`fetchAdd`/`fetchSub`).
+
+- **JSON output**: when `Config.json_output` is true (set via `--json` or `zig.conf.json`), `runner.processPath()` calls `report.writeJsonReport()` after the markdown. The JSON path is derived by `report.deriveJsonPath()` (replaces `.md` extension with `.json`).
 
 - **Tests** live inline in handler files (using `test "..." { ... }` blocks) and are wired into `zig build test` via `src/root.zig` and `build.zig`.
