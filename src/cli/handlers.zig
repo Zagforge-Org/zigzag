@@ -380,6 +380,22 @@ test "handleOutput replaces previous output value" {
     try testing.expectEqualStrings("second.md", cfg.output.?);
 }
 
+/// handleJson enables JSON report output alongside the markdown report.
+pub fn handleJson(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    _ = allocator;
+    _ = value;
+    cfg.json_output = true;
+}
+
+test "handleJson sets json_output to true" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+    try std.testing.expect(!cfg.json_output);
+    try handleJson(&cfg, allocator, null);
+    try std.testing.expect(cfg.json_output);
+}
+
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
 pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
