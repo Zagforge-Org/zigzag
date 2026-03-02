@@ -1,5 +1,6 @@
 const std = @import("std");
 const Job = @import("job.zig").Job;
+const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
 
 fn basename(path: []const u8) []const u8 {
@@ -135,6 +136,19 @@ fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
     return false;
 }
 
+/// Count lines in a content buffer.
+/// Each '\n' counts as a line separator; if the content doesn't end with '\n',
+/// the last partial line is still counted.
+fn countLines(content: []const u8) usize {
+    if (content.len == 0) return 0;
+    var count: usize = 0;
+    for (content) |c| {
+        if (c == '\n') count += 1;
+    }
+    if (content[content.len - 1] != '\n') count += 1;
+    return count;
+}
+
 pub fn processFileJob(job: Job) anyerror!void {
     defer {
         var mutable_job = job;
@@ -146,6 +160,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const cache_opt = job.cache;
     const stats = job.stats;
     const file_entries = job.file_entries;
+    const binary_entries = job.binary_entries;
     const entries_mutex = job.entries_mutex;
 
     if (file_ctx) |ctx| {
@@ -294,14 +309,32 @@ pub fn processFileJob(job: Job) anyerror!void {
     // =========================
     // Binary file detection
     // =========================
+    const extension = getExtension(path);
+
     if (isBinaryFile(path, content)) {
         std.log.info("Skipping binary file: {s}", .{path});
         allocator.free(content);
-        _ = stats.ignored_files.fetchAdd(1, .monotonic);
-        // Adjust stats - we counted it as processed, but it's actually ignored
+        _ = stats.binary_files.fetchAdd(1, .monotonic);
         _ = stats.processed_files.fetchSub(1, .monotonic);
+
+        entries_mutex.lock();
+        defer entries_mutex.unlock();
+
+        const path_copy = try allocator.dupe(u8, path);
+        const ext_copy = try allocator.dupe(u8, extension);
+        try binary_entries.put(path_copy, .{
+            .path = path_copy,
+            .size = size,
+            .mtime = mtime,
+            .extension = ext_copy,
+        });
         return;
     }
+
+    // =========================
+    // Line count
+    // =========================
+    const line_count = countLines(content);
 
     // =========================
     // Store result
@@ -310,7 +343,6 @@ pub fn processFileJob(job: Job) anyerror!void {
     defer entries_mutex.unlock();
 
     const path_copy = try allocator.dupe(u8, path);
-    const extension = getExtension(path);
     const ext_copy = try allocator.dupe(u8, extension);
 
     try file_entries.put(path_copy, .{
@@ -319,5 +351,74 @@ pub fn processFileJob(job: Job) anyerror!void {
         .size = size,
         .mtime = mtime,
         .extension = ext_copy,
+        .line_count = line_count,
     });
+}
+
+test "countLines returns 0 for empty content" {
+    try std.testing.expectEqual(@as(usize, 0), countLines(""));
+}
+
+test "countLines counts a single line with no trailing newline" {
+    try std.testing.expectEqual(@as(usize, 1), countLines("hello"));
+}
+
+test "countLines counts a single line with trailing newline" {
+    try std.testing.expectEqual(@as(usize, 1), countLines("hello\n"));
+}
+
+test "countLines counts multiple lines with trailing newline" {
+    try std.testing.expectEqual(@as(usize, 3), countLines("a\nb\nc\n"));
+}
+
+test "countLines counts multiple lines without trailing newline" {
+    try std.testing.expectEqual(@as(usize, 3), countLines("a\nb\nc"));
+}
+
+test "isBinaryFile detects known binary extensions" {
+    try std.testing.expect(isBinaryFile("logo.png", ""));
+    try std.testing.expect(isBinaryFile("archive.zip", ""));
+    try std.testing.expect(isBinaryFile("binary.exe", ""));
+    try std.testing.expect(isBinaryFile("lib.so", ""));
+}
+
+test "isBinaryFile extension check is case-insensitive" {
+    try std.testing.expect(isBinaryFile("logo.PNG", ""));
+    try std.testing.expect(isBinaryFile("font.TTF", ""));
+}
+
+test "isBinaryFile returns false for text extensions" {
+    try std.testing.expect(!isBinaryFile("main.zig", "const x = 1;"));
+    try std.testing.expect(!isBinaryFile("script.py", "print('hi')"));
+    try std.testing.expect(!isBinaryFile("README.md", "# Hello"));
+}
+
+test "isBinaryFile detects null bytes in content" {
+    const content = "text\x00more";
+    try std.testing.expect(isBinaryFile("unknown", content));
+}
+
+test "isBinaryFile detects high ratio of non-printable chars" {
+    // Build a buffer where >30% of first 512 bytes are non-printable (control chars, not \n/\r/\t)
+    var buf: [100]u8 = undefined;
+    // 40 non-printable control chars (0x01) + 60 printable 'A' = 40% non-printable
+    for (buf[0..40]) |*b| b.* = 0x01;
+    for (buf[40..]) |*b| b.* = 'A';
+    try std.testing.expect(isBinaryFile("data", &buf));
+}
+
+test "isBinaryFile returns false for low ratio of non-printable chars" {
+    var buf: [100]u8 = undefined;
+    // 10 control chars + 90 printable = 10% non-printable, below 30% threshold
+    for (buf[0..10]) |*b| b.* = 0x01;
+    for (buf[10..]) |*b| b.* = 'A';
+    try std.testing.expect(!isBinaryFile("data", &buf));
+}
+
+test "isBinaryFile only examines first 512 bytes" {
+    // First 512 bytes are clean text; byte 513+ has null byte — should NOT be detected
+    var buf: [600]u8 = undefined;
+    for (buf[0..512]) |*b| b.* = 'A';
+    buf[512] = 0x00; // null byte beyond the check window
+    try std.testing.expect(!isBinaryFile("data", &buf));
 }
