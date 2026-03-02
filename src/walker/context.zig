@@ -6,6 +6,7 @@ const FileContext = @import("../cli/context.zig").FileContext;
 const CacheImpl = @import("../cache/impl.zig").CacheImpl;
 const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;
 const JobEntry = @import("../jobs/entry.zig").JobEntry;
+const BinaryEntry = @import("../jobs/entry.zig").BinaryEntry;
 
 pub const WalkerCtx = struct {
     pool: *Pool,
@@ -14,6 +15,7 @@ pub const WalkerCtx = struct {
     cache: ?*CacheImpl,
     stats: *ProcessStats,
     file_entries: *std.StringHashMap(JobEntry),
+    binary_entries: *std.StringHashMap(BinaryEntry),
     entries_mutex: *std.Thread.Mutex,
     allocator: std.mem.Allocator,
 };
