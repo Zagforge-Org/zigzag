@@ -15,6 +15,7 @@ ZigZag scans a directory tree and produces a single Markdown file containing eve
 - [Custom Output](#custom-output)
 - [Timezone-Aware Reports](#timezone-aware-reports)
 - [Performance Tuning](#performance-tuning)
+- [JSON Output](#json-output)
 - [CI / Automation](#ci--automation)
 - [Combining Flags](#combining-flags)
 
@@ -42,7 +43,8 @@ Generated `zig.conf.json`:
   "mmap_threshold": 16777216,
   "timezone": null,
   "output": "report.md",
-  "watch": false
+  "watch": false,
+  "json_output": false
 }
 ```
 
@@ -322,6 +324,49 @@ Files above this size are read using memory-mapped I/O instead of heap allocatio
 ```bash
 zigzag --path ./src --mmap 33554432
 ```
+
+---
+
+## JSON Output
+
+Pass `--json` to generate a structured JSON report alongside the markdown file. The JSON is written next to the markdown with `.json` replacing `.md` (e.g. `report.json` alongside `report.md`).
+
+### One-off JSON report
+
+```bash
+zigzag --path ./src --json
+```
+
+### JSON + markdown together
+
+```bash
+zigzag --path ./src --output context.md --json
+# produces: ./src/context.md and ./src/context.json
+```
+
+### Enable via config file
+
+```json
+{
+  "paths": ["./src"],
+  "json_output": true
+}
+```
+
+```bash
+zigzag run
+```
+
+### What the JSON contains
+
+| Key | Description |
+|-----|-------------|
+| `meta` | Version, generation timestamp (nanoseconds), and scanned paths |
+| `summary` | Counts of source files, binary files, total lines, total bytes, and per-language breakdown |
+| `files` | Sorted array of source file entries: path, size, mtime_ns, extension, language, line count |
+| `binaries` | Sorted array of binary file entries: path, size, mtime_ns, extension |
+
+The JSON report is useful for CI dashboards, metrics collection, or any downstream tooling that processes codebase analytics without parsing markdown.
 
 ---
 
