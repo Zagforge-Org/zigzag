@@ -1,6 +1,7 @@
 const std = @import("std");
 const config = @import("./cli/commands/config.zig");
 const runner = @import("./cli/commands/runner.zig");
+const watch = @import("./cli/commands/watch.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers.zig").printAsciiLogo;
 const handleInit = @import("./cli/handlers.zig").handleInit;
@@ -65,7 +66,7 @@ pub fn main() !void {
                 }
 
                 if (typedCfg.watch) {
-                    runner.execWatch(&typedCfg, &cache) catch |err| {
+                    watch.execWatch(&typedCfg, &cache) catch |err| {
                         std.log.err("zigzag: watch error: {s}", .{@errorName(err)});
                     };
                 } else {
