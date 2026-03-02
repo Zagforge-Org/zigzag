@@ -15,6 +15,7 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
             .cache = walker_ctx.cache,
             .stats = walker_ctx.stats,
             .file_entries = walker_ctx.file_entries,
+            .binary_entries = walker_ctx.binary_entries,
             .entries_mutex = walker_ctx.entries_mutex,
             .allocator = walker_ctx.allocator,
         };
