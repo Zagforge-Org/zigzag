@@ -20,4 +20,5 @@ pub const options = [_]OptionHandler{
     .{ .name = "--timezone", .takes_value = true, .handler = &handler.handleTimezone },
     .{ .name = "--watch", .takes_value = false, .handler = &handler.handleWatch },
     .{ .name = "--output", .takes_value = true, .handler = &handler.handleOutput },
+    .{ .name = "--json", .takes_value = false, .handler = &handler.handleJson },
 };
