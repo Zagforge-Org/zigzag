@@ -65,6 +65,9 @@ const PathWatchState = struct {
         const json_ignore_path = try report.deriveJsonPath(allocator, md_path);
         try self.file_ctx.ignore_list.append(allocator, json_ignore_path);
 
+        const html_ignore_path = try report.deriveHtmlPath(allocator, md_path);
+        try self.file_ctx.ignore_list.append(allocator, html_ignore_path);
+
         if (cfg.ignore_patterns.len != 0) {
             var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
             while (it.next()) |pattern| {
@@ -189,6 +192,12 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
         try std.fmt.allocPrint(allocator, "{s}.json", .{output_filename});
     defer allocator.free(json_output_filename);
 
+    const html_output_filename: []const u8 = if (std.mem.endsWith(u8, output_filename, ".md"))
+        try std.fmt.allocPrint(allocator, "{s}.html", .{output_filename[0 .. output_filename.len - 3]})
+    else
+        try std.fmt.allocPrint(allocator, "{s}.html", .{output_filename});
+    defer allocator.free(html_output_filename);
+
     var pool = Pool{};
     try pool.init(.{ .allocator = allocator, .n_jobs = cfg.n_threads });
     defer pool.deinit();
@@ -219,6 +228,15 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                 defer allocator.free(jp);
                 report.writeJsonReport(&state.file_entries, &state.binary_entries, jp, state.root_path, cfg, allocator) catch |err| {
                     std.log.err("Failed to write initial JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
+                };
+            }
+        }
+        if (cfg.html_output) {
+            const html_path = report.deriveHtmlPath(allocator, state.md_path) catch null;
+            if (html_path) |hp| {
+                defer allocator.free(hp);
+                report.writeHtmlReport(&state.file_entries, &state.binary_entries, hp, state.root_path, cfg, allocator) catch |err| {
+                    std.log.err("Failed to write initial HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
                 };
             }
         }
@@ -264,6 +282,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                 if (std.mem.indexOf(u8, event.path, ".cache") != null) continue;
                 if (std.mem.endsWith(u8, event.path, output_filename)) continue;
                 if (std.mem.endsWith(u8, event.path, json_output_filename)) continue;
+                if (std.mem.endsWith(u8, event.path, html_output_filename)) continue;
 
                 // Find the PathWatchState that owns this path
                 for (states.items) |state| {
@@ -293,6 +312,15 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                         defer allocator.free(jp);
                         report.writeJsonReport(&state.file_entries, &state.binary_entries, jp, state.root_path, cfg, allocator) catch |err| {
                             std.log.err("Failed to write JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
+                        };
+                    }
+                }
+                if (cfg.html_output) {
+                    const html_path = report.deriveHtmlPath(allocator, state.md_path) catch null;
+                    if (html_path) |hp| {
+                        defer allocator.free(hp);
+                        report.writeHtmlReport(&state.file_entries, &state.binary_entries, hp, state.root_path, cfg, allocator) catch |err| {
+                            std.log.err("Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
                         };
                     }
                 }
@@ -348,3 +376,5 @@ test "PathWatchState.removeFile is a no-op for unknown paths" {
     state.removeFile("nonexistent/path.zig");
     try std.testing.expectEqual(@as(usize, 0), state.file_entries.count());
 }
+
+pub fn test_function() void {}
