@@ -49,8 +49,8 @@ pub fn main() !void {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
 
-            // Only initialize cache and run if paths are configured
-            if (typedCfg.paths.items.len > 0) {
+            // Only initialize cache and run if paths are configured and is_run_command is true
+            if (typedCfg.paths.items.len > 0 and is_run_command) {
                 // Create cache directory path (./.cache)
                 const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
                 defer allocator.free(cache_path);
