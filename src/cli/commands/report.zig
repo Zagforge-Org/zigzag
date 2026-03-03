@@ -325,6 +325,241 @@ pub fn writeJsonReport(
     try json_file.writeAll(aw.written());
 }
 
+/// Derive an HTML output path from the markdown path by replacing the extension.
+pub fn deriveHtmlPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
+    if (std.mem.endsWith(u8, md_path, ".md")) {
+        return std.fmt.allocPrint(allocator, "{s}.html", .{md_path[0 .. md_path.len - 3]});
+    }
+    return std.fmt.allocPrint(allocator, "{s}.html", .{md_path});
+}
+
+const dashboard_template = @embedFile("../../templates/dashboard.html");
+
+/// Write a self-contained HTML dashboard alongside the markdown report.
+/// The template is loaded from src/templates/dashboard.html via @embedFile.
+pub fn writeHtmlReport(
+    file_entries: *const std.StringHashMap(JobEntry),
+    binary_entries: *const std.StringHashMap(BinaryEntry),
+    html_path: []const u8,
+    root_path: []const u8,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) !void {
+    const output_filename = std.fs.path.basename(html_path);
+    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
+
+    // --- Aggregate stats (same logic as writeJsonReport) ---
+    var lang_map = std.StringHashMap(LanguageStat).init(allocator);
+    defer {
+        var it = lang_map.iterator();
+        while (it.next()) |entry| allocator.free(entry.value_ptr.name);
+        lang_map.deinit();
+    }
+
+    var total_lines: usize = 0;
+    var total_size: u64 = 0;
+
+    var fit = file_entries.iterator();
+    while (fit.next()) |entry| {
+        const e = entry.value_ptr;
+        total_lines += e.line_count;
+        total_size += e.size;
+
+        const lang = e.getLanguage();
+        const lang_name = if (lang.len > 0) lang else "unknown";
+        const gop = try lang_map.getOrPut(lang_name);
+        if (!gop.found_existing) {
+            gop.value_ptr.* = .{
+                .name = try allocator.dupe(u8, lang_name),
+                .files = 0,
+                .lines = 0,
+                .size_bytes = 0,
+            };
+        }
+        gop.value_ptr.files += 1;
+        gop.value_ptr.lines += e.line_count;
+        gop.value_ptr.size_bytes += e.size;
+    }
+
+    var lang_list: std.ArrayList(LanguageStat) = .empty;
+    defer lang_list.deinit(allocator);
+    var lit = lang_map.iterator();
+    while (lit.next()) |entry| try lang_list.append(allocator, entry.value_ptr.*);
+    std.mem.sort(LanguageStat, lang_list.items, {}, struct {
+        fn lessThan(_: void, a: LanguageStat, b: LanguageStat) bool {
+            return std.mem.lessThan(u8, a.name, b.name);
+        }
+    }.lessThan);
+
+    var sorted_files: std.ArrayList(JobEntry) = .empty;
+    defer sorted_files.deinit(allocator);
+    fit = file_entries.iterator();
+    while (fit.next()) |entry| try sorted_files.append(allocator, entry.value_ptr.*);
+    std.mem.sort(JobEntry, sorted_files.items, {}, struct {
+        fn lessThan(_: void, a: JobEntry, b: JobEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    var sorted_binaries: std.ArrayList(BinaryEntry) = .empty;
+    defer sorted_binaries.deinit(allocator);
+    var bit = binary_entries.iterator();
+    while (bit.next()) |entry| try sorted_binaries.append(allocator, entry.value_ptr.*);
+    std.mem.sort(BinaryEntry, sorted_binaries.items, {}, struct {
+        fn lessThan(_: void, a: BinaryEntry, b: BinaryEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    // --- Build current timestamp ---
+    const now = std.time.timestamp();
+    const local_now = if (cfg.timezone_offset) |offset| now + offset else now;
+    const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_now) };
+    const day_seconds = epoch_seconds.getDaySeconds();
+    const epoch_day = epoch_seconds.getEpochDay();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+
+    const generated_at_str = try std.fmt.allocPrint(
+        allocator,
+        "{d}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}",
+        .{
+            year_day.year,
+            month_day.month.numeric(),
+            month_day.day_index + 1,
+            day_seconds.getHoursIntoDay(),
+            day_seconds.getMinutesIntoHour(),
+            day_seconds.getSecondsIntoMinute(),
+        },
+    );
+    defer allocator.free(generated_at_str);
+
+    // --- Split template on two markers ---
+    // __ZIGZAG_DATA__    → small report JSON (no file content) parsed eagerly
+    // __ZIGZAG_CONTENT__ → content map {"path": "source"} loaded lazily on first viewer open
+    const marker = "__ZIGZAG_DATA__";
+    const content_marker = "__ZIGZAG_CONTENT__";
+    const split_pos = std.mem.indexOf(u8, dashboard_template, marker) orelse
+        return error.MissingTemplateMarker;
+    const content_split_pos = std.mem.indexOf(u8, dashboard_template, content_marker) orelse
+        return error.MissingTemplateMarker;
+
+    // Build the report JSON (without file content) ----------------------------
+    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    defer json_aw.deinit();
+
+    var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
+    try ws.beginObject();
+
+    // meta
+    try ws.objectField("meta");
+    try ws.beginObject();
+    try ws.objectField("root_path");
+    try ws.write(root_path);
+    try ws.objectField("generated_at");
+    try ws.write(generated_at_str);
+    try ws.objectField("version");
+    try ws.write(cfg.version);
+    try ws.objectField("watch_mode");
+    try ws.write(cfg.watch);
+    try ws.endObject();
+
+    // summary
+    try ws.objectField("summary");
+    try ws.beginObject();
+    try ws.objectField("source_files");
+    try ws.write(file_entries.count());
+    try ws.objectField("binary_files");
+    try ws.write(binary_entries.count());
+    try ws.objectField("total_lines");
+    try ws.write(total_lines);
+    try ws.objectField("total_size_bytes");
+    try ws.write(total_size);
+    try ws.objectField("languages");
+    try ws.beginArray();
+    for (lang_list.items) |ls| {
+        try ws.beginObject();
+        try ws.objectField("name");
+        try ws.write(ls.name);
+        try ws.objectField("files");
+        try ws.write(ls.files);
+        try ws.objectField("lines");
+        try ws.write(ls.lines);
+        try ws.objectField("size_bytes");
+        try ws.write(ls.size_bytes);
+        try ws.endObject();
+    }
+    try ws.endArray();
+    try ws.endObject();
+
+    // files — metadata only, no content (content goes in the separate fc block)
+    try ws.objectField("files");
+    try ws.beginArray();
+    for (sorted_files.items) |e| {
+        try ws.beginObject();
+        try ws.objectField("path");
+        try ws.write(e.path);
+        try ws.objectField("size");
+        try ws.write(e.size);
+        try ws.objectField("lines");
+        try ws.write(e.line_count);
+        try ws.objectField("language");
+        try ws.write(e.getLanguage());
+        try ws.endObject();
+    }
+    try ws.endArray();
+
+    // binaries
+    try ws.objectField("binaries");
+    try ws.beginArray();
+    for (sorted_binaries.items) |b| {
+        try ws.beginObject();
+        try ws.objectField("path");
+        try ws.write(b.path);
+        try ws.objectField("size");
+        try ws.write(b.size);
+        try ws.endObject();
+    }
+    try ws.endArray();
+
+    try ws.endObject();
+
+    // Build the content map {"path": "source", ...} ---------------------------
+    var content_aw: std.io.Writer.Allocating = .init(allocator);
+    defer content_aw.deinit();
+
+    var cws: std.json.Stringify = .{ .writer = &content_aw.writer, .options = .{} };
+    try cws.beginObject();
+    for (sorted_files.items) |e| {
+        try cws.objectField(e.path);
+        try cws.write(e.content);
+    }
+    try cws.endObject();
+
+    // Sanitize both payloads: </script> → <\/script> (valid JSON, HTML-safe)
+    const json_raw = json_aw.written();
+    const json_safe = try std.mem.replaceOwned(u8, allocator, json_raw, "</script>", "<\\/script>");
+    defer allocator.free(json_safe);
+
+    const content_raw = content_aw.written();
+    const content_safe = try std.mem.replaceOwned(u8, allocator, content_raw, "</script>", "<\\/script>");
+    defer allocator.free(content_safe);
+
+    // Assemble: template_prefix + report_json + middle + content_json + suffix
+    var aw: std.io.Writer.Allocating = .init(allocator);
+    defer aw.deinit();
+    try aw.writer.writeAll(dashboard_template[0..split_pos]);
+    try aw.writer.writeAll(json_safe);
+    try aw.writer.writeAll(dashboard_template[split_pos + marker.len .. content_split_pos]);
+    try aw.writer.writeAll(content_safe);
+    try aw.writer.writeAll(dashboard_template[content_split_pos + content_marker.len ..]);
+
+    // Write to disk
+    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
+    defer html_file.close();
+    try html_file.writeAll(aw.written());
+}
+
 // ============================================================
 // Tests
 // ============================================================
@@ -348,6 +583,258 @@ test "deriveJsonPath appends .json when no .md extension" {
     const result = try deriveJsonPath(alloc, "output.txt");
     defer alloc.free(result);
     try std.testing.expectEqualStrings("output.txt.json", result);
+}
+
+test "deriveHtmlPath replaces .md extension with .html" {
+    const alloc = std.testing.allocator;
+    const result = try deriveHtmlPath(alloc, "report.md");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("report.html", result);
+}
+
+test "deriveHtmlPath handles full path with .md extension" {
+    const alloc = std.testing.allocator;
+    const result = try deriveHtmlPath(alloc, "/some/dir/output.md");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("/some/dir/output.html", result);
+}
+
+test "deriveHtmlPath appends .html when no .md extension" {
+    const alloc = std.testing.allocator;
+    const result = try deriveHtmlPath(alloc, "output.txt");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("output.txt.html", result);
+}
+
+test "writeHtmlReport creates file with expected HTML structure" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, ".", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "<!doctype html>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "<title>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "window.REPORT =") != null);
+}
+
+test "writeHtmlReport includes summary stats in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("src/main.zig", JobEntry{
+        .path = "src/main.zig",
+        .content = @constCast("const x = 1;\n"),
+        .size = 500,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, "src", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"source_files\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"total_lines\"") != null);
+}
+
+test "writeHtmlReport includes file entry path in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("src/utils.zig", JobEntry{
+        .path = "src/utils.zig",
+        .content = @constCast(""),
+        .size = 100,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 5,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, "src", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "src/utils.zig") != null);
+}
+
+test "writeHtmlReport includes binary entry in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+    try binary_entries.put("assets/logo.png", BinaryEntry{
+        .path = "assets/logo.png",
+        .size = 2048,
+        .mtime = 0,
+        .extension = ".png",
+    });
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, ".", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "assets/logo.png") != null);
+}
+
+test "writeHtmlReport includes language stats in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("main.zig", JobEntry{ .path = "main.zig", .content = @constCast(""), .size = 10, .mtime = 0, .extension = ".zig", .line_count = 5 });
+    try file_entries.put("config.json", JobEntry{ .path = "config.json", .content = @constCast(""), .size = 50, .mtime = 0, .extension = ".json", .line_count = 3 });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, ".", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"languages\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"zig\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"json\"") != null);
+}
+
+test "writeHtmlReport includes meta fields in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, "myproject", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"meta\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"watch_mode\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"generated_at\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"version\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "myproject") != null);
+}
+
+test "writeHtmlReport includes file content in embedded JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("src/hello.zig", JobEntry{
+        .path = "src/hello.zig",
+        .content = @constCast("const greeting = \"hello world\";\n"),
+        .size = 33,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+
+    try writeHtmlReport(&file_entries, &binary_entries, html_path, "src", &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    // Content is now stored in the <script id="fc"> block (lazy content map),
+    // not as a field in the main report JSON.
+    try std.testing.expect(std.mem.indexOf(u8, content, "id=\"fc\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "hello world") != null);
 }
 
 test "writeJsonReport creates file with expected top-level JSON keys" {
