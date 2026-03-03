@@ -21,4 +21,5 @@ pub const options = [_]OptionHandler{
     .{ .name = "--watch", .takes_value = false, .handler = &handler.handleWatch },
     .{ .name = "--output", .takes_value = true, .handler = &handler.handleOutput },
     .{ .name = "--json", .takes_value = false, .handler = &handler.handleJson },
+    .{ .name = "--html", .takes_value = false, .handler = &handler.handleHtml },
 };
