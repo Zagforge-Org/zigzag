@@ -11,6 +11,7 @@ report.json
 TODO.md
 PLAN.md
 report.html
+docs/
 
 .DS_Store
 __pycache__/
