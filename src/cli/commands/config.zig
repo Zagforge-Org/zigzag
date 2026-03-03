@@ -31,6 +31,7 @@ pub const Config = struct {
     watch: bool,
     output: ?[]u8, // Output filename; null means "report.md"
     json_output: bool, // Emit report.json alongside report.md
+    html_output: bool, // Emit report.html alongside report.md
 
     // Internal tracking for memory management and CLI override behavior.
     // These are not user-facing; they track whether list fields were set by CLI
@@ -56,6 +57,7 @@ pub const Config = struct {
             .watch = false,
             .output = null,
             .json_output = false,
+            .html_output = false,
             ._ignore_patterns_allocated = false,
             ._paths_set_by_cli = false,
             ._patterns_set_by_cli = false,
@@ -150,6 +152,9 @@ pub const Config = struct {
 
         // Apply json output flag
         if (conf.json_output) |v| self.json_output = v;
+
+        // Apply html output flag
+        if (conf.html_output) |v| self.html_output = v;
     }
 
     /// Parses CLI args only, without loading any file config.
@@ -244,6 +249,7 @@ test "Config.initDefault has expected defaults" {
     try std.testing.expect(!cfg.skip_git);
     try std.testing.expect(!cfg.watch);
     try std.testing.expect(!cfg.json_output);
+    try std.testing.expect(!cfg.html_output);
     try std.testing.expect(cfg.output == null);
     try std.testing.expect(cfg.timezone_offset == null);
     try std.testing.expectEqual(@as(usize, 0), cfg.paths.items.len);
@@ -382,6 +388,26 @@ test "Config.applyFileConf leaves json_output unchanged when FileConf field is n
     const conf = FileConf{};
     try cfg.applyFileConf(&conf, allocator);
     try std.testing.expect(!cfg.json_output);
+}
+
+test "Config.applyFileConf applies html_output true" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+
+    const conf = FileConf{ .html_output = true };
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expect(cfg.html_output);
+}
+
+test "Config.applyFileConf leaves html_output unchanged when FileConf field is null" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+
+    const conf = FileConf{};
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expect(!cfg.html_output);
 }
 
 test "Config.applyFileConf is idempotent when conf is empty" {
