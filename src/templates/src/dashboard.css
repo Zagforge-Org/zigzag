@@ -223,14 +223,14 @@ td {
     border-bottom: 1px solid var(--border);
     word-break: break-all;
 }
-td > * {
+.table-viewport td > * {
     display: block;
     padding: 0.4rem 0.75rem;
 }
-td:first-child > * {
+.table-viewport td:first-child > * {
     word-break: break-all;
 }
-tr:hover td {
+.table-viewport tr:hover td {
     background: var(--bg);
 }
 
@@ -300,27 +300,54 @@ tr:hover td {
 #viewer-body {
     overflow: auto;
     flex: 1;
-    padding: 1rem;
-}
-#viewer-pre {
-    margin: 0;
-    padding: 0;
-    background: transparent;
-    font-size: 0.8rem;
-    line-height: 1.5;
-}
-#vcode {
-    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+    padding: 0.75rem 0;
+    overflow-anchor: none;
 }
 
-/* ── Highlight status indicator ──────────────────────── */
-#viewer-pre.highlighting::after {
-    content: " ✦";
-    color: #adb5bd;
-    font-size: 0.7rem;
-    animation: pulse 1s ease-in-out infinite;
+/* ── Non-virtual line-number table ───────────────────── */
+table.ln-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 20px;
+    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
 }
-@keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+table.ln-table td {
+    padding: 0;
+    border: none;
+    vertical-align: top;
+}
+table.ln-table td.ln {
+    padding: 0 1rem 0 1rem;
+    text-align: right;
+    color: #6c757d;
+    user-select: none;
+    white-space: nowrap;
+    width: 1%;
+}
+table.ln-table td.lc {
+    padding: 0 1rem 0 0;
+    white-space: pre;
+}
+
+/* ── Virtual viewer line rows ────────────────────────── */
+.vline {
+    display: flex;
+    height: 20px;
+    overflow: hidden;
+    font-size: 13px;
+    line-height: 20px;
+    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+}
+.vline .ln {
+    flex-shrink: 0;
+    padding: 0 1rem 0 1rem;
+    text-align: right;
+    color: #6c757d;
+    user-select: none;
+}
+.vline .lc {
+    flex: none;
+    white-space: pre;
+    padding-right: 1rem;
 }
