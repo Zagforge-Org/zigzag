@@ -22,6 +22,8 @@
 - **JSON config file** (`zig.conf.json`) for project-level defaults
 - **Watch mode** for continuous report regeneration on file changes
 - **Configurable output filename** for the generated report
+- **JSON report output** (`--json`) for machine-readable analytics alongside the markdown report
+- **HTML dashboard** (`--html`) — interactive single-file report with charts, sortable file table, search, and a virtual-scrolling source viewer with syntax highlighting
 
 ## Installation
 
@@ -96,6 +98,12 @@ zigzag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
 
 # Watch mode — react instantly to file changes
 zigzag --path ./src --watch
+
+# Generate JSON report alongside markdown
+zigzag --path ./src --json
+
+# Generate interactive HTML dashboard alongside markdown
+zigzag --path ./src --html
 ```
 
 ## Subcommands
@@ -121,7 +129,9 @@ Running `zigzag init` creates a `zig.conf.json` in the current directory:
   "mmap_threshold": 16777216,
   "timezone": null,
   "output": "report.md",
-  "watch": false
+  "watch": false,
+  "json_output": false,
+  "html_output": false
 }
 ```
 
@@ -138,6 +148,8 @@ Running `zigzag init` creates a `zig.conf.json` in the current directory:
 | `timezone` | `string\|null` | `null` | Timezone offset string (e.g. `"+1"`, `"-5:30"`) |
 | `output` | `string` | `"report.md"` | Output filename for the generated report |
 | `watch` | `bool` | `false` | Enable watch mode |
+| `json_output` | `bool` | `false` | Emit a JSON report alongside the markdown report |
+| `html_output` | `bool` | `false` | Emit an interactive HTML dashboard alongside the markdown report |
 
 ### Config Loading Priority
 
@@ -160,10 +172,13 @@ When the first `--path` CLI flag is encountered, all file-loaded paths are repla
 | `--small` | Threshold for small files (bytes) | 1048576 (1 MiB) | `--small 524288` |
 | `--mmap` | Threshold for memory-mapped files (bytes) | 16777216 (16 MiB) | `--mmap 8388608` |
 | `--skip-cache` | Skip cache operations and clear cache | false | `--skip-cache` |
-| `--skip-git` | Skip git operations | false | `--skip-git` |
 | `--watch` | Watch for file changes and regenerate output | false | `--watch` |
+| `--json` | Emit a JSON report alongside the markdown report | false | `--json` |
+| `--html` | Emit an interactive HTML dashboard alongside the markdown report | false | `--html` |
 | `--help` | Show help message with examples | — | `--help` |
 | `--version` | Show version information | — | `--version` |
+
+> **Note:** `skip_git` can only be set via `zig.conf.json`, not as a CLI flag.
 
 ## Ignore Patterns
 
@@ -283,6 +298,85 @@ zigzag run --watch
 ```
 
 Events are debounced: rapid changes within a 50 ms window are batched into a single report write. Press `Ctrl+C` to stop.
+
+## JSON Output
+
+Pass `--json` (or set `"json_output": true` in `zig.conf.json`) to generate a machine-readable JSON report alongside the markdown file. The JSON file is written to the same directory with `.json` replacing the `.md` extension (e.g. `report.json` next to `report.md`).
+
+```bash
+zigzag --path ./src --json
+zigzag run --json
+```
+
+### JSON Report Structure
+
+```json
+{
+  "meta": {
+    "version": "0.11.0",
+    "generated_at_ns": 1738245534000000000,
+    "scanned_paths": ["./src"]
+  },
+  "summary": {
+    "source_files": 12,
+    "binary_files": 3,
+    "total_lines": 1450,
+    "total_size_bytes": 58320,
+    "languages": [
+      { "name": "zig", "files": 10, "lines": 1300, "size_bytes": 52000 },
+      { "name": "json", "files": 2, "lines": 150, "size_bytes": 6320 }
+    ]
+  },
+  "files": [
+    {
+      "path": "./src/main.zig",
+      "size": 2345,
+      "mtime_ns": 1738245534000000000,
+      "extension": ".zig",
+      "language": "zig",
+      "lines": 87
+    }
+  ],
+  "binaries": [
+    {
+      "path": "./src/assets/logo.png",
+      "size": 4096,
+      "mtime_ns": 1738240000000000000,
+      "extension": ".png"
+    }
+  ]
+}
+```
+
+The JSON report is useful for CI dashboards, code analysis pipelines, or any tooling that needs structured metadata without parsing markdown.
+
+## HTML Dashboard
+
+Pass `--html` (or set `"html_output": true` in `zig.conf.json`) to generate a self-contained interactive HTML report alongside the markdown file. The HTML file is written next to the markdown with `.html` replacing `.md` (e.g. `report.html` next to `report.md`).
+
+```bash
+zigzag --path ./src --html
+zigzag run --html
+```
+
+The dashboard is a **single `.html` file** with no external dependencies — all CSS, JavaScript, and syntax highlighting assets are bundled inline. Open it directly in any browser.
+
+### Dashboard Features
+
+| Feature | Description |
+|---------|-------------|
+| **Summary cards** | Total files, lines, size, and languages at a glance |
+| **Language chart** | Bar chart of file counts per language |
+| **Size distribution** | Histogram of file sizes across the codebase |
+| **File table** | Sortable, searchable table of all source files with path, language, size, and line count |
+| **Source viewer** | Click any file to open a slide-in panel showing its source code |
+| **Syntax highlighting** | Off-thread Prism highlighting for 20+ languages (Zig, Rust, Go, Python, JS/TS, C/C++, and more) |
+| **Virtual scroll** | Files over 500 lines or 200 KB use a virtual-scrolling viewer — only visible lines are rendered, so even 10 000-line files open instantly |
+| **Dark mode** | Follows the OS `prefers-color-scheme` setting automatically |
+
+### Supported Languages (syntax highlighting)
+
+Zig, JavaScript, TypeScript, Lua, JSON, HTML/XML/SVG, CSS, SCSS, Bash/Shell, C, C++, Rust, Go, Python, Ruby, Java, Markdown, TOML, YAML, SQL.
 
 ## Architecture
 
@@ -463,10 +557,8 @@ zig fmt src/
 - [ ] Glob pattern support (`**/*.png`)
 - [ ] MIME type detection for binary files
 - [ ] Configurable binary detection threshold
-- [ ] JSON output format option
 - [ ] Progress bar for large projects
 - [ ] Incremental report updates
-- [ ] Language statistics summary
 
 ## License
 

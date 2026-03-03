@@ -43,6 +43,16 @@ fn processPath(
     const owned_md_path = try allocator.dupe(u8, md_path);
     try file_ctx.ignore_list.append(allocator, owned_md_path);
 
+    if (cfg.json_output) {
+        const json_ignore = try report.deriveJsonPath(allocator, md_path);
+        try file_ctx.ignore_list.append(allocator, json_ignore);
+    }
+
+    if (cfg.html_output) {
+        const html_ignore = try report.deriveHtmlPath(allocator, md_path);
+        try file_ctx.ignore_list.append(allocator, html_ignore);
+    }
+
     if (cfg.ignore_patterns.len != 0) {
         var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
         while (it.next()) |pattern| {
@@ -101,6 +111,12 @@ fn processPath(
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
         try report.writeJsonReport(&file_entries, &binary_entries, json_path, path, cfg, allocator);
+    }
+
+    if (cfg.html_output) {
+        const html_path = try report.deriveHtmlPath(allocator, md_path);
+        defer allocator.free(html_path);
+        try report.writeHtmlReport(&file_entries, &binary_entries, html_path, path, cfg, allocator);
     }
 
     std.log.info("=== Summary for {s} ===", .{path});

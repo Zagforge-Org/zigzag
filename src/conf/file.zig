@@ -13,6 +13,7 @@ pub const FileConf = struct {
     output: ?[]const u8 = null,
     watch: ?bool = null,
     json_output: ?bool = null,
+    html_output: ?bool = null,
 };
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
@@ -30,7 +31,8 @@ pub fn defaultContent() []const u8 {
     \\  "timezone": null,
     \\  "output": "report.md",
     \\  "watch": false,
-    \\  "json_output": false
+    \\  "json_output": false,
+    \\  "html_output": false
     \\}
     \\
     ;
@@ -200,6 +202,35 @@ test "loadFromPath parses json_output true" {
     var parsed = result.?;
     defer parsed.deinit();
     try std.testing.expect(parsed.value.json_output.? == true);
+}
+
+test "defaultContent includes html_output field set to false" {
+    const allocator = std.testing.allocator;
+    const content = defaultContent();
+    const parsed = try std.json.parseFromSlice(FileConf, allocator, content, .{
+        .ignore_unknown_fields = true,
+    });
+    defer parsed.deinit();
+
+    try std.testing.expect(parsed.value.html_output != null);
+    try std.testing.expect(parsed.value.html_output.? == false);
+}
+
+test "loadFromPath parses html_output true" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_html_output_true.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"html_output\": true}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value.html_output.? == true);
 }
 
 test "loadFromPath sets json_output to null when field is absent" {
