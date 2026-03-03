@@ -278,8 +278,9 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
             for (events.items) |event| {
                 defer allocator.free(event.path);
 
-                // Ignore .cache directory and the output reports to avoid cycles
+                // Ignore .cache/.zig-cache directories and the output reports to avoid cycles
                 if (std.mem.indexOf(u8, event.path, ".cache") != null) continue;
+                if (std.mem.indexOf(u8, event.path, ".zig-cache") != null) continue;
                 if (std.mem.endsWith(u8, event.path, output_filename)) continue;
                 if (std.mem.endsWith(u8, event.path, json_output_filename)) continue;
                 if (std.mem.endsWith(u8, event.path, html_output_filename)) continue;
