@@ -1,6 +1,6 @@
 # ZigZag
 
-<img src="assets/logo.png" alt="zig-zag logo" width="64" height="64">
+<img src="src/assets/logo.png" alt="zig-zag logo" width="64" height="64">
 
 ### A high-performance Zig-based tool for generating comprehensive markdown reports of source code directories with intelligent caching, parallel processing, and smart binary file detection.
 

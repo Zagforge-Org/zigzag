@@ -31,13 +31,9 @@ pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const 
     _ = allocator;
     _ = value;
     try stdoutPrint(
-        \\{s}{s}{s}
         \\version {s}
         \\
     , .{
-        colors.colorCode(colors.Color.Yellow),
-        ascii_logo,
-        colors.colorCode(colors.Color.Reset),
         cfg.version,
     });
 }
@@ -330,7 +326,6 @@ test "handleWatch enables watch mode" {
     try handleWatch(&cfg, allocator, null);
     try testing.expect(cfg.watch);
 }
-
 
 /// handleOutput sets the output filename for the generated report.
 pub fn handleOutput(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {

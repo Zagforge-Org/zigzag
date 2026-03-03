@@ -26,13 +26,19 @@ pub fn main() !void {
             try handleInit(allocator, std.fs.cwd());
             return;
         }
+
         if (std.mem.eql(u8, arg, "run")) {
             is_run_command = true;
             continue; // "run" itself is not forwarded to the option parser
         }
+
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
+        } else {
+            std.log.info("unknown argument: {s}", .{arg});
+            return;
         }
+
         try list.append(allocator, arg);
     }
 
@@ -49,8 +55,8 @@ pub fn main() !void {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
 
-            // Only initialize cache and run if paths are configured
-            if (typedCfg.paths.items.len > 0) {
+            // Only initialize cache and run if paths are configured and is_run_command is true
+            if (typedCfg.paths.items.len > 0 and is_run_command) {
                 // Create cache directory path (./.cache)
                 const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
                 defer allocator.free(cache_path);
