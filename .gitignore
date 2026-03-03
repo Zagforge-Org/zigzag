@@ -8,3 +8,12 @@ root
 zig.conf.json
 zigzag
 report.json
+TODO.md
+PLAN.md
+report.html
+
+.DS_Store
+__pycache__/
+src/templates/src/prism-*.min.js
+.idea/
+.vscode/
