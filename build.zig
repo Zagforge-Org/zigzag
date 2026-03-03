@@ -4,6 +4,9 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // Bundle dashboard template before compiling (requires python in PATH)
+    const bundle = b.addSystemCommand(&.{ "python", "src/templates/bundle.py" });
+
     const mod = b.addModule("zigzag", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -23,6 +26,10 @@ pub fn build(b: *std.Build) void {
     });
 
     b.installArtifact(exe);
+    exe.step.dependOn(&bundle.step);
+
+    const bundle_step = b.step("bundle", "Regenerate src/templates/dashboard.html");
+    bundle_step.dependOn(&bundle.step);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
