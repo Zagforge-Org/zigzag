@@ -9,9 +9,10 @@ zig.conf.json
 zigzag
 report.json
 TODO.md
+USECASES.md
 PLAN.md
 report.html
-docs/*
+docs
 
 .DS_Store
 __pycache__/
