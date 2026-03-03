@@ -26,13 +26,19 @@ pub fn main() !void {
             try handleInit(allocator, std.fs.cwd());
             return;
         }
+
         if (std.mem.eql(u8, arg, "run")) {
             is_run_command = true;
             continue; // "run" itself is not forwarded to the option parser
         }
+
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
+        } else {
+            std.log.info("unknown argument: {s}", .{arg});
+            return;
         }
+
         try list.append(allocator, arg);
     }
 
