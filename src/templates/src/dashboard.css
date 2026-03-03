@@ -1,0 +1,326 @@
+/* ── Reset ───────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* ── Design tokens (light mode) ──────────────────────── */
+:root {
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --border: #dee2e6;
+    --text: #212529;
+    --muted: #6c757d;
+    --accent: #0d6efd;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ── Dark mode ───────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #58a6ff;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+}
+
+/* ── Base ────────────────────────────────────────────── */
+body {
+    font-family: system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+}
+
+header {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 1.5rem 2rem;
+}
+header h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+header p {
+    color: #adb5bd;
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem;
+}
+
+h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+}
+
+.section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+
+/* ── Summary cards ───────────────────────────────────── */
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+}
+.card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    text-align: center;
+}
+.card .val {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+.card .lbl {
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-top: 0.2rem;
+}
+
+/* ── Language bar chart ──────────────────────────────── */
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+}
+.bar-row .name {
+    width: 90px;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--muted);
+}
+.bar-track {
+    flex: 1;
+    background: var(--border);
+    border-radius: 3px;
+    height: 18px;
+    overflow: hidden;
+}
+.bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.3s;
+}
+.bar-count {
+    min-width: 36px;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* ── Size histogram ──────────────────────────────────── */
+.hist {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 100px;
+}
+.hist-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+.hist-bar {
+    width: 100%;
+    background: var(--accent);
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+}
+.hist-lbl {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.2;
+}
+
+/* ── Search ──────────────────────────────────────────── */
+input[type="search"] {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    margin-bottom: 1rem;
+    background: var(--bg);
+    color: var(--text);
+}
+input[type="search"]:focus {
+    outline: 2px solid var(--accent);
+    border-color: var(--accent);
+}
+
+/* ── File table ──────────────────────────────────────── */
+.table-viewport {
+    height: 480px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+}
+thead {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface);
+}
+th {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 2px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+th:hover {
+    color: var(--accent);
+}
+th .sort-icon {
+    margin-left: 4px;
+    opacity: 0.4;
+}
+th.sorted .sort-icon {
+    opacity: 1;
+}
+td {
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+    word-break: break-all;
+}
+td > * {
+    display: block;
+    padding: 0.4rem 0.75rem;
+}
+td:first-child > * {
+    word-break: break-all;
+}
+tr:hover td {
+    background: var(--bg);
+}
+
+.tag {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    background: color-mix(in srgb, var(--border) 60%, transparent);
+    color: var(--muted);
+}
+
+.file-link {
+    cursor: pointer;
+    color: var(--accent);
+    text-decoration: underline;
+}
+.file-link:hover {
+    opacity: 0.8;
+}
+
+/* ── Source viewer panel ─────────────────────────────── */
+#viewer {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 55%;
+    height: 100vh;
+    background: #1a1a2e;
+    color: #e9ecef;
+    overflow: hidden;
+    transform: translateX(100%);
+    transition: transform 0.3s;
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
+}
+#viewer.open {
+    transform: translateX(0);
+}
+#viewer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #333;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+#viewer-path {
+    color: #adb5bd;
+    word-break: break-all;
+}
+#viewer-close {
+    background: none;
+    border: none;
+    color: #adb5bd;
+    font-size: 1.25rem;
+    cursor: pointer;
+    padding: 0.25rem 0.5rem;
+    flex-shrink: 0;
+}
+#viewer-close:hover {
+    color: #fff;
+}
+#viewer-body {
+    overflow: auto;
+    flex: 1;
+    padding: 1rem;
+}
+#viewer-pre {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+#vcode {
+    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+}
+
+/* ── Highlight status indicator ──────────────────────── */
+#viewer-pre.highlighting::after {
+    content: " ✦";
+    color: #adb5bd;
+    font-size: 0.7rem;
+    animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+}
