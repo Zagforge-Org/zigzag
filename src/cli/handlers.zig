@@ -396,6 +396,22 @@ test "handleJson sets json_output to true" {
     try std.testing.expect(cfg.json_output);
 }
 
+/// handleHtml enables HTML report output alongside the markdown report.
+pub fn handleHtml(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    _ = allocator;
+    _ = value;
+    cfg.html_output = true;
+}
+
+test "handleHtml sets html_output to true" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+    try std.testing.expect(!cfg.html_output);
+    try handleHtml(&cfg, allocator, null);
+    try std.testing.expect(cfg.html_output);
+}
+
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
 pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
