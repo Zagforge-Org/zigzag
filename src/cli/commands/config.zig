@@ -39,6 +39,9 @@ pub const Config = struct {
     _ignore_patterns_allocated: bool,
     _paths_set_by_cli: bool,
     _patterns_set_by_cli: bool,
+    output_dir: ?[]u8,           // Base output directory; null means "zigzag-reports"
+    _output_dir_allocated: bool, // true when output_dir is heap-allocated
+    _output_dir_set_by_cli: bool, // true when CLI set it (prevents file conf override)
 
     const Self = @This();
 
@@ -61,6 +64,9 @@ pub const Config = struct {
             ._ignore_patterns_allocated = false,
             ._paths_set_by_cli = false,
             ._patterns_set_by_cli = false,
+            .output_dir = null,
+            ._output_dir_allocated = false,
+            ._output_dir_set_by_cli = false,
         };
     }
 
@@ -155,6 +161,17 @@ pub const Config = struct {
 
         // Apply html output flag
         if (conf.html_output) |v| self.html_output = v;
+
+        // Apply output directory (only if CLI hasn't set it)
+        if (!self._output_dir_set_by_cli) {
+            if (conf.output_dir) |dir| {
+                if (self._output_dir_allocated) {
+                    if (self.output_dir) |existing| self.allocator.free(existing);
+                }
+                self.output_dir = try allocator.dupe(u8, dir);
+                self._output_dir_allocated = true;
+            }
+        }
     }
 
     /// Parses CLI args only, without loading any file config.
@@ -234,6 +251,10 @@ pub const Config = struct {
 
         if (self.output) |out| {
             self.allocator.free(out);
+        }
+
+        if (self._output_dir_allocated) {
+            if (self.output_dir) |dir| self.allocator.free(dir);
         }
     }
 };
@@ -456,4 +477,31 @@ test "Config.parse handles empty args" {
         },
         else => return error.WrongVariant,
     }
+}
+
+test "Config.initDefault has output_dir null" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+    try std.testing.expect(cfg.output_dir == null);
+}
+
+test "Config.applyFileConf applies output_dir" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+
+    const conf = FileConf{ .output_dir = "my-reports" };
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expectEqualStrings("my-reports", cfg.output_dir.?);
+}
+
+test "Config.applyFileConf leaves output_dir unchanged when FileConf field is null" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+
+    const conf = FileConf{};
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expect(cfg.output_dir == null);
 }
