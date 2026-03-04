@@ -30,7 +30,7 @@ fn processPath(
     defer dir.close();
 
     const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
-    const md_path = try std.fs.path.join(allocator, &.{ path, output_filename });
+    const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
@@ -39,6 +39,11 @@ fn processPath(
         .md_mutex = undefined,
     };
     defer file_ctx.ignore_list.deinit(allocator);
+
+    // Auto-ignore the output directory to prevent scanning report artifacts
+    const base_output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+    const output_dir_ignore = try allocator.dupe(u8, base_output_dir);
+    try file_ctx.ignore_list.append(allocator, output_dir_ignore);
 
     const owned_md_path = try allocator.dupe(u8, md_path);
     try file_ctx.ignore_list.append(allocator, owned_md_path);
