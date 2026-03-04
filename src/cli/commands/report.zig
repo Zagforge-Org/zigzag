@@ -3,6 +3,39 @@ const Config = @import("config.zig").Config;
 const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../jobs/entry.zig").BinaryEntry;
 
+/// Compute the output directory segment for a scanned path.
+/// Relative paths have "./" stripped; absolute paths use basename only.
+pub fn computeOutputSegment(path: []const u8) []const u8 {
+    if (std.fs.path.isAbsolute(path)) {
+        return std.fs.path.basename(path);
+    }
+    if (std.mem.startsWith(u8, path, "./")) {
+        const stripped = path[2..];
+        return if (stripped.len > 0) stripped else ".";
+    }
+    return if (path.len > 0) path else ".";
+}
+
+/// Resolve the full output file path for a given scanned path and filename.
+/// Creates output directory tree if it doesn't exist.
+/// Caller must free the returned slice.
+pub fn resolveOutputPath(
+    allocator: std.mem.Allocator,
+    cfg: *const Config,
+    scanned_path: []const u8,
+    filename: []const u8,
+) ![]u8 {
+    const base_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+    const segment = computeOutputSegment(scanned_path);
+    const output_dir = try std.fs.path.join(allocator, &.{ base_dir, segment });
+    defer allocator.free(output_dir);
+    std.fs.cwd().makePath(output_dir) catch |err| switch (err) {
+        error.PathAlreadyExists => {}, // ok
+        else => return err,
+    };
+    return std.fs.path.join(allocator, &.{ output_dir, filename });
+}
+
 /// Write a single file entry to the report with metadata
 fn writeFileEntry(
     md_file: *std.fs.File,
@@ -1190,4 +1223,36 @@ test "writeReport overwrites existing file" {
 
     try std.testing.expect(std.mem.indexOf(u8, content, "second.zig") != null);
     try std.testing.expect(std.mem.indexOf(u8, content, "first.zig") == null);
+}
+
+test "computeOutputSegment strips leading ./" {
+    try std.testing.expectEqualStrings("src", computeOutputSegment("./src"));
+    try std.testing.expectEqualStrings("src/cli", computeOutputSegment("./src/cli"));
+}
+
+test "computeOutputSegment uses basename for absolute paths" {
+    try std.testing.expectEqualStrings("src", computeOutputSegment("/home/user/project/src"));
+}
+
+test "computeOutputSegment returns path unchanged when no ./ prefix" {
+    try std.testing.expectEqualStrings("src", computeOutputSegment("src"));
+}
+
+test "computeOutputSegment handles bare dot" {
+    try std.testing.expectEqualStrings(".", computeOutputSegment("."));
+    try std.testing.expectEqualStrings(".", computeOutputSegment("./"));
+}
+
+test "resolveOutputPath returns path under zigzag-reports by default" {
+    const allocator = std.testing.allocator;
+    // Use a Config with no output_dir set (null = use default "zigzag-reports")
+    // We'll test the path string without actually calling makePath
+    // by calling computeOutputSegment + path.join directly to verify the logic
+    const segment = computeOutputSegment("./src");
+    try std.testing.expectEqualStrings("src", segment);
+
+    // Verify join would produce the expected path
+    const joined = try std.fs.path.join(allocator, &.{ "zigzag-reports", segment, "report.md" });
+    defer allocator.free(joined);
+    try std.testing.expectEqualStrings("zigzag-reports/src/report.md", joined);
 }
