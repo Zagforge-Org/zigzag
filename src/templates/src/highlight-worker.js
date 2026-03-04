@@ -3,7 +3,10 @@
  * Bundled from: Prism 1.29.0 (https://prismjs.com)
  * Grammars: markup, css, clike, javascript, json, typescript,
  *           rust, go, python, ruby, java, scss, bash, toml,
- *           yaml, markdown, c, cpp, sql, zig (custom)
+ *           yaml, markdown, c, cpp, sql, lua, zig (custom),
+ *           jsx, tsx, less, kotlin, groovy, scala, csharp, fsharp,
+ *           vbnet, php, swift, dart, julia, haskell, elm,
+ *           clojure, elixir, erlang
  *
  * Run as a Blob Worker via URL.createObjectURL — do not execute directly.
  */
@@ -2480,6 +2483,254 @@ Prism.languages.lua = Prism.languages.extend("clike", {
     function: /\b[a-zA-Z_]\w*(?=\s*\()/,
     variable: /\b[a-zA-Z_]\w*\b/,
 });
+/* ── JSX / TSX ───────────────────────────────────────── */
+/* jsx — JavaScript with JSX tag syntax */
+Prism.languages.jsx = Prism.languages.extend("javascript", {});
+Prism.languages.insertBefore("jsx", "punctuation", {
+    "jsx-tag": {
+        pattern: /<\/?(?:[\w.:-]+\s*(?:\s+(?:[\w.:$-]+(?:=(?:"[^"]*"|'[^']*'|\{(?:\{(?:\{[^{}]*\}|[^{}])*\}|[^{}])*\}))?|\{\.{3}[^{}]*\}))*\s*\/?)>/,
+        greedy: true,
+        inside: {
+            punctuation: /^<\/?|\/?>$/,
+            tag: { pattern: /^<\/?[\w.:-]+/, inside: { punctuation: /^<\/?/ } },
+            "attr-value": {
+                pattern: /=(?:"[^"]*"|'[^']*'|\{(?:\{(?:\{[^{}]*\}|[^{}])*\}|[^{}])*\})/,
+                inside: { punctuation: /^=|["']/ },
+            },
+            "attr-name": /[\w.:$-]+/,
+            spread: { pattern: /\{\.{3}[^{}]*\}/, inside: { punctuation: /[{}.]/ } },
+        },
+    },
+});
+/* tsx — TypeScript with JSX tag syntax */
+Prism.languages.tsx = Prism.languages.extend("typescript", {});
+Prism.languages.insertBefore("tsx", "punctuation", {
+    "jsx-tag": Prism.languages.jsx["jsx-tag"],
+});
+
+/* ── Less ────────────────────────────────────────────── */
+Prism.languages.less = Prism.languages.extend("css", {});
+Prism.languages.less.variable = { pattern: /@@?[\w-]+/, greedy: false };
+Prism.languages.insertBefore("less", "selector", {
+    variable: Prism.languages.less.variable,
+    mixin: {
+        pattern: /\.[\w-]+\s*(?=\()/,
+        inside: { function: /[\w-]+/, punctuation: /\./ },
+    },
+});
+
+/* ── Kotlin ──────────────────────────────────────────── */
+Prism.languages.kotlin = Prism.languages.extend("clike", {
+    keyword: /\b(?:abstract|actual|annotation|as|break|by|catch|class|companion|const|constructor|continue|crossinline|data|do|dynamic|else|enum|expect|external|final|finally|for|fun|get|if|import|in|infix|init|inline|inner|interface|internal|is|it|lateinit|noinline|null|object|open|operator|out|override|package|private|protected|public|reified|return|sealed|set|super|suspend|tailrec|this|throw|try|typealias|val|var|vararg|when|where|while)\b/,
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\\r\n])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\\r\n])'/, greedy: true },
+    ],
+    number: /\b(?:0[xXbB][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fFlLuU]*)\b/,
+});
+
+/* ── Groovy ──────────────────────────────────────────── */
+Prism.languages.groovy = Prism.languages.extend("clike", {
+    keyword: /\b(?:abstract|as|assert|break|case|catch|class|const|continue|def|default|do|else|enum|extends|final|finally|for|goto|if|implements|import|in|instanceof|interface|native|new|null|package|private|protected|public|return|static|strictfp|super|switch|synchronized|this|threadsafe|throw|throws|trait|transient|try|volatile|while)\b/,
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /'''[\s\S]*?'''/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])*'/, greedy: true },
+        { pattern: /\/(?:[^\/\\\r\n]|\\.)+\//, greedy: true },
+    ],
+    number: /\b(?:0[xXbB][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[gGiIfFdDlLmM]?)\b/,
+});
+
+/* ── Scala ───────────────────────────────────────────── */
+Prism.languages.scala = Prism.languages.extend("java", {
+    keyword: /\b(?:abstract|case|catch|class|def|do|else|enum|export|extends|extension|final|finally|for|forSome|given|if|implicit|import|lazy|match|new|null|object|opaque|override|package|private|protected|return|sealed|super|then|this|throw|trait|transparent|try|type|using|val|var|while|with|yield)\b/,
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /s"""[\s\S]*?"""/, greedy: true },
+        { pattern: /s"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\\r\n])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\\r\n])'/, greedy: true },
+    ],
+    number: /\b(?:0[xX][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fFlLdD]?)\b/,
+});
+
+/* ── C# ──────────────────────────────────────────────── */
+Prism.languages.csharp = Prism.languages.extend("clike", {
+    keyword: /\b(?:abstract|add|alias|as|ascending|async|await|base|bool|break|by|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|descending|do|double|dynamic|else|enum|equals|event|explicit|extern|false|finally|fixed|float|for|foreach|from|get|global|goto|group|if|implicit|in|int|interface|internal|into|is|join|let|lock|long|nameof|namespace|new|notnull|null|object|on|operator|orderby|out|override|params|partial|private|protected|public|readonly|record|ref|remove|required|return|sbyte|sealed|select|set|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unmanaged|unsafe|ushort|using|value|var|virtual|void|volatile|where|while|with|yield)\b/,
+    string: [
+        { pattern: /\$?"(?:\\.|[^"\\\r\n])*"/, greedy: true },
+        { pattern: /@"(?:[^"]|"")*"/, greedy: true },
+        { pattern: /\$@"(?:[^"\\]|\\.|"")*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\\r\n])'/, greedy: true },
+    ],
+    number: /\b(?:0[xXbB][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[fdlmuFDLMU]?)\b/,
+});
+
+/* ── F# ──────────────────────────────────────────────── */
+Prism.languages.fsharp = {
+    comment: [
+        { pattern: /\(\*[\s\S]*?\*\)/, greedy: true },
+        { pattern: /\/\/.*/, greedy: true },
+    ],
+    string: [
+        { pattern: /@"(?:[^"]|"")*"/, greedy: true },
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\\r\n])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\\r\n])'/, greedy: true, alias: "character" },
+    ],
+    keyword: /\b(?:abstract|and|as|assert|base|begin|do|done|downcast|downto|elif|else|end|exception|extern|false|finally|for|fun|function|global|if|in|inherit|inline|interface|internal|lazy|let|let!|match|match!|member|module|mutable|namespace|new|not|null|of|open|or|override|private|public|rec|return|return!|select|static|struct|then|to|true|try|type|upcast|use|use!|val|void|when|while|with|yield|yield!)\b/,
+    operator: /[<>]|[-+*/%&|^!=<>]=?|\.{2,3}|->|<-|\bmod\b/,
+    number: /\b(?:0[xXbBoO][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?[yunflmdYUNFLMD]?[ifbslnuBSLN]?)\b/,
+    punctuation: /[{}[\];(),.:]/,
+};
+
+/* ── VB.NET ──────────────────────────────────────────── */
+Prism.languages.vbnet = {
+    comment: [
+        { pattern: /(?:^|[^\\])'[^\r\n]*/, greedy: true },
+        { pattern: /REM[^\r\n]*/i, greedy: true },
+    ],
+    string: { pattern: /"(?:[^"]|"")*"/, greedy: true },
+    keyword: /\b(?:AddHandler|AddressOf|Alias|And|AndAlso|As|Boolean|ByRef|Byte|ByVal|Call|Case|Catch|CBool|CByte|CChar|CDate|CDbl|CDec|Char|CInt|Class|CLng|CObj|Const|Continue|CSByte|CShort|CSng|CStr|CType|CUInt|CULng|CUShort|Date|Decimal|Declare|Default|Delegate|Dim|DirectCast|Do|Double|Each|Else|ElseIf|End|EndIf|Enum|Erase|Error|Event|Exit|False|Finally|For|Friend|Function|Get|GetType|GetXMLNamespace|Global|GoSub|GoTo|Handles|If|Implements|Imports|In|Inherits|Integer|Interface|Is|IsNot|Let|Lib|Like|Long|Loop|Me|Mod|Module|MustInherit|MustOverride|MyBase|MyClass|Namespace|Narrowing|New|Next|Not|NotInheritable|NotOverridable|Nothing|Object|Of|On|Operator|Option|Optional|Or|OrElse|Overloads|Overridable|Overrides|ParamArray|Partial|Private|Property|Protected|Public|RaiseEvent|ReadOnly|ReDim|RemoveHandler|Resume|Return|SByte|Select|Set|Shadows|Shared|Short|Single|Static|Step|Stop|String|Structure|Sub|SyncLock|Then|Throw|To|True|Try|TryCast|TypeOf|UInteger|ULong|UShort|Using|Variant|Wend|When|While|Widening|With|WithEvents|WriteOnly|Xor)\b/i,
+    number: /\b(?:&[hH][\da-fA-F]+|&[oO][0-7]+|\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[SILRFDsIlrfd%!@&#]?)\b/,
+    operator: /[+\-*/\\^&<>=]/,
+    punctuation: /[.,(){}[\]:]/,
+};
+
+/* ── PHP ─────────────────────────────────────────────── */
+Prism.languages.php = Prism.languages.extend("clike", {
+    keyword: /\b(?:__CLASS__|__DIR__|__FILE__|__FUNCTION__|__LINE__|__METHOD__|__NAMESPACE__|__TRAIT__|abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|enum|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|new|null|or|print|private|protected|public|readonly|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|xor|yield)\b/i,
+    string: [
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])*'/, greedy: true },
+    ],
+    variable: /\$+\w+/,
+    number: /\b0[xX][\da-fA-F]+\b|\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b/i,
+});
+
+/* ── Swift ───────────────────────────────────────────── */
+Prism.languages.swift = Prism.languages.extend("clike", {
+    keyword: /\b(?:actor|any|as|associatedtype|associativity|async|await|break|case|catch|class|continue|convenience|default|defer|deinit|didSet|do|dynamic|else|enum|extension|fallthrough|false|fileprivate|final|for|func|get|guard|if|import|in|indirect|infix|init|inout|internal|is|lazy|let|mutating|nil|nonisolated|nonmutating|open|operator|optional|override|package|postfix|precedencegroup|prefix|private|protocol|public|repeat|required|rethrows|return|right|self|set|some|static|struct|subscript|super|switch|throw|throws|true|try|type|typealias|unowned|unsafe|var|weak|where|while|willSet)\b/,
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+    ],
+    number: /\b(?:0[bBoOxX][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eEpP][+-]?\d+)?)\b/,
+});
+
+/* ── Dart ────────────────────────────────────────────── */
+Prism.languages.dart = Prism.languages.extend("clike", {
+    keyword: /\b(?:abstract|as|assert|async|await|base|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|sealed|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|when|while|with|yield)\b/,
+    string: [
+        { pattern: /r"[^"]*"/, greedy: true },
+        { pattern: /r'[^']*'/, greedy: true },
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])*'/, greedy: true },
+    ],
+    number: /\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/,
+});
+
+/* ── Julia ───────────────────────────────────────────── */
+Prism.languages.julia = {
+    comment: [
+        { pattern: /#=[\s\S]*?=#/, greedy: true },
+        { pattern: /#.*/, greedy: true },
+    ],
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\\r\n])*"/, greedy: true },
+        { pattern: /`[^`]*`/, greedy: true },
+    ],
+    keyword: /\b(?:abstract|baremodule|begin|break|catch|const|continue|do|else|elseif|end|export|false|finally|for|function|global|if|import|let|local|macro|module|mutable|primitive|quote|return|struct|true|try|type|using|where|while)\b/,
+    builtin: /\b(?:AbstractArray|Any|Bool|Char|Complex|Dict|Float16|Float32|Float64|Function|Int|Int8|Int16|Int32|Int64|Integer|Matrix|Nothing|Number|Rational|Real|Set|String|Symbol|Tuple|UInt|UInt8|UInt16|UInt32|UInt64|Union|Vector)\b/,
+    number: /\b(?:0[xXbBoO][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eEf][+-]?\d+)?(?:im)?)\b/,
+    operator: /\.{2,3}|[-+*\/\\^<>=!|&%]=?/,
+    punctuation: /[{}[\];(),.:@#!$]/,
+};
+
+/* ── Haskell ─────────────────────────────────────────── */
+Prism.languages.haskell = {
+    comment: [
+        { pattern: /\{-[\s\S]*?-\}/, greedy: true },
+        { pattern: /--.*/, greedy: true },
+    ],
+    string: [
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])'/, greedy: true },
+    ],
+    keyword: /\b(?:case|class|data|default|deriving|do|else|forall|foreign|if|import|in|infix|infixl|infixr|instance|let|module|newtype|of|qualified|then|type|where)\b/,
+    builtin: /\b(?:Bool|Char|Double|Either|FilePath|Float|Int|Integer|IO|Maybe|Ordering|Rational|ReadS|ShowS|String|fmap|fst|head|id|init|last|length|map|maximum|minimum|not|null|print|putStr|putStrLn|read|return|reverse|show|snd|sqrt|tail|undefined|unwords|words)\b/,
+    number: /\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/,
+    operator: /[+\-*\/\\<>=|!@$%^&~?.:]+/,
+    punctuation: /[{}[\];(),]/,
+};
+
+/* ── Elm ─────────────────────────────────────────────── */
+Prism.languages.elm = {
+    comment: [
+        { pattern: /\{-[\s\S]*?-\}/, greedy: true },
+        { pattern: /--.*/, greedy: true },
+    ],
+    string: [
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])'/, greedy: true },
+    ],
+    keyword: /\b(?:as|case|else|exposing|if|import|in|let|module|of|port|then|type|where)\b/,
+    "class-name": /\b[A-Z]\w*/,
+    number: /\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/,
+    operator: /[+\-*\/\\<>=|!@#$%^&~?.:]+/,
+    punctuation: /[{}[\];(),]/,
+};
+
+/* ── Clojure ─────────────────────────────────────────── */
+Prism.languages.clojure = {
+    comment: /;.*/,
+    string: [
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /#"(?:\\.|[^"\\])*"/, greedy: true },
+    ],
+    keyword: /\b(?:def|defn|defmacro|defmethod|defmulti|defonce|defprotocol|defrecord|defstruct|deftype|do|doseq|dotimes|doall|fn|if|if-let|if-not|let|letfn|loop|ns|recur|require|try|when|when-let|when-not)\b/,
+    symbol: /:[^\s(){}[\]",;`~@^\\]+/,
+    boolean: /\b(?:true|false|nil)\b/,
+    number: /\b(?:0[xX][\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?[NM]?)\b/,
+    punctuation: /[{}[\];(),`~@^]/,
+};
+
+/* ── Elixir ──────────────────────────────────────────── */
+Prism.languages.elixir = {
+    comment: { pattern: /#.*/, greedy: false },
+    string: [
+        { pattern: /~[a-z](?:"[^"]*"|'[^']*'|\/[^\/]*\/|<[^>]*>|\|[^|]*\||\[[^\]]*\]|\{[^}]*\})(?:[a-z]*)/, greedy: true },
+        { pattern: /"""[\s\S]*?"""/, greedy: true },
+        { pattern: /'''[\s\S]*?'''/, greedy: true },
+        { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+        { pattern: /'(?:\\.|[^'\\])*'/, greedy: true },
+    ],
+    atom: /:[a-z_]\w*|:"[^"]*"/,
+    keyword: /\b(?:after|alias|and|case|catch|cond|def|defexception|defimpl|defmacro|defmacrop|defmodule|defoverridable|defp|defprotocol|defstruct|do|else|end|fn|for|if|import|in|not|or|quote|raise|receive|require|rescue|return|super|throw|try|unless|unquote|unquote_splicing|use|when|with)\b/,
+    boolean: /\b(?:true|false|nil)\b/,
+    number: /\b(?:0[xXbBoO][\da-fA-F_]+|\d[\d_]*(?:\.[\d_]+)?(?:[eE][+-]?\d+)?)\b/,
+    operator: /[+\-*\/\\<>=|!@#$%^&~?.:]+/,
+    punctuation: /[{}[\];(),]/,
+};
+
+/* ── Erlang ──────────────────────────────────────────── */
+Prism.languages.erlang = {
+    comment: { pattern: /%.+/, greedy: false },
+    string: { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+    atom: /\b[a-z][a-zA-Z\d_@]*\b|'[^']*'/,
+    keyword: /\b(?:after|and|andalso|band|begin|bnot|bor|bsl|bsr|bxor|case|catch|div|end|fun|if|let|not|of|or|orelse|receive|rem|try|when|xor)\b/,
+    boolean: /\b(?:true|false)\b/,
+    number: /\b(?:0[xX][\da-fA-F]+|\d+#[\da-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)\b/,
+    variable: /\b[A-Z][a-zA-Z\d_]*\b|_\b/,
+    operator: /[+\-*\/\\<>=|!:?]+/,
+    punctuation: /[{}[\];(),.]/,
+};
+
 /* ── Zig grammar (minimal, hand-written) ─────────────── */
 Prism.languages.zig = {
     comment: [
