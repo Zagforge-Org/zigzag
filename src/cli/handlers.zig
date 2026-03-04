@@ -70,6 +70,7 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  --mmap           Mmap threshold in bytes (default: 16 MiB)
         \\  --timezone       Timezone offset from UTC (e.g., +1, -5, +5:30)
         \\  --output         Output filename (default: report.md)
+        \\  --output-dir     Base directory for report output (default: zigzag-reports)
         \\  --watch          Watch for file changes and regenerate output
         \\
         \\Ignore Pattern Examples:
@@ -375,6 +376,19 @@ test "handleOutput replaces previous output value" {
     try testing.expectEqualStrings("second.md", cfg.output.?);
 }
 
+/// handleOutputDir sets the base output directory for generated reports.
+pub fn handleOutputDir(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+    if (value) |v| {
+        const trimmed = std.mem.trim(u8, v, " \t\r\n");
+        if (cfg._output_dir_allocated) {
+            if (cfg.output_dir) |existing| allocator.free(existing);
+        }
+        cfg.output_dir = try allocator.dupe(u8, trimmed);
+        cfg._output_dir_allocated = true;
+        cfg._output_dir_set_by_cli = true;
+    }
+}
+
 /// handleJson enables JSON report output alongside the markdown report.
 pub fn handleJson(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
@@ -405,6 +419,35 @@ test "handleHtml sets html_output to true" {
     try std.testing.expect(!cfg.html_output);
     try handleHtml(&cfg, allocator, null);
     try std.testing.expect(cfg.html_output);
+}
+
+test "handleOutputDir sets output_dir" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutputDir(&cfg, allocator, "my-reports");
+    try testing.expectEqualStrings("my-reports", cfg.output_dir.?);
+    try testing.expect(cfg._output_dir_set_by_cli);
+}
+
+test "handleOutputDir trims whitespace" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutputDir(&cfg, allocator, "  reports/  ");
+    try testing.expectEqualStrings("reports/", cfg.output_dir.?);
+}
+
+test "handleOutputDir replaces previous value" {
+    const allocator = std.testing.allocator;
+    var cfg = makeTestConfig(allocator);
+    defer cfg.deinit();
+
+    try handleOutputDir(&cfg, allocator, "first");
+    try handleOutputDir(&cfg, allocator, "second");
+    try testing.expectEqualStrings("second", cfg.output_dir.?);
 }
 
 /// handleInit creates the zig.conf.json configuration file with default values.
