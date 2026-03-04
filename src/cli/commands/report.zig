@@ -29,10 +29,7 @@ pub fn resolveOutputPath(
     const segment = computeOutputSegment(scanned_path);
     const output_dir = try std.fs.path.join(allocator, &.{ base_dir, segment });
     defer allocator.free(output_dir);
-    std.fs.cwd().makePath(output_dir) catch |err| switch (err) {
-        error.PathAlreadyExists => {}, // ok
-        else => return err,
-    };
+    try std.fs.cwd().makePath(output_dir);
     return std.fs.path.join(allocator, &.{ output_dir, filename });
 }
 
@@ -1245,14 +1242,28 @@ test "computeOutputSegment handles bare dot" {
 
 test "resolveOutputPath returns path under zigzag-reports by default" {
     const allocator = std.testing.allocator;
-    // Use a Config with no output_dir set (null = use default "zigzag-reports")
-    // We'll test the path string without actually calling makePath
-    // by calling computeOutputSegment + path.join directly to verify the logic
-    const segment = computeOutputSegment("./src");
-    try std.testing.expectEqualStrings("src", segment);
 
-    // Verify join would produce the expected path
-    const joined = try std.fs.path.join(allocator, &.{ "zigzag-reports", segment, "report.md" });
-    defer allocator.free(joined);
-    try std.testing.expectEqualStrings("zigzag-reports/src/report.md", joined);
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_abs);
+
+    var cfg = @import("config.zig").Config.initDefault(allocator);
+    defer cfg.deinit();
+    // output_dir is null → default "zigzag-reports"
+    // Use tmp_abs as base via output_dir to avoid writing to project CWD
+    cfg.output_dir = try allocator.dupe(u8, tmp_abs);
+    cfg._output_dir_allocated = true;
+
+    const result = try resolveOutputPath(allocator, &cfg, "./src", "report.md");
+    defer allocator.free(result);
+
+    // The result should contain the tmp path, "src", and "report.md"
+    try std.testing.expect(std.mem.indexOf(u8, result, "src") != null);
+    try std.testing.expect(std.mem.endsWith(u8, result, "report.md"));
+    // Verify the directory was actually created
+    tmp.dir.access("src", .{}) catch |err| {
+        std.debug.print("Expected 'src' dir to exist in tmp, got: {s}\n", .{@errorName(err)});
+        return err;
+    };
 }
