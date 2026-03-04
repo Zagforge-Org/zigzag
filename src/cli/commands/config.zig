@@ -32,6 +32,7 @@ pub const Config = struct {
     output: ?[]u8, // Output filename; null means "report.md"
     json_output: bool, // Emit report.json alongside report.md
     html_output: bool, // Emit report.html alongside report.md
+    output_dir: ?[]u8,           // Base output directory; null means "zigzag-reports"
 
     // Internal tracking for memory management and CLI override behavior.
     // These are not user-facing; they track whether list fields were set by CLI
@@ -39,7 +40,6 @@ pub const Config = struct {
     _ignore_patterns_allocated: bool,
     _paths_set_by_cli: bool,
     _patterns_set_by_cli: bool,
-    output_dir: ?[]u8,           // Base output directory; null means "zigzag-reports"
     _output_dir_allocated: bool, // true when output_dir is heap-allocated
     _output_dir_set_by_cli: bool, // true when CLI set it (prevents file conf override)
 
@@ -166,7 +166,7 @@ pub const Config = struct {
         if (!self._output_dir_set_by_cli) {
             if (conf.output_dir) |dir| {
                 if (self._output_dir_allocated) {
-                    if (self.output_dir) |existing| self.allocator.free(existing);
+                    if (self.output_dir) |existing| allocator.free(existing);
                 }
                 self.output_dir = try allocator.dupe(u8, dir);
                 self._output_dir_allocated = true;
