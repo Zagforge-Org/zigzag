@@ -14,6 +14,7 @@ pub const FileConf = struct {
     watch: ?bool = null,
     json_output: ?bool = null,
     html_output: ?bool = null,
+    output_dir: ?[]const u8 = null,
 };
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
@@ -269,4 +270,21 @@ test "loadFromPath ignores unknown JSON fields" {
     defer parsed.deinit();
 
     try std.testing.expect(parsed.value.watch.? == true);
+}
+
+test "loadFromPath parses output_dir field" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_output_dir.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"output_dir\": \"my-reports\"}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("my-reports", parsed.value.output_dir.?);
 }
