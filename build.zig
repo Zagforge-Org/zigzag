@@ -19,8 +19,9 @@ pub fn build(b: *std.Build) void {
     opts.addOption([]const u8, "version_string", @as([]const u8, version_string));
     const opts_mod = opts.createModule();
 
-    // Setup Python bundle
-    const bundle = b.addSystemCommand(&.{ "python", "src/templates/bundle.py" });
+    // Setup Python bundle (esbuild + injection pass)
+    // npm install only runs when node_modules is absent (bundle.py handles the check).
+    const bundle = b.addSystemCommand(&.{ "python3", "src/templates/bundle.py" });
     bundle.addArgs(&.{});
     _ = bundle.captureStdOut();
     const bundle_step = b.step("bundle", "Regenerate src/templates/dashboard.html");
