@@ -101,7 +101,12 @@ def run_esbuild() -> None:
     node_modules = TEMPLATES_DIR / "node_modules"
     if not node_modules.exists():
         print("bundle.py: node_modules not found, running npm install...")
-        subprocess.run(["npm", "install"], cwd=TEMPLATES_DIR, check=True)
+        subprocess.run(
+            ["npm", "install"],
+            cwd=TEMPLATES_DIR,
+            check=True,
+            shell=(sys.platform == "win32"),
+        )
 
     dist_dir = TEMPLATES_DIR / "dist"
     dist_dir.mkdir(exist_ok=True)
