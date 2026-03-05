@@ -372,6 +372,205 @@ pub fn deriveLlmPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{s}.llm.md", .{md_path});
 }
 
+/// Build the SSE event payload for watch-mode push updates.
+/// Returns JSON: {"report":{...},"content":"<content_map_json_string>"}
+/// Caller must free the returned slice.
+pub fn buildSsePayload(
+    file_entries: *const std.StringHashMap(JobEntry),
+    binary_entries: *const std.StringHashMap(BinaryEntry),
+    root_path: []const u8,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) ![]u8 {
+    // Aggregate stats
+    var lang_map = std.StringHashMap(LanguageStat).init(allocator);
+    defer {
+        var it = lang_map.iterator();
+        while (it.next()) |entry| allocator.free(entry.value_ptr.name);
+        lang_map.deinit();
+    }
+
+    var total_lines: usize = 0;
+    var total_size: u64 = 0;
+
+    var fit = file_entries.iterator();
+    while (fit.next()) |entry| {
+        const e = entry.value_ptr;
+        total_lines += e.line_count;
+        total_size += e.size;
+        const lang = e.getLanguage();
+        const lang_name = if (lang.len > 0) lang else "unknown";
+        const gop = try lang_map.getOrPut(lang_name);
+        if (!gop.found_existing) {
+            gop.value_ptr.* = .{
+                .name = try allocator.dupe(u8, lang_name),
+                .files = 0,
+                .lines = 0,
+                .size_bytes = 0,
+            };
+        }
+        gop.value_ptr.files += 1;
+        gop.value_ptr.lines += e.line_count;
+        gop.value_ptr.size_bytes += e.size;
+    }
+
+    var lang_list: std.ArrayList(LanguageStat) = .empty;
+    defer lang_list.deinit(allocator);
+    var lit = lang_map.iterator();
+    while (lit.next()) |entry| try lang_list.append(allocator, entry.value_ptr.*);
+    std.mem.sort(LanguageStat, lang_list.items, {}, struct {
+        fn lessThan(_: void, a: LanguageStat, b: LanguageStat) bool {
+            return std.mem.lessThan(u8, a.name, b.name);
+        }
+    }.lessThan);
+
+    var sorted_files: std.ArrayList(JobEntry) = .empty;
+    defer sorted_files.deinit(allocator);
+    fit = file_entries.iterator();
+    while (fit.next()) |entry| try sorted_files.append(allocator, entry.value_ptr.*);
+    std.mem.sort(JobEntry, sorted_files.items, {}, struct {
+        fn lessThan(_: void, a: JobEntry, b: JobEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    var sorted_binaries: std.ArrayList(BinaryEntry) = .empty;
+    defer sorted_binaries.deinit(allocator);
+    var bit = binary_entries.iterator();
+    while (bit.next()) |entry| try sorted_binaries.append(allocator, entry.value_ptr.*);
+    std.mem.sort(BinaryEntry, sorted_binaries.items, {}, struct {
+        fn lessThan(_: void, a: BinaryEntry, b: BinaryEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    // Timestamp
+    const now = std.time.timestamp();
+    const local_now = if (cfg.timezone_offset) |offset| now + offset else now;
+    const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_now) };
+    const day_seconds = epoch_seconds.getDaySeconds();
+    const epoch_day = epoch_seconds.getEpochDay();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+    const generated_at_str = try std.fmt.allocPrint(
+        allocator,
+        "{d}-{d:0>2}-{d:0>2} {d:0>2}:{d:0>2}:{d:0>2}",
+        .{
+            year_day.year,
+            month_day.month.numeric(),
+            month_day.day_index + 1,
+            day_seconds.getHoursIntoDay(),
+            day_seconds.getMinutesIntoHour(),
+            day_seconds.getSecondsIntoMinute(),
+        },
+    );
+    defer allocator.free(generated_at_str);
+
+    // Build report JSON (same structure as __ZIGZAG_DATA__)
+    var report_aw: std.io.Writer.Allocating = .init(allocator);
+    defer report_aw.deinit();
+    var ws: std.json.Stringify = .{ .writer = &report_aw.writer, .options = .{} };
+    try ws.beginObject();
+    try ws.objectField("meta");
+    try ws.beginObject();
+    try ws.objectField("root_path");
+    try ws.write(root_path);
+    try ws.objectField("generated_at");
+    try ws.write(generated_at_str);
+    try ws.objectField("version");
+    try ws.write(cfg.version);
+    try ws.objectField("watch_mode");
+    try ws.write(cfg.watch);
+    {
+        const sse_url = try std.fmt.allocPrint(
+            allocator,
+            "http://127.0.0.1:{d}/__events",
+            .{cfg.serve_port},
+        );
+        defer allocator.free(sse_url);
+        try ws.objectField("sse_url");
+        try ws.write(sse_url);
+    }
+    try ws.endObject();
+    try ws.objectField("summary");
+    try ws.beginObject();
+    try ws.objectField("source_files");
+    try ws.write(file_entries.count());
+    try ws.objectField("binary_files");
+    try ws.write(binary_entries.count());
+    try ws.objectField("total_lines");
+    try ws.write(total_lines);
+    try ws.objectField("total_size_bytes");
+    try ws.write(total_size);
+    try ws.objectField("languages");
+    try ws.beginArray();
+    for (lang_list.items) |ls| {
+        try ws.beginObject();
+        try ws.objectField("name");
+        try ws.write(ls.name);
+        try ws.objectField("files");
+        try ws.write(ls.files);
+        try ws.objectField("lines");
+        try ws.write(ls.lines);
+        try ws.objectField("size_bytes");
+        try ws.write(ls.size_bytes);
+        try ws.endObject();
+    }
+    try ws.endArray();
+    try ws.endObject();
+    try ws.objectField("files");
+    try ws.beginArray();
+    for (sorted_files.items) |e| {
+        try ws.beginObject();
+        try ws.objectField("path");
+        try ws.write(e.path);
+        try ws.objectField("size");
+        try ws.write(e.size);
+        try ws.objectField("lines");
+        try ws.write(e.line_count);
+        try ws.objectField("language");
+        try ws.write(e.getLanguage());
+        try ws.endObject();
+    }
+    try ws.endArray();
+    try ws.objectField("binaries");
+    try ws.beginArray();
+    for (sorted_binaries.items) |b| {
+        try ws.beginObject();
+        try ws.objectField("path");
+        try ws.write(b.path);
+        try ws.objectField("size");
+        try ws.write(b.size);
+        try ws.endObject();
+    }
+    try ws.endArray();
+    try ws.endObject();
+
+    // Build content map JSON (same structure as __ZIGZAG_CONTENT__)
+    var content_aw: std.io.Writer.Allocating = .init(allocator);
+    defer content_aw.deinit();
+    var cws: std.json.Stringify = .{ .writer = &content_aw.writer, .options = .{} };
+    try cws.beginObject();
+    for (sorted_files.items) |e| {
+        try cws.objectField(e.path);
+        try cws.write(e.content);
+    }
+    try cws.endObject();
+
+    // Wrap into {"report":<report_json>,"content":<content_json_as_string>}
+    var out: std.io.Writer.Allocating = .init(allocator);
+    defer out.deinit();
+    // Embed report JSON as-is (already a JSON object); encode content map as a JSON string
+    try out.writer.writeAll("{\"report\":");
+    try out.writer.writeAll(report_aw.written());
+    try out.writer.writeAll(",\"content\":");
+    var cs: std.json.Stringify = .{ .writer = &out.writer, .options = .{} };
+    try cs.write(content_aw.written());
+    try out.writer.writeByte('}');
+
+    return allocator.dupe(u8, out.written());
+}
+
 /// Returns true if the filename matches known boilerplate patterns.
 pub fn isBoilerplate(filename: []const u8) bool {
     const boilerplate_exact = [_][]const u8{
@@ -624,6 +823,16 @@ pub fn writeHtmlReport(
     try ws.write(cfg.version);
     try ws.objectField("watch_mode");
     try ws.write(cfg.watch);
+    if (cfg.watch and cfg.html_output) {
+        const sse_url = try std.fmt.allocPrint(
+            allocator,
+            "http://127.0.0.1:{d}/__events",
+            .{cfg.serve_port},
+        );
+        defer allocator.free(sse_url);
+        try ws.objectField("sse_url");
+        try ws.write(sse_url);
+    }
     try ws.endObject();
 
     // summary
