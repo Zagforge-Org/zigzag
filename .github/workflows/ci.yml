@@ -35,6 +35,7 @@ jobs:
               with:
                   version: "0.15.2"
             - name: Run tests
+              shell: bash
               run: zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/options_fallback.zig
 
     build:
