@@ -25,6 +25,15 @@
 - **JSON report output** (`--json`) for machine-readable analytics alongside the markdown report
 - **HTML dashboard** (`--html`) — interactive single-file report with charts, sortable file table, search, and a virtual-scrolling source viewer with syntax highlighting
 
+# Thanks to our contributors
+
+<p align="left">
+  <a href="https://github.com/ycqm">
+    <img src="https://github.com/ycqm.png" width="40" style="border-radius:50%; vertical-align:middle;" alt="ycqm"/>
+  </a>
+  <b>ycqm</b> — <kbd>Author of the documentation page</kbd>
+</p>
+
 ## Installation
 
 ### Prerequisites
