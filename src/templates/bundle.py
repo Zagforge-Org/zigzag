@@ -83,7 +83,7 @@ def bundle(
     )
     result = pattern.sub(lambda m: _inject(src_dir, templates_dir, m), template)
     output_path.write_text(result, encoding="utf-8")
-    print(f"Bundled {template_path} → {output_path} ({len(result):,} bytes)")
+    print(f"Bundled {template_path} -> {output_path} ({len(result):,} bytes)")
 
 
 def _esbuild_bin() -> str:
