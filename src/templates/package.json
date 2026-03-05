@@ -1,0 +1,8 @@
+{
+    "private": true,
+    "devDependencies": {
+        "@types/prismjs": "^1.26.0",
+        "esbuild": "^0.25.0",
+        "prismjs": "^1.29.0"
+    }
+}
