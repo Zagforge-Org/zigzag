@@ -1,7 +1,6 @@
 const std = @import("std");
 const options = @import("../options.zig").options;
-const FileConf = @import("../../conf/file.zig").FileConf;
-const loadFileConf = @import("../../conf/file.zig").load;
+const FileConf = @import("../../conf/file_new.zig").FileConf;
 
 /// Version string baked in at compile time from build.zig.zon via the options module.
 /// Requires the options module (provided by build.zig or options_fallback.zig via -M flag).
@@ -211,7 +210,7 @@ pub const Config = struct {
         var cfg = Self.initDefault(allocator);
 
         // Try to load zig.conf.json as base configuration
-        const maybe_conf = loadFileConf(allocator) catch |err| blk: {
+        const maybe_conf = FileConf.load(allocator) catch |err| blk: {
             std.log.warn("zigzag: could not read zig.conf.json: {s}", .{@errorName(err)});
             break :blk null;
         };
