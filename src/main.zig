@@ -3,8 +3,8 @@ const config = @import("./cli/commands/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
-const printAsciiLogo = @import("./cli/handlers.zig").printAsciiLogo;
-const handleInit = @import("./cli/handlers.zig").handleInit;
+const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
+const initHandler = @import("./cli/handlers/init.zig").handleInit;
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -23,7 +23,7 @@ pub fn main() !void {
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "init")) {
-            try handleInit(allocator, std.fs.cwd());
+            try initHandler(allocator, std.fs.cwd());
             return;
         }
 
