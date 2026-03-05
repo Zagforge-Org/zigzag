@@ -60,6 +60,9 @@ jobs:
             - uses: mlugg/setup-zig@v2
               with:
                   version: "0.15.2"
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: "lts/*"
             - name: Build release binary
               run: zig build -Doptimize=ReleaseFast -Dtarget=${{ matrix.target }}
 
