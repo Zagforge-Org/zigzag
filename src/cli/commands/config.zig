@@ -3,7 +3,10 @@ const options = @import("../options.zig").options;
 const FileConf = @import("../../conf/file.zig").FileConf;
 const loadFileConf = @import("../../conf/file.zig").load;
 
-pub const VERSION = "0.13.0";
+/// Version string baked in at compile time from build.zig.zon via the options module.
+/// Requires the options module (provided by build.zig or options_fallback.zig via -M flag).
+/// Use `zig build run` or `make test`; bare `zig run src/main.zig` is not supported.
+pub const VERSION = @import("options").version_string;
 
 const DEFAULT_SMALL_THRESHOLD = 1 << 20; // 1 MiB
 const DEFAULT_MMAP_THRESHOLD = 16 << 20; // 16 MiB
@@ -32,10 +35,10 @@ pub const Config = struct {
     output: ?[]u8, // Output filename; null means "report.md"
     json_output: bool, // Emit report.json alongside report.md
     html_output: bool, // Emit report.html alongside report.md
-    output_dir: ?[]u8,           // Base output directory; null means "zigzag-reports"
-    llm_report: bool,            // Generate LLM-optimized condensed report
-    llm_max_lines: u64,          // Max lines per file before truncation (default: 150)
-    llm_description: ?[]u8,      // Optional project description for LLM report preamble
+    output_dir: ?[]u8, // Base output directory; null means "zigzag-reports"
+    llm_report: bool, // Generate LLM-optimized condensed report
+    llm_max_lines: u64, // Max lines per file before truncation (default: 150)
+    llm_description: ?[]u8, // Optional project description for LLM report preamble
 
     // Internal tracking for memory management and CLI override behavior.
     // These are not user-facing; they track whether list fields were set by CLI
