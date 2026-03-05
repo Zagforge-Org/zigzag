@@ -720,6 +720,17 @@ pub fn writeHtmlReport(
     var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
     defer html_file.close();
     try html_file.writeAll(aw.written());
+
+    // In watch mode, write a tiny sidecar .stamp file containing only the
+    // generated_at timestamp. The browser polls this cheap file (~20 bytes)
+    // instead of the full HTML, and only fetches the full HTML on a change.
+    if (cfg.watch) {
+        const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
+        defer allocator.free(stamp_path);
+        var stamp_file = try std.fs.cwd().createFile(stamp_path, .{ .truncate = true });
+        defer stamp_file.close();
+        try stamp_file.writeAll(generated_at_str);
+    }
 }
 
 const VERSION = @import("config.zig").VERSION;
