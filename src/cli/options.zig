@@ -15,6 +15,7 @@ const outputDirHandler = @import("./handlers/output_dir.zig").handleOutputDir;
 const jsonHandler = @import("./handlers/json.zig").handleJson;
 const htmlHandler = @import("./handlers/html.zig").handleHtml;
 const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
+const portHandler = @import("./handlers/port.zig").handlePort;
 
 ///  OptionHandler represents a command-line option.
 pub const OptionHandler = struct {
@@ -38,4 +39,5 @@ pub const options = [_]OptionHandler{
     .{ .name = "--json", .takes_value = false, .handler = &jsonHandler },
     .{ .name = "--html", .takes_value = false, .handler = &htmlHandler },
     .{ .name = "--llm-report", .takes_value = false, .handler = &llmReportHandler },
+    .{ .name = "--port", .takes_value = true, .handler = &portHandler },
 };
