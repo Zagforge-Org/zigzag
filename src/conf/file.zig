@@ -15,6 +15,9 @@ pub const FileConf = struct {
     json_output: ?bool = null,
     html_output: ?bool = null,
     output_dir: ?[]const u8 = null,
+    llm_report: ?bool = null,
+    llm_max_lines: ?u64 = null,
+    llm_description: ?[]const u8 = null,
 };
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
@@ -33,7 +36,11 @@ pub fn defaultContent() []const u8 {
     \\  "output": "report.md",
     \\  "watch": false,
     \\  "json_output": false,
-    \\  "html_output": false
+    \\  "html_output": false,
+    \\  "output_dir": "zigzag-reports",
+    \\  "llm_report": false,
+    \\  "llm_max_lines": 150,
+    \\  "llm_description": null
     \\}
     \\
     ;
@@ -287,4 +294,66 @@ test "loadFromPath parses output_dir field" {
     var parsed = result.?;
     defer parsed.deinit();
     try std.testing.expectEqualStrings("my-reports", parsed.value.output_dir.?);
+}
+
+test "loadFromPath parses llm_report field" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_llm_report.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"llm_report\": true}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expect(parsed.value.llm_report.? == true);
+}
+
+test "loadFromPath parses llm_max_lines field" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_llm_max_lines.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"llm_max_lines\": 200}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expectEqual(@as(u64, 200), parsed.value.llm_max_lines.?);
+}
+
+test "loadFromPath parses llm_description field" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_llm_desc.json";
+    {
+        const f = try std.fs.cwd().createFile(tmp_path, .{});
+        defer f.close();
+        try f.writeAll("{\"llm_description\": \"A CLI tool\"}");
+    }
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+
+    const result = try loadFromPath(allocator, tmp_path);
+    var parsed = result.?;
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("A CLI tool", parsed.value.llm_description.?);
+}
+
+test "defaultContent includes output_dir, llm_report, llm_max_lines, llm_description fields" {
+    const allocator = std.testing.allocator;
+    const content = defaultContent();
+    const parsed = try std.json.parseFromSlice(FileConf, allocator, content, .{
+        .ignore_unknown_fields = true,
+    });
+    defer parsed.deinit();
+    try std.testing.expectEqualStrings("zigzag-reports", parsed.value.output_dir.?);
+    try std.testing.expect(parsed.value.llm_report != null);
+    try std.testing.expect(parsed.value.llm_report.? == false);
+    try std.testing.expectEqual(@as(u64, 150), parsed.value.llm_max_lines.?);
+    try std.testing.expect(parsed.value.llm_description == null);
 }
