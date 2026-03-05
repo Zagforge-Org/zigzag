@@ -6,8 +6,6 @@ const std = @import("std");
 pub const options = @import("options");
 
 test {
-    _ = @import("./cli/handlers.zig");
-
     _ = @import("./cli/handlers/version.zig");
     _ = @import("./cli/handlers/help.zig");
     _ = @import("./cli/handlers/skip_cache.zig");
