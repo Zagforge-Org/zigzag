@@ -2,6 +2,21 @@ const std = @import("std");
 const Config = @import("./commands/config.zig").Config;
 const handler = @import("handlers.zig");
 
+const versionHandler = @import("./handlers/version.zig").printVersion;
+const helpHandler = @import("./handlers/help.zig").printHelp;
+const skipCacheHandler = @import("./handlers/skip_cache.zig").handleSkipCache;
+const smallHandler = @import("./handlers/small.zig").handleSmall;
+const mmapHandler = @import("./handlers/mmap.zig").handleMmap;
+const pathHandler = @import("./handlers/path.zig").handlePath;
+const ignoreHandler = @import("./handlers/ignore.zig").handleIgnore;
+const timezoneHandler = @import("./handlers/timezone.zig").handleTimezone;
+const watchHandler = @import("./handlers/watch.zig").handleWatch;
+const outputHandler = @import("./handlers/output.zig").handleOutput;
+const outputDirHandler = @import("./handlers/output_dir.zig").handleOutputDir;
+const jsonHandler = @import("./handlers/json.zig").handleJson;
+const htmlHandler = @import("./handlers/html.zig").handleHtml;
+const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
+
 ///  OptionHandler represents a command-line option.
 pub const OptionHandler = struct {
     name: []const u8,
@@ -10,17 +25,18 @@ pub const OptionHandler = struct {
 };
 
 pub const options = [_]OptionHandler{
-    .{ .name = "--version", .takes_value = false, .handler = &handler.printVersion },
-    .{ .name = "--help", .takes_value = false, .handler = &handler.printHelp },
-    .{ .name = "--skip-cache", .takes_value = false, .handler = &handler.handleSkipCache },
-    .{ .name = "--small", .takes_value = true, .handler = &handler.handleSmall },
-    .{ .name = "--mmap", .takes_value = true, .handler = &handler.handleMmap },
-    .{ .name = "--path", .takes_value = true, .handler = &handler.handlePath },
-    .{ .name = "--ignore", .takes_value = true, .handler = &handler.handleIgnore },
-    .{ .name = "--timezone", .takes_value = true, .handler = &handler.handleTimezone },
-    .{ .name = "--watch", .takes_value = false, .handler = &handler.handleWatch },
-    .{ .name = "--output", .takes_value = true, .handler = &handler.handleOutput },
-    .{ .name = "--output-dir", .takes_value = true, .handler = &handler.handleOutputDir },
-    .{ .name = "--json", .takes_value = false, .handler = &handler.handleJson },
-    .{ .name = "--html", .takes_value = false, .handler = &handler.handleHtml },
+    .{ .name = "--version", .takes_value = false, .handler = &versionHandler },
+    .{ .name = "--help", .takes_value = false, .handler = &helpHandler },
+    .{ .name = "--skip-cache", .takes_value = false, .handler = &skipCacheHandler },
+    .{ .name = "--small", .takes_value = true, .handler = &smallHandler },
+    .{ .name = "--mmap", .takes_value = true, .handler = &mmapHandler },
+    .{ .name = "--path", .takes_value = true, .handler = &pathHandler },
+    .{ .name = "--ignore", .takes_value = true, .handler = &ignoreHandler },
+    .{ .name = "--timezone", .takes_value = true, .handler = &timezoneHandler },
+    .{ .name = "--watch", .takes_value = false, .handler = &watchHandler },
+    .{ .name = "--output", .takes_value = true, .handler = &outputHandler },
+    .{ .name = "--output-dir", .takes_value = true, .handler = &outputDirHandler },
+    .{ .name = "--json", .takes_value = false, .handler = &jsonHandler },
+    .{ .name = "--html", .takes_value = false, .handler = &htmlHandler },
+    .{ .name = "--llm-report", .takes_value = false, .handler = &llmReportHandler },
 };
