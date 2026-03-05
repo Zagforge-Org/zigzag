@@ -859,18 +859,25 @@
             return m ? m[1] : null;
         }
 
+        // Poll a tiny .stamp file (just the generated_at timestamp) instead of the
+        // full HTML. The full HTML can be many MB for large codebases; polling it
+        // every 2s was extremely slow. The stamp file is ~20 bytes and cheap to fetch.
         function poll() {
-            fetch(location.href, { cache: "no-store" })
+            var stampUrl = location.href + ".stamp";
+            fetch(stampUrl, { cache: "no-store" })
                 .then(function (r) {
-                    return r.text();
+                    return r.ok ? r.text() : Promise.resolve(null);
                 })
-                .then(function (html) {
-                    var newAt = extractGeneratedAt(html);
-                    if (newAt && newAt !== window.REPORT.meta.generated_at) {
-                        var newR = extractReport(html);
-                        var newContent = extractContent(html);
-                        if (newR) softUpdate(newR, newContent);
-                    }
+                .then(function (ts) {
+                    if (!ts || ts.trim() === window.REPORT.meta.generated_at) return;
+                    // Timestamp changed — fetch full HTML and soft-update
+                    return fetch(location.href, { cache: "no-store" })
+                        .then(function (r) { return r.text(); })
+                        .then(function (html) {
+                            var newR = extractReport(html);
+                            var newContent = extractContent(html);
+                            if (newR) softUpdate(newR, newContent);
+                        });
                 })
                 .catch(function () {})
                 .then(function () {
