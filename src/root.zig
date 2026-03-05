@@ -29,7 +29,10 @@ test {
     _ = @import("./cli/commands/watch.zig");
     _ = @import("./cli/version.zig");
     _ = @import("./cli/commands/stats.zig");
-    _ = @import("./conf/file.zig");
+
+    // _ = @import("./conf/file.zig");
+    _ = @import("./conf/file_test.zig");
+
     _ = @import("./fs/directory_test.zig");
     _ = @import("./fs/watcher.zig");
     _ = @import("./jobs/entry.zig");
