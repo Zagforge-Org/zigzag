@@ -1,6 +1,6 @@
 const std = @import("std");
 const options = @import("../options.zig").options;
-const FileConf = @import("../../conf/file_new.zig").FileConf;
+const FileConf = @import("../../conf/file.zig").FileConf;
 
 /// Version string baked in at compile time from build.zig.zon via the options module.
 /// Requires the options module (provided by build.zig or options_fallback.zig via -M flag).
