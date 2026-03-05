@@ -16,6 +16,7 @@ const watcher_mod = @import("../../fs/watcher.zig");
 const Watcher = watcher_mod.Watcher;
 const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("report.zig");
+const SseServer = @import("server.zig").SseServer;
 
 /// Per-path persistent state for watch mode.
 /// Heap-allocated so that entries_mutex has a stable address for thread pool jobs.
@@ -255,6 +256,39 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     if (states.items.len == 0) return;
 
+    // --- Start SSE dev server when both --watch and --html are active ---
+    var sse_server: ?*SseServer = null;
+    if (cfg.html_output) {
+        // Derive HTML path from the first path's state for the server's static fallback
+        const first_html_path = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
+        defer if (first_html_path) |p| allocator.free(p);
+
+        if (first_html_path) |hp| {
+            sse_server = SseServer.init(cfg.serve_port, hp, allocator) catch |err| blk: {
+                std.log.warn("SSE server failed to start on port {d}: {s}", .{ cfg.serve_port, @errorName(err) });
+                break :blk null;
+            };
+            if (sse_server) |srv| {
+                srv.start() catch |err| {
+                    std.log.warn("SSE server thread failed: {s}", .{@errorName(err)});
+                    srv.deinit();
+                    sse_server = null;
+                };
+                if (sse_server != null) {
+                    std.log.info("Dashboard: http://127.0.0.1:{d}", .{cfg.serve_port});
+                    // Broadcast initial payload so connecting clients get data immediately.
+                    const payload = report.buildSsePayload(&states.items[0].file_entries, &states.items[0].binary_entries, states.items[0].root_path, cfg, allocator) catch null;
+                    if (payload) |p| {
+                        defer allocator.free(p);
+                        srv.broadcast(p);
+                    }
+                    srv.openBrowser();
+                }
+            }
+        }
+    }
+    defer if (sse_server) |srv| srv.deinit();
+
     // --- Set up OS-level filesystem watcher ---
     var watcher = try Watcher.init(allocator);
     defer watcher.deinit();
@@ -333,6 +367,13 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                         report.writeHtmlReport(&state.file_entries, &state.binary_entries, hp, state.root_path, cfg, allocator) catch |err| {
                             std.log.err("Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
                         };
+                        if (sse_server) |srv| {
+                            const payload = report.buildSsePayload(&state.file_entries, &state.binary_entries, state.root_path, cfg, allocator) catch null;
+                            if (payload) |p| {
+                                defer allocator.free(p);
+                                srv.broadcast(p);
+                            }
+                        }
                     }
                 }
                 if (cfg.llm_report) {
