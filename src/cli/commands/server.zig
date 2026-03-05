@@ -186,16 +186,25 @@ pub const SseServer = struct {
                 conn.stream.close();
                 return;
             };
-            if (n == 0) { conn.stream.close(); return; }
+            if (n == 0) {
+                conn.stream.close();
+                return;
+            }
             total += n;
             if (std.mem.indexOf(u8, buf[0..total], "\r\n\r\n") != null) break;
             if (std.mem.indexOf(u8, buf[0..total], "\n\n") != null) break;
         }
 
         const line_end = std.mem.indexOf(u8, buf[0..total], "\r\n") orelse
-            std.mem.indexOf(u8, buf[0..total], "\n") orelse { conn.stream.close(); return; };
+            std.mem.indexOf(u8, buf[0..total], "\n") orelse {
+            conn.stream.close();
+            return;
+        };
         const first_line = buf[0..line_end];
-        if (!std.mem.startsWith(u8, first_line, "GET ")) { conn.stream.close(); return; }
+        if (!std.mem.startsWith(u8, first_line, "GET ")) {
+            conn.stream.close();
+            return;
+        }
         const path_end = std.mem.indexOfPos(u8, first_line, 4, " ") orelse first_line.len;
         const req_path = first_line[4..path_end];
 
@@ -220,7 +229,10 @@ pub const SseServer = struct {
             "\r\n" ++
             // Instruct the browser to reconnect every 3 s on disconnect.
             "retry: 3000\n\n";
-        stream.writeAll(headers) catch { stream.close(); return; };
+        stream.writeAll(headers) catch {
+            stream.close();
+            return;
+        };
 
         // Immediately push the last known report so new clients don't wait for
         // the next file-change event.
@@ -231,10 +243,16 @@ pub const SseServer = struct {
                 stream.writeAll("\n\n") catch break :blk false;
                 break :blk true;
             };
-            if (!ok) { stream.close(); return; }
+            if (!ok) {
+                stream.close();
+                return;
+            }
         }
 
-        clients.append(self.allocator, stream) catch { stream.close(); return; };
+        clients.append(self.allocator, stream) catch {
+            stream.close();
+            return;
+        };
     }
 };
 

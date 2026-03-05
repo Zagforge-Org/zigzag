@@ -21,6 +21,7 @@ test {
     _ = @import("./cli/handlers/html.zig");
     _ = @import("./cli/handlers/llm_report.zig");
     _ = @import("./cli/handlers/port.zig");
+    _ = @import("./cli/commands/server.zig");
 
     _ = @import("./cli/commands/config.zig");
     _ = @import("./cli/commands/runner.zig");
