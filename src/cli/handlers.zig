@@ -71,7 +71,10 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  --timezone       Timezone offset from UTC (e.g., +1, -5, +5:30)
         \\  --output         Output filename (default: report.md)
         \\  --output-dir     Base directory for report output (default: zigzag-reports)
+        \\  --json           Generate a JSON report alongside the markdown report
+        \\  --html           Generate an HTML report alongside the markdown report
         \\  --watch          Watch for file changes and regenerate output
+        \\  --llm-report     Generate a condensed LLM-optimized report (report.llm.md)
         \\
         \\Ignore Pattern Examples:
         \\  --ignore "*.png"              Ignore all PNG files
@@ -459,6 +462,19 @@ test "handleHtml sets html_output to true" {
     try std.testing.expect(!cfg.html_output);
     try handleHtml(&cfg, allocator, null);
     try std.testing.expect(cfg.html_output);
+}
+
+/// handleLlmReport enables LLM-optimized report output alongside the markdown report.
+pub fn handleLlmReport(cfg: *Config, allocator: std.mem.Allocator, _: ?[]const u8) anyerror!void {
+    _ = allocator;
+    cfg.llm_report = true;
+}
+
+test "handleLlmReport sets llm_report to true" {
+    var cfg = Config.initDefault(std.testing.allocator);
+    defer cfg.deinit();
+    try handleLlmReport(&cfg, std.testing.allocator, null);
+    try std.testing.expect(cfg.llm_report);
 }
 
 /// handleInit creates the zig.conf.json configuration file with default values.

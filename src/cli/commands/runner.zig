@@ -58,6 +58,11 @@ fn processPath(
         try file_ctx.ignore_list.append(allocator, html_ignore);
     }
 
+    if (cfg.llm_report) {
+        const llm_ignore = try report.deriveLlmPath(allocator, md_path);
+        try file_ctx.ignore_list.append(allocator, llm_ignore);
+    }
+
     if (cfg.ignore_patterns.len != 0) {
         var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
         while (it.next()) |pattern| {
@@ -122,6 +127,12 @@ fn processPath(
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
         try report.writeHtmlReport(&file_entries, &binary_entries, html_path, path, cfg, allocator);
+    }
+
+    if (cfg.llm_report) {
+        const llm_path = try report.deriveLlmPath(allocator, md_path);
+        defer allocator.free(llm_path);
+        try report.writeLlmReport(&file_entries, &binary_entries, llm_path, path, cfg, allocator);
     }
 
     std.log.info("=== Summary for {s} ===", .{path});

@@ -18,3 +18,4 @@ __pycache__/
 src/templates/src/prism-*.min.js
 .idea/
 .vscode/
+zigzag-reports

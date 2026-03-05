@@ -363,6 +363,138 @@ pub fn deriveHtmlPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{s}.html", .{md_path});
 }
 
+/// Derives the LLM report path by replacing the .md extension with .llm.md.
+pub fn deriveLlmPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
+    if (std.mem.endsWith(u8, md_path, ".md")) {
+        const stem = md_path[0 .. md_path.len - 3];
+        return std.fmt.allocPrint(allocator, "{s}.llm.md", .{stem});
+    }
+    return std.fmt.allocPrint(allocator, "{s}.llm.md", .{md_path});
+}
+
+/// Returns true if the filename matches known boilerplate patterns.
+pub fn isBoilerplate(filename: []const u8) bool {
+    const boilerplate_exact = [_][]const u8{
+        "package-lock.json",
+        "go.sum",
+        "yarn.lock",
+        "Cargo.lock",
+        "Gemfile.lock",
+        "poetry.lock",
+        "pnpm-lock.yaml",
+        "composer.lock",
+    };
+    for (boilerplate_exact) |name| {
+        if (std.mem.eql(u8, filename, name)) return true;
+    }
+    // Extension-based boilerplate
+    const boilerplate_ext = [_][]const u8{ ".lock", ".min.js", ".pb.go" };
+    for (boilerplate_ext) |ext| {
+        if (std.mem.endsWith(u8, filename, ext)) return true;
+    }
+    // generated suffix
+    if (std.mem.indexOf(u8, filename, ".generated.") != null) return true;
+    return false;
+}
+
+/// Returns the single-line comment prefix for the given file extension, or null if unknown.
+pub fn getCommentPrefix(extension: []const u8) ?[]const u8 {
+    const slash_slash = [_][]const u8{ ".zig", ".js", ".ts", ".jsx", ".tsx", ".rs", ".go", ".c", ".h", ".cpp", ".cc", ".java", ".swift", ".kt", ".cs" };
+    for (slash_slash) |ext| {
+        if (std.mem.eql(u8, extension, ext)) return "//";
+    }
+    const hash = [_][]const u8{ ".py", ".sh", ".rb", ".pl", ".r", ".yaml", ".yml", ".toml" };
+    for (hash) |ext| {
+        if (std.mem.eql(u8, extension, ext)) return "#";
+    }
+    const dash_dash = [_][]const u8{ ".sql", ".lua" };
+    for (dash_dash) |ext| {
+        if (std.mem.eql(u8, extension, ext)) return "--";
+    }
+    if (std.mem.eql(u8, extension, ".tex")) return "%";
+    return null;
+}
+
+/// Condenses file content for LLM ingestion:
+/// - Strips single-line comments (by extension)
+/// - Collapses consecutive blank lines to 1
+/// - Truncates files over max_lines to first 60 + last 20 lines
+/// Returns caller-owned slice.
+pub fn condenseContent(
+    allocator: std.mem.Allocator,
+    content: []const u8,
+    extension: []const u8,
+    max_lines: u64,
+) ![]u8 {
+    const comment_prefix = getCommentPrefix(extension);
+
+    // Phase 1: comment strip + blank collapse
+    var condensed: std.ArrayList([]const u8) = .empty;
+    defer condensed.deinit(allocator);
+
+    var prev_blank = false;
+    var iter = std.mem.splitScalar(u8, content, '\n');
+    while (iter.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+
+        // Strip single-line comment lines
+        if (comment_prefix) |pfx| {
+            if (std.mem.startsWith(u8, trimmed, pfx)) continue;
+        }
+
+        // Collapse consecutive blank lines
+        const is_blank = trimmed.len == 0;
+        if (is_blank) {
+            if (prev_blank) continue;
+            prev_blank = true;
+        } else {
+            prev_blank = false;
+        }
+
+        try condensed.append(allocator, line);
+    }
+
+    // Phase 2: truncation
+    // A trailing empty string from splitting a newline-terminated file is not
+    // a real line; exclude it from the count but preserve it for the join so
+    // that the output retains a trailing newline.
+    const has_trailing_empty = condensed.items.len > 0 and
+        condensed.items[condensed.items.len - 1].len == 0;
+    const real_lines: u64 = @intCast(if (has_trailing_empty) condensed.items.len - 1 else condensed.items.len);
+    const head: usize = 60;
+    const tail: usize = 20;
+    if (real_lines <= max_lines or real_lines <= head + tail) {
+        return std.mem.join(allocator, "\n", condensed.items);
+    }
+    const total = real_lines;
+    const omitted = total - (head + tail);
+
+    var out: std.ArrayList(u8) = .empty;
+    defer out.deinit(allocator);
+
+    const writer = out.writer(allocator);
+
+    for (condensed.items[0..head]) |line| {
+        try writer.writeAll(line);
+        try writer.writeByte('\n');
+    }
+
+    try writer.print("// [{d} lines omitted]\n", .{omitted});
+
+    // Slice the real lines only (exclude trailing empty if present), then take last `tail`
+    const real_items = if (has_trailing_empty)
+        condensed.items[0 .. condensed.items.len - 1]
+    else
+        condensed.items;
+    const start_tail = real_items.len - tail;
+    for (real_items[start_tail..]) |line| {
+        try writer.writeAll(line);
+        try writer.writeByte('\n');
+    }
+
+    return out.toOwnedSlice(allocator);
+}
+
 const dashboard_template = @embedFile("../../templates/dashboard.html");
 
 /// Write a self-contained HTML dashboard alongside the markdown report.
@@ -588,6 +720,204 @@ pub fn writeHtmlReport(
     var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
     defer html_file.close();
     try html_file.writeAll(aw.written());
+}
+
+const VERSION = @import("config.zig").VERSION;
+
+/// Write a condensed LLM-optimised report alongside the markdown report.
+pub fn writeLlmReport(
+    file_entries: *const std.StringHashMap(JobEntry),
+    binary_entries: *const std.StringHashMap(BinaryEntry),
+    llm_path: []const u8,
+    root_path: []const u8,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) !void {
+    const output_filename = std.fs.path.basename(llm_path);
+    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
+
+    // --- Date string (same epoch calc as writeReport) ---
+    const now = std.time.timestamp();
+    const local_now = if (cfg.timezone_offset) |offset| now + offset else now;
+    const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_now) };
+    const epoch_day = epoch_seconds.getEpochDay();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+    const date_str = try std.fmt.allocPrint(
+        allocator,
+        "{d}-{d:0>2}-{d:0>2}",
+        .{ year_day.year, month_day.month.numeric(), month_day.day_index + 1 },
+    );
+    defer allocator.free(date_str);
+
+    // --- Separate boilerplate from real entries ---
+    var boilerplate_count: usize = 0;
+    var sorted_entries: std.ArrayList(JobEntry) = .empty;
+    defer sorted_entries.deinit(allocator);
+
+    var fit = file_entries.iterator();
+    while (fit.next()) |kv| {
+        const entry = kv.value_ptr.*;
+        const basename = std.fs.path.basename(entry.path);
+        if (isBoilerplate(basename)) {
+            boilerplate_count += 1;
+        } else {
+            try sorted_entries.append(allocator, entry);
+        }
+    }
+
+    std.mem.sort(JobEntry, sorted_entries.items, {}, struct {
+        fn lessThan(_: void, a: JobEntry, b: JobEntry) bool {
+            return std.mem.lessThan(u8, a.path, b.path);
+        }
+    }.lessThan);
+
+    // --- Condense each file and track stats ---
+    // LangCount item struct
+    const LangCount = struct { name: []const u8, count: usize };
+
+    var lang_map = std.StringHashMap(usize).init(allocator);
+    defer lang_map.deinit();
+
+    var original_lines: u64 = 0;
+    var condensed_lines: u64 = 0;
+
+    // Store condensed content per entry (parallel array to sorted_entries)
+    var condensed_contents: std.ArrayList([]u8) = .empty;
+    defer {
+        for (condensed_contents.items) |c| allocator.free(c);
+        condensed_contents.deinit(allocator);
+    }
+
+    for (sorted_entries.items) |*entry| {
+        original_lines += @intCast(entry.line_count);
+
+        const condensed = try condenseContent(allocator, entry.content, entry.extension, cfg.llm_max_lines);
+        try condensed_contents.append(allocator, condensed);
+
+        const newlines = std.mem.count(u8, condensed, "\n");
+        condensed_lines += @intCast(newlines);
+
+        const lang = entry.getLanguage();
+        if (lang.len > 0) {
+            const gop = try lang_map.getOrPut(lang);
+            if (!gop.found_existing) gop.value_ptr.* = 0;
+            gop.value_ptr.* += 1;
+        }
+    }
+
+    // --- Build sorted language list (by count desc, then name asc) ---
+    var lang_list: std.ArrayList(LangCount) = .empty;
+    defer lang_list.deinit(allocator);
+
+    var lit = lang_map.iterator();
+    while (lit.next()) |kv| {
+        try lang_list.append(allocator, .{ .name = kv.key_ptr.*, .count = kv.value_ptr.* });
+    }
+    std.mem.sort(LangCount, lang_list.items, {}, struct {
+        fn lessThan(_: void, a: LangCount, b: LangCount) bool {
+            if (a.count != b.count) return a.count > b.count;
+            return std.mem.lessThan(u8, a.name, b.name);
+        }
+    }.lessThan);
+
+    // --- Reduction pct ---
+    const reduction_pct: u64 = if (original_lines > 0 and original_lines >= condensed_lines)
+        100 * (original_lines - condensed_lines) / original_lines
+    else
+        0;
+
+    // --- Build output in allocating writer, then flush to disk ---
+    var aw: std.io.Writer.Allocating = .init(allocator);
+    defer aw.deinit();
+
+    const w = &aw.writer;
+
+    // Header
+    try w.print(
+        "# LLM Context: {s}\n" ++
+            "> This report is condensed for LLM ingestion. The full human-readable report is available at report.md.\n" ++
+            "> ZigZag v{s} · {s}\n\n",
+        .{ root_path, VERSION, date_str },
+    );
+
+    // Project Description (only when set and non-empty)
+    if (cfg.llm_description) |desc| {
+        if (desc.len > 0) {
+            try w.print("## Project Description\n{s}\n\n", .{desc});
+        }
+    }
+
+    // Statistics
+    try w.writeAll("## Statistics\n");
+    try w.print(
+        "- Source files: {d}  |  Binary files: {d}  |  Boilerplate skipped: {d}\n",
+        .{ sorted_entries.items.len, binary_entries.count(), boilerplate_count },
+    );
+
+    // Languages line
+    if (lang_list.items.len > 0) {
+        try w.writeAll("- Languages: ");
+        for (lang_list.items, 0..) |lc, i| {
+            if (i > 0) try w.writeAll(", ");
+            try w.print("{s} ({d})", .{ lc.name, lc.count });
+        }
+        try w.writeByte('\n');
+    }
+
+    try w.print(
+        "- Original lines: {d}  →  Condensed: ~{d}  ({d}% reduction)\n\n",
+        .{ original_lines, condensed_lines, reduction_pct },
+    );
+
+    // File Index
+    const llm_shown_lines: usize = 80; // head (60) + tail (20) from condenseContent
+    try w.writeAll("## File Index\n");
+    for (sorted_entries.items, condensed_contents.items) |entry, condensed| {
+        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+        if (is_condensed) {
+            try w.print(
+                "- {s} (condensed — {d} of {d} lines shown)\n",
+                .{ entry.path, llm_shown_lines, entry.line_count },
+            );
+        } else {
+            try w.print("- {s} ({d} lines, full)\n", .{ entry.path, entry.line_count });
+        }
+    }
+    try w.writeByte('\n');
+
+    // Source
+    try w.writeAll("## Source\n\n");
+    for (sorted_entries.items, condensed_contents.items) |entry, condensed| {
+        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+        const lang = entry.getLanguage();
+
+        if (is_condensed) {
+            try w.print(
+                "### {s} *(condensed — {d} of {d} lines shown)*\n",
+                .{ entry.path, llm_shown_lines, entry.line_count },
+            );
+        } else {
+            try w.print("### {s}\n", .{entry.path});
+        }
+
+        if (lang.len > 0) {
+            try w.print("```{s}\n", .{lang});
+        } else {
+            try w.writeAll("```\n");
+        }
+
+        try w.writeAll(condensed);
+        if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
+            try w.writeByte('\n');
+        }
+        try w.writeAll("```\n\n");
+    }
+
+    // Write to disk
+    var llm_file = try std.fs.cwd().createFile(llm_path, .{ .truncate = true });
+    defer llm_file.close();
+    try llm_file.writeAll(aw.written());
 }
 
 // ============================================================
@@ -1266,4 +1596,215 @@ test "resolveOutputPath returns path under zigzag-reports by default" {
         std.debug.print("Expected 'src' dir to exist in tmp, got: {s}\n", .{@errorName(err)});
         return err;
     };
+}
+
+test "deriveLlmPath replaces .md extension with .llm.md" {
+    const result = try deriveLlmPath(std.testing.allocator, "zigzag-reports/src/report.md");
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/src/report.llm.md", result);
+}
+
+test "deriveLlmPath appends .llm.md when no .md extension" {
+    const result = try deriveLlmPath(std.testing.allocator, "zigzag-reports/src/report");
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/src/report.llm.md", result);
+}
+
+test "isBoilerplate detects exact filenames" {
+    try std.testing.expect(isBoilerplate("package-lock.json"));
+    try std.testing.expect(isBoilerplate("go.sum"));
+    try std.testing.expect(isBoilerplate("yarn.lock"));
+    try std.testing.expect(!isBoilerplate("main.zig"));
+}
+
+test "isBoilerplate detects .min.js extension" {
+    try std.testing.expect(isBoilerplate("jquery.min.js"));
+    try std.testing.expect(!isBoilerplate("app.js"));
+}
+
+test "isBoilerplate detects .generated. suffix" {
+    try std.testing.expect(isBoilerplate("proto.generated.go"));
+    try std.testing.expect(!isBoilerplate("generated.zig"));
+}
+
+test "getCommentPrefix returns correct prefix for known extensions" {
+    try std.testing.expectEqualStrings("//", getCommentPrefix(".zig").?);
+    try std.testing.expectEqualStrings("#", getCommentPrefix(".py").?);
+    try std.testing.expectEqualStrings("--", getCommentPrefix(".sql").?);
+    try std.testing.expectEqualStrings("%", getCommentPrefix(".tex").?);
+    try std.testing.expect(getCommentPrefix(".md") == null);
+    try std.testing.expect(getCommentPrefix(".unknown") == null);
+}
+
+test "condenseContent strips single-line comments" {
+    const content =
+        \\pub fn main() void {
+        \\// this is a comment
+        \\    const x = 1;
+        \\}
+    ;
+    const result = try condenseContent(std.testing.allocator, content, ".zig", 150);
+    defer std.testing.allocator.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "// this is a comment") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "const x = 1") != null);
+}
+
+test "condenseContent collapses consecutive blank lines" {
+    const content = "line1\n\n\nline2\n";
+    const result = try condenseContent(std.testing.allocator, content, ".zig", 150);
+    defer std.testing.allocator.free(result);
+    try std.testing.expect(std.mem.indexOf(u8, result, "\n\n\n") == null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "line1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result, "line2") != null);
+}
+
+test "condenseContent truncates long files with correct omitted count" {
+    // Build content with 100 numbered lines
+    var buf: [4096]u8 = undefined;
+    var fbs = std.io.fixedBufferStream(&buf);
+    const w = fbs.writer();
+    for (0..100) |i| {
+        try w.print("line {d}\n", .{i});
+    }
+    const content = fbs.getWritten();
+    // Use a non-comment extension to avoid stripping; max_lines = 90 (< 100)
+    const result = try condenseContent(std.testing.allocator, content, ".md", 90);
+    defer std.testing.allocator.free(result);
+    // Should contain truncation marker with 100 - 80 = 20 omitted
+    try std.testing.expect(std.mem.indexOf(u8, result, "// [20 lines omitted]") != null);
+    // First line should be present
+    try std.testing.expect(std.mem.indexOf(u8, result, "line 0") != null);
+    // Last line should be present
+    try std.testing.expect(std.mem.indexOf(u8, result, "line 99") != null);
+}
+
+test "condenseContent returns full content when under max_lines" {
+    const content = "line1\nline2\nline3\n";
+    const result = try condenseContent(std.testing.allocator, content, ".zig", 150);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("line1\nline2\nline3\n", result);
+}
+
+test "writeLlmReport creates report with correct structure" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+    cfg.llm_max_lines = 150;
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    const content = "pub fn main() void {}\n";
+    try file_entries.put("src/main.zig", .{
+        .path = "src/main.zig",
+        .content = @constCast(content),
+        .size = content.len,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+    const llm_path = try deriveLlmPath(alloc, md_path);
+    defer alloc.free(llm_path);
+
+    try writeLlmReport(&file_entries, &binary_entries, llm_path, "src", &cfg, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    try std.testing.expect(std.mem.indexOf(u8, written, "# LLM Context: src") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "## Statistics") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "## File Index") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "## Source") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "src/main.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "pub fn main() void {}") != null);
+    // File Index format for full file
+    try std.testing.expect(std.mem.indexOf(u8, written, "- src/main.zig (1 lines, full)") != null);
+}
+
+test "writeLlmReport omits boilerplate files" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+    cfg.llm_max_lines = 150;
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    const lock_content = "{ \"dep\": \"1.0\" }\n";
+    try file_entries.put("package-lock.json", .{
+        .path = "package-lock.json",
+        .content = @constCast(lock_content),
+        .size = lock_content.len,
+        .mtime = 0,
+        .extension = ".json",
+        .line_count = 1,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+    const llm_path = try deriveLlmPath(alloc, md_path);
+    defer alloc.free(llm_path);
+
+    try writeLlmReport(&file_entries, &binary_entries, llm_path, "src", &cfg, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    // boilerplate should not appear in source section
+    try std.testing.expect(std.mem.indexOf(u8, written, "package-lock.json") == null);
+    // boilerplate skipped count should be 1
+    try std.testing.expect(std.mem.indexOf(u8, written, "Boilerplate skipped: 1") != null);
+}
+
+test "writeLlmReport includes llm_description when set" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+
+    var cfg = Config.initDefault(alloc);
+    defer cfg.deinit();
+    cfg.llm_max_lines = 150;
+    cfg.llm_description = try alloc.dupe(u8, "A great tool.");
+    cfg._llm_description_allocated = true;
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
+    defer alloc.free(md_path);
+    const llm_path = try deriveLlmPath(alloc, md_path);
+    defer alloc.free(llm_path);
+
+    try writeLlmReport(&file_entries, &binary_entries, llm_path, "src", &cfg, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    try std.testing.expect(std.mem.indexOf(u8, written, "## Project Description") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "A great tool.") != null);
 }

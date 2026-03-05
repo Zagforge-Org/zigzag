@@ -33,6 +33,9 @@ pub const Config = struct {
     json_output: bool, // Emit report.json alongside report.md
     html_output: bool, // Emit report.html alongside report.md
     output_dir: ?[]u8,           // Base output directory; null means "zigzag-reports"
+    llm_report: bool,            // Generate LLM-optimized condensed report
+    llm_max_lines: u64,          // Max lines per file before truncation (default: 150)
+    llm_description: ?[]u8,      // Optional project description for LLM report preamble
 
     // Internal tracking for memory management and CLI override behavior.
     // These are not user-facing; they track whether list fields were set by CLI
@@ -42,6 +45,7 @@ pub const Config = struct {
     _patterns_set_by_cli: bool,
     _output_dir_allocated: bool, // true when output_dir is heap-allocated
     _output_dir_set_by_cli: bool, // true when CLI set it (prevents file conf override)
+    _llm_description_allocated: bool,
 
     const Self = @This();
 
@@ -67,6 +71,10 @@ pub const Config = struct {
             .output_dir = null,
             ._output_dir_allocated = false,
             ._output_dir_set_by_cli = false,
+            .llm_report = false,
+            .llm_max_lines = 150,
+            .llm_description = null,
+            ._llm_description_allocated = false,
         };
     }
 
@@ -172,6 +180,17 @@ pub const Config = struct {
                 self._output_dir_allocated = true;
             }
         }
+
+        // Apply LLM report settings
+        if (conf.llm_report) |v| self.llm_report = v;
+        if (conf.llm_max_lines) |v| self.llm_max_lines = v;
+        if (conf.llm_description) |desc| {
+            if (self._llm_description_allocated) {
+                if (self.llm_description) |existing| allocator.free(existing);
+            }
+            self.llm_description = try allocator.dupe(u8, desc);
+            self._llm_description_allocated = true;
+        }
     }
 
     /// Parses CLI args only, without loading any file config.
@@ -255,6 +274,10 @@ pub const Config = struct {
 
         if (self._output_dir_allocated) {
             if (self.output_dir) |dir| self.allocator.free(dir);
+        }
+
+        if (self._llm_description_allocated) {
+            if (self.llm_description) |desc| self.allocator.free(desc);
         }
     }
 };
@@ -504,4 +527,40 @@ test "Config.applyFileConf leaves output_dir unchanged when FileConf field is nu
     const conf = FileConf{};
     try cfg.applyFileConf(&conf, allocator);
     try std.testing.expect(cfg.output_dir == null);
+}
+
+test "Config.initDefault has llm defaults" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+    try std.testing.expect(!cfg.llm_report);
+    try std.testing.expectEqual(@as(u64, 150), cfg.llm_max_lines);
+    try std.testing.expect(cfg.llm_description == null);
+}
+
+test "Config.applyFileConf applies llm_report" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+    const conf = FileConf{ .llm_report = true };
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expect(cfg.llm_report);
+}
+
+test "Config.applyFileConf applies llm_max_lines" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+    const conf = FileConf{ .llm_max_lines = 300 };
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expectEqual(@as(u64, 300), cfg.llm_max_lines);
+}
+
+test "Config.applyFileConf applies llm_description" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.initDefault(allocator);
+    defer cfg.deinit();
+    const conf = FileConf{ .llm_description = "My project" };
+    try cfg.applyFileConf(&conf, allocator);
+    try std.testing.expectEqualStrings("My project", cfg.llm_description.?);
 }
