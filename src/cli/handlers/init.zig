@@ -2,19 +2,27 @@ const std = @import("std");
 const testing = std.testing;
 const fs = std.fs;
 
-const DEFAULT_CONF_FILENAME = @import("../../conf/file.zig").DEFAULT_CONF_FILENAME;
-const defaultContent = @import("../../conf/file.zig").defaultContent;
+const DEFAULT_CONF_FILENAME = @import("../../conf/file_new.zig").DEFAULT_CONF_FILENAME;
+const FileConf = @import("../../conf/file_new.zig").FileConf;
 
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
 pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
-    _ = allocator;
+    const full_path = try std.fs.path.join(allocator, &[_][]const u8{ ".", DEFAULT_CONF_FILENAME });
 
     const file = dir.createFile(DEFAULT_CONF_FILENAME, .{
         .read = true,
         .exclusive = true,
     }) catch |err| switch (err) {
         error.PathAlreadyExists => {
+
+            // Write to the file only if it's empty
+            const content = try FileConf.read(allocator, full_path) orelse FileConf.default();
+            if (FileConf.isEmpty(content)) {
+                try FileConf.writeDefaultConfig(full_path);
+                return;
+            }
+
             std.log.info("zigzag: {s} already exists", .{DEFAULT_CONF_FILENAME});
             return;
         },
@@ -22,7 +30,7 @@ pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
     };
     defer file.close();
 
-    try file.writeAll(defaultContent());
+    try FileConf.writeDefaultConfig(full_path);
     std.log.info("zigzag: created {s}", .{DEFAULT_CONF_FILENAME});
 }
 
@@ -41,7 +49,7 @@ test "handleInit creates file with default content" {
     try testing.expect(content.len > 0);
 
     const parsed = try std.json.parseFromSlice(
-        @import("../../conf/file.zig").FileConf,
+        FileConf,
         allocator,
         content,
         .{ .ignore_unknown_fields = true },
