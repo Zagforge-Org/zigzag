@@ -29,7 +29,7 @@
 
 <p align="left">
   <a href="https://github.com/ycqm">
-    <img src="https://github.com/ycqm.png" width="40" style="border-radius:50%; vertical-align:middle;" alt="ycqm"/>
+    <img src="https://github.com/ycqm.png" width="40" style="border-radius:100%; vertical-align:middle;" alt="ycqm"/>
   </a>
   <b>ycqm</b> — <kbd>Author of the documentation page</kbd>
 </p>
