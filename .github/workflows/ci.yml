@@ -35,7 +35,7 @@ jobs:
               with:
                   version: "0.15.2"
             - name: Run tests
-              run: zig test src/root.zig
+              run: zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/options_fallback.zig
 
     build:
         name: Build (${{ matrix.target }})
