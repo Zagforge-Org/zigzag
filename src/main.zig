@@ -1,5 +1,5 @@
 const std = @import("std");
-const config = @import("./cli/commands/config.zig");
+const config = @import("./cli/commands/config/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;

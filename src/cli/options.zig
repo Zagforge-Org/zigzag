@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("./commands/config.zig").Config;
+const Config = @import("./commands/config/config.zig").Config;
 
 const versionHandler = @import("./handlers/version.zig").printVersion;
 const helpHandler = @import("./handlers/help.zig").printHelp;
