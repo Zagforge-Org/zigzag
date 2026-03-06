@@ -1,7 +1,7 @@
 const std = @import("std");
 const walk = @import("../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
-const Config = @import("config.zig").Config;
+const Config = @import("config/config.zig").Config;
 const FileContext = @import("../context.zig").FileContext;
 const Pool = @import("../../workers/pool.zig").Pool;
 const WaitGroup = @import("../../workers/wait_group.zig").WaitGroup;
@@ -63,12 +63,9 @@ fn processPath(
         try file_ctx.ignore_list.append(allocator, llm_ignore);
     }
 
-    if (cfg.ignore_patterns.len != 0) {
-        var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
-        while (it.next()) |pattern| {
-            const owned_pattern = try allocator.dupe(u8, pattern);
-            try file_ctx.ignore_list.append(allocator, owned_pattern);
-        }
+    for (cfg.ignore_patterns.items) |pattern| {
+        const owned_pattern = try allocator.dupe(u8, pattern);
+        try file_ctx.ignore_list.append(allocator, owned_pattern);
     }
 
     var wg = WaitGroup.init();
@@ -115,24 +112,28 @@ fn processPath(
     try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
 
-    try report.writeReport(&file_entries, md_path, path, cfg, allocator);
+    // Build ReportData once; all writers share the pre-aggregated result.
+    var report_data = try report.ReportData.init(allocator, &file_entries, &binary_entries, cfg.timezone_offset);
+    defer report_data.deinit();
+
+    try report.writeReport(&report_data, &file_entries, md_path, path, cfg, allocator);
 
     if (cfg.json_output) {
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
-        try report.writeJsonReport(&file_entries, &binary_entries, json_path, path, cfg, allocator);
+        try report.writeJsonReport(&report_data, json_path, path, cfg, allocator);
     }
 
     if (cfg.html_output) {
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
-        try report.writeHtmlReport(&file_entries, &binary_entries, html_path, path, cfg, allocator);
+        try report.writeHtmlReport(&report_data, html_path, path, cfg, allocator);
     }
 
     if (cfg.llm_report) {
         const llm_path = try report.deriveLlmPath(allocator, md_path);
         defer allocator.free(llm_path);
-        try report.writeLlmReport(&file_entries, &binary_entries, llm_path, path, cfg, allocator);
+        try report.writeLlmReport(&report_data, binary_entries.count(), llm_path, path, cfg, allocator);
     }
 
     std.log.info("=== Summary for {s} ===", .{path});
