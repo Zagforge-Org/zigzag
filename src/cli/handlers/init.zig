@@ -4,6 +4,7 @@ const fs = std.fs;
 
 const DEFAULT_CONF_FILENAME = @import("../../conf/file.zig").DEFAULT_CONF_FILENAME;
 const FileConf = @import("../../conf/file.zig").FileConf;
+const lg = @import("../commands/logger.zig");
 
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
@@ -23,7 +24,7 @@ pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
                 return;
             }
 
-            std.log.info("zigzag: {s} already exists", .{DEFAULT_CONF_FILENAME});
+            lg.printWarn("{s} already exists", .{DEFAULT_CONF_FILENAME});
             return;
         },
         else => return err,
@@ -31,7 +32,7 @@ pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
     defer file.close();
 
     try FileConf.writeDefaultConfig(full_path);
-    std.log.info("zigzag: created {s}", .{DEFAULT_CONF_FILENAME});
+    lg.printSuccess("Created {s}", .{DEFAULT_CONF_FILENAME});
 }
 
 test "handleInit creates file with default content" {
