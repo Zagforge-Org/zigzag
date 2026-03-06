@@ -44,6 +44,10 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     if (states.items.len == 0) return;
 
+    // Flush cache to disk now so it survives Ctrl+C during the watch loop.
+    // Without this, defer cache.deinit() in main.zig never runs on SIGINT.
+    if (cache) |c| c.saveToDisk() catch {};
+
     // Start SSE dev server when both --watch and --html are active
     var sse_server: ?*SseServer = null;
     if (cfg.html_output) {

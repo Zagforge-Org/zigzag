@@ -75,7 +75,7 @@ pub const CacheImpl = struct {
                 },
             };
 
-            const mtime = @as(u64, @intCast(stat.mtime));
+            const mtime: u64 = @intCast(@divFloor(stat.mtime, std.time.ns_per_s));
             const size = stat.size;
 
             // Check if file has been modified
@@ -148,7 +148,7 @@ pub const CacheImpl = struct {
         }
     }
 
-    fn saveToDisk(self: *Self) !void {
+    pub fn saveToDisk(self: *Self) !void {
         const cache_index_path = try std.fmt.allocPrint(self.allocator, "{s}/index", .{self.cache_dir});
         defer self.allocator.free(cache_index_path);
 
