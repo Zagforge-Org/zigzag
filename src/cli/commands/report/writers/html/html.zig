@@ -15,9 +15,6 @@ pub fn writeHtmlReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    const output_filename = std.fs.path.basename(html_path);
-    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
-
     // --- Split template on two markers ---
     // __ZIGZAG_DATA__    → report JSON (no file content) parsed eagerly
     // __ZIGZAG_CONTENT__ → content map {"path": "source"} loaded lazily

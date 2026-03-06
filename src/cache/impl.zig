@@ -106,7 +106,7 @@ pub const CacheImpl = struct {
         }
 
         if (invalid_entries.items.len > 0) {
-            std.log.info("Invalidated {d} stale cache entries", .{invalid_entries.items.len});
+            std.log.debug("Invalidated {d} stale cache entries", .{invalid_entries.items.len});
         }
     }
 
@@ -319,7 +319,7 @@ pub const CacheImpl = struct {
         };
 
         if (is_new_entry) {
-            std.log.info("Cached new file: {s} -> {s}", .{ path, cache_filename });
+            std.log.debug("Cached new file: {s} -> {s}", .{ path, cache_filename });
         } else {
             std.log.debug("Updated cache for: {s}", .{path});
         }

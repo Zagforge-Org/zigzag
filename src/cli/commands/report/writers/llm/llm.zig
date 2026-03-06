@@ -18,9 +18,6 @@ pub fn writeLlmReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    const output_filename = std.fs.path.basename(llm_path);
-    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
-
     // --- Separate boilerplate from real entries ---
     var boilerplate_count: usize = 0;
     var real_entries: std.ArrayList(JobEntry) = .empty;

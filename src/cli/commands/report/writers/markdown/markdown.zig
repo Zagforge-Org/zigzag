@@ -62,9 +62,6 @@ pub fn writeReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    const output_filename = std.fs.path.basename(md_path);
-    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
-
     var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
 

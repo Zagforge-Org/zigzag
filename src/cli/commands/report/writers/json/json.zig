@@ -12,9 +12,6 @@ pub fn writeJsonReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    const output_filename = std.fs.path.basename(json_path);
-    std.log.info("Building {s} for {s}...", .{ output_filename, root_path });
-
     var aw: std.io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 

@@ -9,6 +9,7 @@ const Watcher = watcher_mod.Watcher;
 const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
+const lg = @import("../logger.zig");
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
@@ -31,8 +32,8 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     for (cfg.paths.items) |path| {
         const state = State.init(cfg, cache, path, &pool, allocator) catch |err| {
             switch (err) {
-                error.NotADirectory => std.log.err("Path '{s}' is not a directory", .{path}),
-                else => std.log.err("Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
+                error.NotADirectory => lg.printError("Path '{s}' is not a directory", .{path}),
+                else => lg.printError("Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
             }
             continue;
         };
@@ -51,17 +52,17 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
         if (first_html_path) |hp| {
             sse_server = SseServer.init(cfg.serve_port, hp, allocator) catch |err| blk: {
-                std.log.warn("SSE server failed to start on port {d}: {s}", .{ cfg.serve_port, @errorName(err) });
+                lg.printWarn("SSE server failed to start on port {d}: {s}", .{ cfg.serve_port, @errorName(err) });
                 break :blk null;
             };
             if (sse_server) |srv| {
                 srv.start() catch |err| {
-                    std.log.warn("SSE server thread failed: {s}", .{@errorName(err)});
+                    lg.printWarn("SSE server thread failed: {s}", .{@errorName(err)});
                     srv.deinit();
                     sse_server = null;
                 };
                 if (sse_server != null) {
-                    std.log.info("Dashboard: http://127.0.0.1:{d}", .{cfg.serve_port});
+                    lg.printSuccess("Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
                     // Broadcast initial payload so connecting clients get data immediately.
                     const first = states.items[0];
                     var init_data = report.ReportData.init(allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
@@ -85,11 +86,11 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     for (states.items) |state| {
         watcher.watchDir(state.root_path) catch |err| {
-            std.log.err("Failed to watch '{s}': {s}", .{ state.root_path, @errorName(err) });
+            lg.printError("Failed to watch '{s}': {s}", .{ state.root_path, @errorName(err) });
         };
     }
 
-    std.log.info("Watching {d} path(s) for changes. Press Ctrl+C to stop.", .{states.items.len});
+    lg.printSuccess("Watching {d} path(s) — press Ctrl+C to stop", .{states.items.len});
 
     // Event loop with debounce to group multiple events into a single update.
     // Ensures that updates are not triggered by rapid-fire events and preserves CPU resources.
@@ -104,7 +105,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
         const timeout: i32 = if (dirty) DEBOUNCE_MS else -1;
         const n = watcher.poll(&events, timeout) catch |err| {
-            std.log.err("Watcher poll error: {s}", .{@errorName(err)});
+            lg.printError("Watcher poll error: {s}", .{@errorName(err)});
             continue;
         };
 
@@ -123,7 +124,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                     switch (event.kind) {
                         .created, .modified => {
                             state.updateFile(event.path, cache, &pool) catch |err| {
-                                std.log.err("Failed to process {s}: {s}", .{ event.path, @errorName(err) });
+                                lg.printError("Failed to process {s}: {s}", .{ event.path, @errorName(err) });
                             };
                         },
                         .deleted => state.removeFile(event.path),

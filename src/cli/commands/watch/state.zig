@@ -13,6 +13,7 @@ const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
 const report = @import("../report.zig");
+const lg = @import("../logger.zig");
 
 /// Per-path persistent state for watch mode.
 /// Heap-allocated so that entries_mutex has a stable address for thread pool jobs.
@@ -76,8 +77,8 @@ pub const State = struct {
         try walker.walkDir(path, walkerCallback, walk_ctx);
         wg.wait();
 
-        std.log.info("=== Initial scan for {s} ===", .{path});
-        stats.printSummary();
+        const sv = stats.getSummary();
+        lg.printSummary(path, sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored);
 
         return self;
     }
