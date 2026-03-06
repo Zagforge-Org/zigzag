@@ -1,10 +1,10 @@
 const std = @import("std");
 const testing = std.testing;
 
-const Config = @import("../commands/config.zig").Config;
+const Config = @import("../commands/config/config.zig").Config;
 const stdoutPrint = @import("../../fs/stdout.zig").stdoutPrint;
 const makeTestConfig = @import("./test_config.zig").makeTestConfig;
-const VERSION = @import("../commands/config.zig").VERSION;
+const VERSION = @import("../commands/config/config.zig").VERSION;
 
 /// printVersion prints version information.
 pub fn printVersion(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
