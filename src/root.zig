@@ -21,13 +21,16 @@ test {
     _ = @import("./cli/handlers/html.zig");
     _ = @import("./cli/handlers/llm_report.zig");
     _ = @import("./cli/handlers/port.zig");
-    _ = @import("./cli/commands/server.zig");
-
     _ = @import("./cli/commands/config/config.zig");
     _ = @import("./cli/commands/runner.zig");
-    _ = @import("./cli/commands/watch.zig");
+
+    // watch sub-module tests
+    _ = @import("./cli/commands/watch/state_test.zig");
+    _ = @import("./cli/commands/watch/server_test.zig");
+    _ = @import("./cli/commands/watch/reporter_test.zig");
+    _ = @import("./cli/commands/watch/exec_test.zig");
     _ = @import("./cli/version/version_test.zig");
-    _ = @import("./cli/commands/stats.zig");
+    _ = @import("./cli/commands/stats/stats_test.zig");
 
     // report sub-module tests
     _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
@@ -39,7 +42,6 @@ test {
     _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
     _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
-    // _ = @import("./conf/file.zig");
     _ = @import("./conf/file_test.zig");
 
     _ = @import("./fs/directory_test.zig");
