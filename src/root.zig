@@ -51,4 +51,6 @@ test {
 
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
+
+    _ = @import("./fs/watcher/linux_test.zig");
 }
