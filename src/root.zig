@@ -5,6 +5,8 @@ const std = @import("std");
 /// Provided by build.zig (real version) or options_fallback.zig (0.0.0 sentinel).
 pub const options = @import("options");
 
+const builtin = @import("builtin");
+
 test {
     _ = @import("./cli/handlers/version.zig");
     _ = @import("./cli/handlers/help.zig");
@@ -52,5 +54,9 @@ test {
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
 
-    _ = @import("./fs/watcher/linux_test.zig");
+    switch (builtin.os.tag) {
+        .linux => {
+            _ = @import("./fs/watcher/linux_test.zig");
+        },
+    }
 }
