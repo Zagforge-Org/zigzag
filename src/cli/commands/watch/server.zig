@@ -39,7 +39,7 @@ pub const SseServer = struct {
         const owned_path = try allocator.dupe(u8, html_path);
         errdefer allocator.free(owned_path);
         self.* = .{
-            .rllocator = allocator,
+            .allocator = allocator,
             .listener = listener,
             .html_path = owned_path,
             .bound_port = port,
