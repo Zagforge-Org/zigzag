@@ -17,14 +17,14 @@ const htmlHandler = @import("./handlers/html.zig").handleHtml;
 const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
 const portHandler = @import("./handlers/port.zig").handlePort;
 
-///  OptionHandler represents a command-line option.
-pub const OptionHandler = struct {
+///  FlagsHandler represents a command-line flag.
+pub const FlagsHandler = struct {
     name: []const u8,
     takes_value: bool,
     handler: *const fn (*Config, std.mem.Allocator, ?[]const u8) anyerror!void,
 };
 
-pub const options = [_]OptionHandler{
+pub const flags = [_]FlagsHandler{
     .{ .name = "--version", .takes_value = false, .handler = &versionHandler },
     .{ .name = "--help", .takes_value = false, .handler = &helpHandler },
     .{ .name = "--skip-cache", .takes_value = false, .handler = &skipCacheHandler },

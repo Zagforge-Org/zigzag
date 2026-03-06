@@ -1,5 +1,5 @@
 const std = @import("std");
-const options = @import("../../options.zig").options;
+const flags = @import("../../flags.zig").flags;
 const FileConf = @import("../../../conf/file.zig").FileConf;
 const parseTimezoneStr = @import("./timezone/timezone.zig").parseTimezoneStr;
 
@@ -173,20 +173,20 @@ pub const Config = struct {
             const arg = args[i];
 
             var handled = false;
-            for (options) |opt| {
-                if (std.mem.eql(u8, arg, opt.name)) {
+            for (flags) |flag| {
+                if (std.mem.eql(u8, arg, flag.name)) {
                     var value: ?[]const u8 = null;
 
-                    if (opt.takes_value) {
+                    if (flag.takes_value) {
                         if (i + 1 < args.len) {
                             i += 1;
                             value = args[i];
                         } else {
-                            return .{ .MissingValue = opt.name };
+                            return .{ .MissingValue = flag.name };
                         }
                     }
 
-                    opt.handler(self, allocator, value) catch |err| {
+                    flag.handler(self, allocator, value) catch |err| {
                         return .{ .Other = @errorName(err) };
                     };
 
