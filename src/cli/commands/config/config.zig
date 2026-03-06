@@ -28,6 +28,7 @@ pub const Config = struct {
     timezone_offset: ?i64, // Offset in seconds from UTC (e.g., 3600 for UTC+1)
     version: []const u8 = VERSION,
     watch: bool,
+    log: bool,
     output: ?[]u8, // Output filename; null means "report.md"
     json_output: bool, // Emit report.json alongside report.md
     html_output: bool, // Emit report.html alongside report.md
@@ -62,6 +63,7 @@ pub const Config = struct {
             .n_threads = std.Thread.getCpuCount() catch 1,
             .timezone_offset = null,
             .watch = false,
+            .log = false,
             .output = null,
             .json_output = false,
             .html_output = false,
@@ -122,6 +124,7 @@ pub const Config = struct {
         if (conf.small_threshold) |v| self.small_threshold = v;
         if (conf.mmap_threshold) |v| self.mmap_threshold = v;
         if (conf.watch) |v| self.watch = v;
+        if (conf.log) |v| self.log = v;
 
         // Timezone
         if (conf.timezone) |tz| {
