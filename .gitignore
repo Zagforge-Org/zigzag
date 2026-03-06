@@ -12,10 +12,14 @@ TODO.md
 USECASES.md
 PLAN.md
 report.html
-docs
+*.html.stamp
 
 .DS_Store
 __pycache__/
 src/templates/src/prism-*.min.js
+src/templates/node_modules/
+src/templates/dist/
+src/templates/dashboard.html
 .idea/
 .vscode/
+zigzag-reports

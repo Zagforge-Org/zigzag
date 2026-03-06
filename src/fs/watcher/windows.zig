@@ -8,19 +8,31 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-/// Thread-safe event queue shared between background watch threads and poll()
+/// Thread-safe event queue shared between background watch threads and poll().
+/// Heap-allocated and ref-counted so both the Watcher and each watchThread can
+/// hold a reference; the queue is only freed when the last holder releases it.
 const SharedQueue = struct {
     mutex: std.Thread.Mutex = .{},
     events: std.ArrayList(WatchEvent) = .empty,
     allocator: std.mem.Allocator,
+    ref: std.atomic.Value(u32),
 
-    fn init(allocator: std.mem.Allocator) SharedQueue {
-        return .{ .allocator = allocator };
+    fn create(allocator: std.mem.Allocator) !*SharedQueue {
+        const q = try allocator.create(SharedQueue);
+        q.* = .{ .allocator = allocator, .ref = std.atomic.Value(u32).init(1) };
+        return q;
     }
 
-    fn deinit(self: *SharedQueue) void {
-        for (self.events.items) |ev| self.allocator.free(ev.path);
-        self.events.deinit(self.allocator);
+    fn retain(self: *SharedQueue) void {
+        _ = self.ref.fetchAdd(1, .monotonic);
+    }
+
+    fn release(self: *SharedQueue) void {
+        if (self.ref.fetchSub(1, .acq_rel) == 1) {
+            for (self.events.items) |ev| self.allocator.free(ev.path);
+            self.events.deinit(self.allocator);
+            self.allocator.destroy(self);
+        }
     }
 
     fn push(self: *SharedQueue, ev: WatchEvent) void {
@@ -37,15 +49,27 @@ const SharedQueue = struct {
     }
 };
 
-/// Context passed to each background watch thread
+/// Context passed to each background watch thread.
+/// Ref-counted (init=2: one for watcher, one for thread) so deinit() can signal
+/// stop and release its ref without freeing memory the thread is still using.
 const WatchCtx = struct {
     path: []const u8,
     queue: *SharedQueue,
     allocator: std.mem.Allocator,
     stop: std.atomic.Value(bool),
+    ref: std.atomic.Value(u32),
+
+    fn release(self: *WatchCtx) void {
+        if (self.ref.fetchSub(1, .acq_rel) == 1) {
+            self.queue.release(); // release queue ref when ctx is freed
+            self.allocator.free(self.path);
+            self.allocator.destroy(self);
+        }
+    }
 };
 
 fn watchThread(ctx: *WatchCtx) void {
+    defer ctx.release();
     // Convert path to null-terminated UTF-16
     var path_w_buf: [std.fs.max_path_bytes]u16 = undefined;
     const path_w_len = std.unicode.utf8ToUtf16Le(&path_w_buf, ctx.path) catch return;
@@ -119,13 +143,13 @@ fn watchThread(ctx: *WatchCtx) void {
 }
 
 pub const Watcher = struct {
-    queue: SharedQueue,
+    queue: *SharedQueue,
     ctxs: std.ArrayList(*WatchCtx) = .empty,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
         return .{
-            .queue = SharedQueue.init(allocator),
+            .queue = try SharedQueue.create(allocator),
             .allocator = allocator,
         };
     }
@@ -133,20 +157,21 @@ pub const Watcher = struct {
     pub fn deinit(self: *Watcher) void {
         for (self.ctxs.items) |ctx| {
             ctx.stop.store(true, .release);
-            self.allocator.free(ctx.path);
-            self.allocator.destroy(ctx);
+            ctx.release(); // release watcher's ref; thread frees ctx+queue-ref when it exits
         }
         self.ctxs.deinit(self.allocator);
-        self.queue.deinit();
+        self.queue.release(); // release watcher's queue ref
     }
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
         const ctx = try self.allocator.create(WatchCtx);
+        self.queue.retain(); // ctx will hold one extra queue ref
         ctx.* = .{
             .path = try self.allocator.dupe(u8, path),
-            .queue = &self.queue,
+            .queue = self.queue,
             .allocator = self.allocator,
             .stop = std.atomic.Value(bool).init(false),
+            .ref = std.atomic.Value(u32).init(2),
         };
         try self.ctxs.append(self.allocator, ctx);
         const t = try std.Thread.spawn(.{}, watchThread, .{ctx});

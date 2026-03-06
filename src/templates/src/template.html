@@ -40,13 +40,13 @@
             <div id="viewer-body"></div>
         </div>
         <!-- Prism highlight worker source (embedded, no CDN required) -->
-        <!-- @inject-text: highlight-worker.js as prism-src -->
+        <!-- @inject-text: dist/highlight.worker.js as prism-src -->
         <!-- Report data (injected by ZigZag at report-generation time) -->
         <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
         <script type="application/json" id="fc">__ZIGZAG_CONTENT__</script>
         <!-- Parse report data before app logic runs -->
         <script>window.REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
         <!-- App logic -->
-        <!-- @inject: dashboard.js -->
+        <!-- @inject: dist/bundle.js -->
     </body>
 </html>

@@ -1,0 +1,179 @@
+const std = @import("std");
+const Config = @import("../../../config/config.zig").Config;
+const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
+const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
+const ReportData = @import("../aggregator.zig").ReportData;
+const content_mod = @import("../content.zig");
+const isBoilerplate = content_mod.isBoilerplate;
+const condenseContent = content_mod.condenseContent;
+
+const VERSION = @import("../../../config/config.zig").VERSION;
+
+/// Write a condensed LLM-optimised report alongside the markdown report.
+pub fn writeLlmReport(
+    data: *const ReportData,
+    binary_count: usize,
+    llm_path: []const u8,
+    root_path: []const u8,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) !void {
+    // --- Separate boilerplate from real entries ---
+    var boilerplate_count: usize = 0;
+    var real_entries: std.ArrayList(JobEntry) = .empty;
+    defer real_entries.deinit(allocator);
+
+    for (data.sorted_files.items) |entry| {
+        const basename = std.fs.path.basename(entry.path);
+        if (isBoilerplate(basename)) {
+            boilerplate_count += 1;
+        } else {
+            try real_entries.append(allocator, entry);
+        }
+    }
+    // real_entries are already sorted (sorted_files is sorted)
+
+    // LangCount: used for counting per-language files in LLM report
+    const LangCount = struct { name: []const u8, count: usize };
+
+    var lang_map = std.StringHashMap(usize).init(allocator);
+    defer lang_map.deinit();
+
+    var original_lines: u64 = 0;
+    var condensed_lines: u64 = 0;
+
+    var condensed_contents: std.ArrayList([]u8) = .empty;
+    defer {
+        for (condensed_contents.items) |c| allocator.free(c);
+        condensed_contents.deinit(allocator);
+    }
+
+    for (real_entries.items) |*entry| {
+        original_lines += @intCast(entry.line_count);
+
+        const condensed = try condenseContent(allocator, entry.content, entry.extension, cfg.llm_max_lines);
+        try condensed_contents.append(allocator, condensed);
+
+        const newlines = std.mem.count(u8, condensed, "\n");
+        condensed_lines += @intCast(newlines);
+
+        const lang = entry.getLanguage();
+        if (lang.len > 0) {
+            const gop = try lang_map.getOrPut(lang);
+            if (!gop.found_existing) gop.value_ptr.* = 0;
+            gop.value_ptr.* += 1;
+        }
+    }
+
+    // --- Build sorted language list (by count desc, then name asc) ---
+    var lang_list: std.ArrayList(LangCount) = .empty;
+    defer lang_list.deinit(allocator);
+
+    var lit = lang_map.iterator();
+    while (lit.next()) |kv| {
+        try lang_list.append(allocator, .{ .name = kv.key_ptr.*, .count = kv.value_ptr.* });
+    }
+    std.mem.sort(LangCount, lang_list.items, {}, struct {
+        fn lessThan(_: void, a: LangCount, b: LangCount) bool {
+            if (a.count != b.count) return a.count > b.count;
+            return std.mem.lessThan(u8, a.name, b.name);
+        }
+    }.lessThan);
+
+    // --- Reduction pct ---
+    const reduction_pct: u64 = if (original_lines > 0 and original_lines >= condensed_lines)
+        100 * (original_lines - condensed_lines) / original_lines
+    else
+        0;
+
+    // --- Build output in allocating writer, then flush to disk ---
+    var aw: std.io.Writer.Allocating = .init(allocator);
+    defer aw.deinit();
+
+    const w = &aw.writer;
+
+    // Header
+    try w.print(
+        "# LLM Context: {s}\n" ++
+            "> This report is condensed for LLM ingestion. The full human-readable report is available at report.md.\n" ++
+            "> ZigZag v{s} · {s}\n\n",
+        .{ root_path, VERSION, data.date_str },
+    );
+
+    // Project Description (only when set and non-empty)
+    if (cfg.llm_description) |desc| {
+        if (desc.len > 0) {
+            try w.print("## Project Description\n{s}\n\n", .{desc});
+        }
+    }
+
+    // Statistics
+    try w.writeAll("## Statistics\n");
+    try w.print(
+        "- Source files: {d}  |  Binary files: {d}  |  Boilerplate skipped: {d}\n",
+        .{ real_entries.items.len, binary_count, boilerplate_count },
+    );
+
+    if (lang_list.items.len > 0) {
+        try w.writeAll("- Languages: ");
+        for (lang_list.items, 0..) |lc, i| {
+            if (i > 0) try w.writeAll(", ");
+            try w.print("{s} ({d})", .{ lc.name, lc.count });
+        }
+        try w.writeByte('\n');
+    }
+
+    try w.print(
+        "- Original lines: {d}  →  Condensed: ~{d}  ({d}% reduction)\n\n",
+        .{ original_lines, condensed_lines, reduction_pct },
+    );
+
+    // File Index
+    const llm_shown_lines: usize = 80; // head (60) + tail (20) from condenseContent
+    try w.writeAll("## File Index\n");
+    for (real_entries.items, condensed_contents.items) |entry, condensed| {
+        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+        if (is_condensed) {
+            try w.print(
+                "- {s} (condensed — {d} of {d} lines shown)\n",
+                .{ entry.path, llm_shown_lines, entry.line_count },
+            );
+        } else {
+            try w.print("- {s} ({d} lines, full)\n", .{ entry.path, entry.line_count });
+        }
+    }
+    try w.writeByte('\n');
+
+    // Source
+    try w.writeAll("## Source\n\n");
+    for (real_entries.items, condensed_contents.items) |entry, condensed| {
+        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+        const lang = entry.getLanguage();
+
+        if (is_condensed) {
+            try w.print(
+                "### {s} *(condensed — {d} of {d} lines shown)*\n",
+                .{ entry.path, llm_shown_lines, entry.line_count },
+            );
+        } else {
+            try w.print("### {s}\n", .{entry.path});
+        }
+
+        if (lang.len > 0) {
+            try w.print("```{s}\n", .{lang});
+        } else {
+            try w.writeAll("```\n");
+        }
+
+        try w.writeAll(condensed);
+        if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
+            try w.writeByte('\n');
+        }
+        try w.writeAll("```\n\n");
+    }
+
+    // Write to disk
+    var llm_file = try std.fs.cwd().createFile(llm_path, .{ .truncate = true });
+    defer llm_file.close();
+    try llm_file.writeAll(aw.written());
+}

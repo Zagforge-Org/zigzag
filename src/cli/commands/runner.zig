@@ -1,7 +1,7 @@
 const std = @import("std");
 const walk = @import("../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
-const Config = @import("config.zig").Config;
+const Config = @import("config/config.zig").Config;
 const FileContext = @import("../context.zig").FileContext;
 const Pool = @import("../../workers/pool.zig").Pool;
 const WaitGroup = @import("../../workers/wait_group.zig").WaitGroup;
@@ -11,6 +11,9 @@ const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../jobs/entry.zig").BinaryEntry;
 const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 const report = @import("report.zig");
+const lg = @import("logger.zig");
+
+const Logger = lg.Logger;
 
 /// Process a single directory path (one-shot mode)
 fn processPath(
@@ -19,9 +22,11 @@ fn processPath(
     path: []const u8,
     pool: *Pool,
     allocator: std.mem.Allocator,
+    logger: ?*Logger,
 ) !void {
     if (path.len != 0) {
-        std.log.info("Processing path: {s}", .{path});
+        lg.printStep("Processing path: {s}", .{path});
+        if (logger) |l| l.log("Processing path: {s}", .{path});
     }
 
     var dir = std.fs.cwd().openDir(path, .{}) catch {
@@ -30,7 +35,7 @@ fn processPath(
     defer dir.close();
 
     const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
-    const md_path = try std.fs.path.join(allocator, &.{ path, output_filename });
+    const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
@@ -39,6 +44,11 @@ fn processPath(
         .md_mutex = undefined,
     };
     defer file_ctx.ignore_list.deinit(allocator);
+
+    // Auto-ignore the output directory to prevent scanning report artifacts
+    const base_output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+    const output_dir_ignore = try allocator.dupe(u8, base_output_dir);
+    try file_ctx.ignore_list.append(allocator, output_dir_ignore);
 
     const owned_md_path = try allocator.dupe(u8, md_path);
     try file_ctx.ignore_list.append(allocator, owned_md_path);
@@ -53,12 +63,14 @@ fn processPath(
         try file_ctx.ignore_list.append(allocator, html_ignore);
     }
 
-    if (cfg.ignore_patterns.len != 0) {
-        var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
-        while (it.next()) |pattern| {
-            const owned_pattern = try allocator.dupe(u8, pattern);
-            try file_ctx.ignore_list.append(allocator, owned_pattern);
-        }
+    if (cfg.llm_report) {
+        const llm_ignore = try report.deriveLlmPath(allocator, md_path);
+        try file_ctx.ignore_list.append(allocator, llm_ignore);
+    }
+
+    for (cfg.ignore_patterns.items) |pattern| {
+        const owned_pattern = try allocator.dupe(u8, pattern);
+        try file_ctx.ignore_list.append(allocator, owned_pattern);
     }
 
     var wg = WaitGroup.init();
@@ -105,22 +117,57 @@ fn processPath(
     try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
 
-    try report.writeReport(&file_entries, md_path, path, cfg, allocator);
+    // Log each processed file to the log file
+    if (logger) |l| {
+        var it = file_entries.iterator();
+        while (it.next()) |entry| {
+            l.log("  file: {s} ({d} bytes, {d} lines)", .{
+                entry.value_ptr.path,
+                entry.value_ptr.content.len,
+                entry.value_ptr.line_count,
+            });
+        }
+    }
+
+    // Build ReportData once; all writers share the pre-aggregated result.
+    var report_data = try report.ReportData.init(allocator, &file_entries, &binary_entries, cfg.timezone_offset);
+    defer report_data.deinit();
+
+    try report.writeReport(&report_data, &file_entries, md_path, path, cfg, allocator);
+    lg.printSuccess("Report written: {s}", .{md_path});
+    if (logger) |l| l.log("Report written: {s}", .{md_path});
 
     if (cfg.json_output) {
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
-        try report.writeJsonReport(&file_entries, &binary_entries, json_path, path, cfg, allocator);
+        try report.writeJsonReport(&report_data, json_path, path, cfg, allocator);
+        lg.printSuccess("JSON report: {s}", .{json_path});
+        if (logger) |l| l.log("JSON report written: {s}", .{json_path});
     }
 
     if (cfg.html_output) {
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
-        try report.writeHtmlReport(&file_entries, &binary_entries, html_path, path, cfg, allocator);
+        try report.writeHtmlReport(&report_data, html_path, path, cfg, allocator);
+        lg.printSuccess("HTML report: {s}", .{html_path});
+        if (logger) |l| l.log("HTML report written: {s}", .{html_path});
     }
 
-    std.log.info("=== Summary for {s} ===", .{path});
-    stats.printSummary();
+    if (cfg.llm_report) {
+        const llm_path = try report.deriveLlmPath(allocator, md_path);
+        defer allocator.free(llm_path);
+        try report.writeLlmReport(&report_data, binary_entries.count(), llm_path, path, cfg, allocator);
+        lg.printSuccess("LLM report: {s}", .{llm_path});
+        if (logger) |l| l.log("LLM report written: {s}", .{llm_path});
+    }
+
+    const sv = stats.getSummary();
+    lg.printSummary(path, sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored);
+    if (logger) |l| {
+        l.log("Summary: total={d}, source={d}, cached={d}, fresh={d}, binary={d}, ignored={d}", .{
+            sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored,
+        });
+    }
 }
 
 /// Executes the runner command for all configured paths.
@@ -129,6 +176,21 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     const allocator = std.heap.page_allocator;
 
+    // Set up file logger if --log is enabled
+    var logger_storage: ?Logger = null;
+    defer if (logger_storage) |*l| l.deinit();
+    if (cfg.log) {
+        const output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+        if (Logger.init(output_dir, allocator)) |l| {
+            logger_storage = l;
+        } else |err| {
+            lg.printWarn("Could not create log file: {s}", .{@errorName(err)});
+        }
+    }
+    const logger: ?*Logger = if (logger_storage) |*l| l else null;
+
+    if (logger) |l| l.log("zigzag started — processing {d} path(s)", .{cfg.paths.items.len});
+
     var pool = Pool{};
     try pool.init(.{
         .allocator = allocator,
@@ -136,21 +198,24 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
     });
     defer pool.deinit();
 
-    std.log.info("Processing {d} path(s)...", .{cfg.paths.items.len});
+    lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
 
     for (cfg.paths.items) |path| {
-        processPath(cfg, cache, path, &pool, allocator) catch |err| {
+        processPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
             switch (err) {
                 error.NotADirectory => {
-                    std.log.err("Path '{s}' is not a directory", .{path});
+                    lg.printError("Path '{s}' is not a directory", .{path});
+                    if (logger) |l| l.log("ERROR: Path '{s}' is not a directory", .{path});
                     return error.ErrorNotFound;
                 },
                 else => {
-                    std.log.err("Unexpected error: {s}", .{@errorName(err)});
+                    lg.printError("Unexpected error: {s}", .{@errorName(err)});
+                    if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
                 },
             }
         };
     }
 
-    std.log.info("All paths processed successfully!", .{});
+    lg.printSuccess("All paths processed!", .{});
+    if (logger) |l| l.log("Done", .{});
 }

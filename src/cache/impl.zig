@@ -75,7 +75,7 @@ pub const CacheImpl = struct {
                 },
             };
 
-            const mtime = @as(u64, @intCast(stat.mtime));
+            const mtime: u64 = @intCast(@divFloor(stat.mtime, std.time.ns_per_s));
             const size = stat.size;
 
             // Check if file has been modified
@@ -106,7 +106,7 @@ pub const CacheImpl = struct {
         }
 
         if (invalid_entries.items.len > 0) {
-            std.log.info("Invalidated {d} stale cache entries", .{invalid_entries.items.len});
+            std.log.debug("Invalidated {d} stale cache entries", .{invalid_entries.items.len});
         }
     }
 
@@ -148,7 +148,7 @@ pub const CacheImpl = struct {
         }
     }
 
-    fn saveToDisk(self: *Self) !void {
+    pub fn saveToDisk(self: *Self) !void {
         const cache_index_path = try std.fmt.allocPrint(self.allocator, "{s}/index", .{self.cache_dir});
         defer self.allocator.free(cache_index_path);
 
@@ -319,7 +319,7 @@ pub const CacheImpl = struct {
         };
 
         if (is_new_entry) {
-            std.log.info("Cached new file: {s} -> {s}", .{ path, cache_filename });
+            std.log.debug("Cached new file: {s} -> {s}", .{ path, cache_filename });
         } else {
             std.log.debug("Updated cache for: {s}", .{path});
         }

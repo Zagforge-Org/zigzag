@@ -18,10 +18,14 @@ class TestBundler(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
-    def _run_bundle(self, template_content, src_files):
+    def _run_bundle(self, template_content, src_files, dist_files=None):
         """Write files to tmp dir and run bundle logic."""
         for name, content in src_files.items():
             (self.tmp / "src" / name).write_text(content)
+        if dist_files:
+            (self.tmp / "dist").mkdir(exist_ok=True)
+            for name, content in dist_files.items():
+                (self.tmp / "dist" / name).write_text(content)
         (self.tmp / "src" / "template.html").write_text(template_content)
         # Import bundle module and run with tmp paths
         import importlib.util
@@ -32,6 +36,7 @@ class TestBundler(unittest.TestCase):
             template_path=self.tmp / "src" / "template.html",
             src_dir=self.tmp / "src",
             output_path=self.tmp / "dashboard.html",
+            templates_dir=self.tmp,
         )
         return (self.tmp / "dashboard.html").read_text()
 
@@ -79,6 +84,27 @@ class TestBundler(unittest.TestCase):
         )
         self.assertIn("<style>", result)
         self.assertIn("<script>", result)
+
+    def test_inject_dist_js(self):
+        """Paths with a directory component resolve relative to templates_dir."""
+        result = self._run_bundle(
+            "<!-- @inject: dist/bundle.js -->",
+            {},
+            dist_files={"bundle.js": "var bundled=1;"},
+        )
+        self.assertIn("<script>", result)
+        self.assertIn("var bundled=1;", result)
+        self.assertNotIn("<!-- @inject:", result)
+
+    def test_inject_text_dist(self):
+        """dist/ path also works for inject-text."""
+        result = self._run_bundle(
+            '<!-- @inject-text: dist/highlight.worker.js as prism-src -->',
+            {},
+            dist_files={"highlight.worker.js": "self.onmessage=function(){};"},
+        )
+        self.assertIn('id="prism-src"', result)
+        self.assertIn("self.onmessage=function(){};", result)
 
 if __name__ == "__main__":
     unittest.main()

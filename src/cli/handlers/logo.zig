@@ -1,3 +1,6 @@
+const colors = @import("../colors.zig");
+const stdoutPrint = @import("../../fs/stdout.zig").stdoutPrint;
+
 pub const ascii_logo =
     \\
     \\
@@ -15,3 +18,11 @@ pub const ascii_logo =
     \\
     \\
 ;
+
+pub fn printAsciiLogo() anyerror!void {
+    try stdoutPrint("{s}{s}{s}", .{
+        colors.colorCode(colors.Color.Yellow),
+        ascii_logo,
+        colors.colorCode(colors.Color.Reset),
+    });
+}

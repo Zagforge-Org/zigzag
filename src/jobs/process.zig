@@ -255,7 +255,7 @@ pub fn processFileJob(job: Job) anyerror!void {
                 break :blk original;
             };
         } else {
-            std.log.info(
+            std.log.debug(
                 "Processing (reading original): {s}",
                 .{path},
             );
@@ -289,7 +289,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     // NO CACHE MODE
     // =========================
     else {
-        std.log.info(
+        std.log.debug(
             "Processing (no cache): {s}",
             .{path},
         );
@@ -312,7 +312,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const extension = getExtension(path);
 
     if (isBinaryFile(path, content)) {
-        std.log.info("Skipping binary file: {s}", .{path});
+        std.log.debug("Skipping binary file: {s}", .{path});
         allocator.free(content);
         _ = stats.binary_files.fetchAdd(1, .monotonic);
         _ = stats.processed_files.fetchSub(1, .monotonic);

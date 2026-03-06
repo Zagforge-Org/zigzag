@@ -25,9 +25,43 @@
 - **JSON report output** (`--json`) for machine-readable analytics alongside the markdown report
 - **HTML dashboard** (`--html`) — interactive single-file report with charts, sortable file table, search, and a virtual-scrolling source viewer with syntax highlighting
 
+# Thanks to our contributors
+
+<p align="left">
+  <a href="https://github.com/ycqm">
+    <img src="https://github.com/ycqm.png" width="40" style="border-radius:100%; vertical-align:middle;" alt="ycqm"/>
+  </a>
+  <b>ycqm</b> — <kbd>Author of the documentation page</kbd>
+</p>
+
 ## Installation
 
-### Prerequisites
+### Homebrew (macOS / Linux) — recommended
+
+```bash
+brew tap LegationPro/zigzag
+brew install zigzag
+```
+
+Homebrew verifies the download, strips the quarantine flag, and puts `zigzag` on your `PATH` automatically.
+
+### Pre-built binaries
+
+Download the latest archive for your platform from the [Releases page](https://github.com/LegationPro/zigzag/releases), extract it, and place the `zigzag` binary somewhere on your `PATH`.
+
+**macOS — Gatekeeper notice**
+
+Because the binary is downloaded from the internet, macOS will quarantine it on first run. After extracting, remove the flag with:
+
+```bash
+xattr -d com.apple.quarantine zigzag
+```
+
+Or right-click the binary in Finder → **Open** → **Open** to approve it once.
+
+> The release binaries are ad-hoc code-signed, which avoids the "damaged and can't be opened" error on Apple Silicon. Full notarization (which would remove the prompt entirely) requires an Apple Developer account; the Homebrew tap is the easiest path for a warning-free install.
+
+### Prerequisites (building from source)
 
 - Zig compiler version 0.15.2 or later
 
