@@ -5,10 +5,10 @@ build:
 	zig build -Doptimize=ReleaseFast
 
 test:
-	zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/options_fallback.zig
+	zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig
 
 run:
-	zig run --dep options -Mroot=src/main.zig -Moptions=src/cli/options_fallback.zig -- $(filter-out $@,$(MAKECMDGOALS))
+	zig run --dep options -Mroot=src/main.zig -Moptions=src/cli/version/fallback.zig -- $(filter-out $@,$(MAKECMDGOALS))
 
 %:
 	@:
