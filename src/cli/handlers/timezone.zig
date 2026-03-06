@@ -1,7 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 
-const Config = @import("../commands/config.zig").Config;
+const Config = @import("../commands/config/config.zig").Config;
+const parseTimezoneStr = @import("../commands/config/timezone/timezone.zig").parseTimezoneStr;
 const makeTestConfig = @import("./test_config.zig").makeTestConfig;
 
 /// handleTimezone handles the timezone option.
@@ -10,7 +11,7 @@ pub fn handleTimezone(cfg: *Config, allocator: std.mem.Allocator, value: ?[]cons
     _ = allocator;
     const tz_str = value orelse return;
     if (tz_str.len == 0) return;
-    cfg.timezone_offset = try Config.parseTimezoneStr(tz_str);
+    cfg.timezone_offset = try parseTimezoneStr(tz_str);
 }
 
 test "handleTimezone handles timezone option" {
