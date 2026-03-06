@@ -5,6 +5,7 @@ const watch = @import("./cli/commands/watch.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init.zig").handleInit;
+const lg = @import("./cli/commands/logger.zig");
 
 pub fn main() !void {
     const allocator = std.heap.page_allocator;
@@ -35,7 +36,7 @@ pub fn main() !void {
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
         } else {
-            std.log.info("unknown argument: {s}", .{arg});
+            lg.printWarn("unknown argument: {s}", .{arg});
             return;
         }
 
@@ -66,14 +67,14 @@ pub fn main() !void {
                 defer cache.deinit();
 
                 if (typedCfg.skip_cache) {
-                    std.log.info("Clearing cache directory: {s}", .{cache_path});
+                    lg.printStep("Clearing cache: {s}", .{cache_path});
                     try cache.cleanup();
-                    std.log.info("Cache cleared", .{});
+                    lg.printSuccess("Cache cleared", .{});
                 }
 
                 if (typedCfg.watch) {
                     watch.execWatch(&typedCfg, &cache) catch |err| {
-                        std.log.err("zigzag: watch error: {s}", .{@errorName(err)});
+                        lg.printError("watch error: {s}", .{@errorName(err)});
                     };
                 } else {
                     _ = runner.exec(&typedCfg, &cache) catch |err| {
@@ -82,25 +83,25 @@ pub fn main() !void {
                                 return;
                             },
                             else => {
-                                std.log.err("zigzag: error executing runner: {s}", .{@errorName(err)});
+                                lg.printError("error executing runner: {s}", .{@errorName(err)});
                             },
                         }
                     };
                 }
             } else if (is_run_command) {
-                std.log.warn("zigzag: no paths configured. Add --path or set \"paths\" in zig.conf.json.", .{});
+                lg.printWarn("no paths configured — add --path or set \"paths\" in zig.conf.json", .{});
             }
         },
         config.ConfigParseResult.MissingValue => |opt| {
-            std.log.err("zigzag: missing value for option: {s}", .{opt});
+            lg.printError("missing value for option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.UnknownOption => |opt| {
-            std.log.err("zigzag: unknown option: {s}", .{opt});
+            lg.printError("unknown option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.Other => |err_name| {
-            std.log.err("zigzag: handler failed: {s}", .{err_name});
+            lg.printError("handler failed: {s}", .{err_name});
             return;
         },
     }
