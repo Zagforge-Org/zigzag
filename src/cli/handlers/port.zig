@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../commands/config.zig").Config;
+const Config = @import("../commands/config/config.zig").Config;
 const makeTestConfig = @import("./test_config.zig").makeTestConfig;
 
 /// handlePort sets the SSE/HTML dev server port (used in --watch --html mode).

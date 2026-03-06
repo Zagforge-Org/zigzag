@@ -1,7 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
-const Config = @import("../commands/config.zig").Config;
+const Config = @import("../commands/config/config.zig").Config;
 const makeTestConfig = @import("./test_config.zig").makeTestConfig;
 
 /// handleMmap handles the mmap option.
