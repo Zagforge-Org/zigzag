@@ -8,19 +8,31 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-/// Thread-safe event queue shared between background watch threads and poll()
+/// Thread-safe event queue shared between background watch threads and poll().
+/// Heap-allocated and ref-counted so both the Watcher and each watchThread can
+/// hold a reference; the queue is only freed when the last holder releases it.
 const SharedQueue = struct {
     mutex: std.Thread.Mutex = .{},
     events: std.ArrayList(WatchEvent) = .empty,
     allocator: std.mem.Allocator,
+    ref: std.atomic.Value(u32),
 
-    fn init(allocator: std.mem.Allocator) SharedQueue {
-        return .{ .allocator = allocator };
+    fn create(allocator: std.mem.Allocator) !*SharedQueue {
+        const q = try allocator.create(SharedQueue);
+        q.* = .{ .allocator = allocator, .ref = std.atomic.Value(u32).init(1) };
+        return q;
     }
 
-    fn deinit(self: *SharedQueue) void {
-        for (self.events.items) |ev| self.allocator.free(ev.path);
-        self.events.deinit(self.allocator);
+    fn retain(self: *SharedQueue) void {
+        _ = self.ref.fetchAdd(1, .monotonic);
+    }
+
+    fn release(self: *SharedQueue) void {
+        if (self.ref.fetchSub(1, .acq_rel) == 1) {
+            for (self.events.items) |ev| self.allocator.free(ev.path);
+            self.events.deinit(self.allocator);
+            self.allocator.destroy(self);
+        }
     }
 
     fn push(self: *SharedQueue, ev: WatchEvent) void {
@@ -49,6 +61,7 @@ const WatchCtx = struct {
 
     fn release(self: *WatchCtx) void {
         if (self.ref.fetchSub(1, .acq_rel) == 1) {
+            self.queue.release(); // release queue ref when ctx is freed
             self.allocator.free(self.path);
             self.allocator.destroy(self);
         }
@@ -130,13 +143,13 @@ fn watchThread(ctx: *WatchCtx) void {
 }
 
 pub const Watcher = struct {
-    queue: SharedQueue,
+    queue: *SharedQueue,
     ctxs: std.ArrayList(*WatchCtx) = .empty,
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
         return .{
-            .queue = SharedQueue.init(allocator),
+            .queue = try SharedQueue.create(allocator),
             .allocator = allocator,
         };
     }
@@ -144,17 +157,18 @@ pub const Watcher = struct {
     pub fn deinit(self: *Watcher) void {
         for (self.ctxs.items) |ctx| {
             ctx.stop.store(true, .release);
-            ctx.release(); // release watcher's ref; thread frees ctx when it exits
+            ctx.release(); // release watcher's ref; thread frees ctx+queue-ref when it exits
         }
         self.ctxs.deinit(self.allocator);
-        self.queue.deinit();
+        self.queue.release(); // release watcher's queue ref
     }
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
         const ctx = try self.allocator.create(WatchCtx);
+        self.queue.retain(); // ctx will hold one extra queue ref
         ctx.* = .{
             .path = try self.allocator.dupe(u8, path),
-            .queue = &self.queue,
+            .queue = self.queue,
             .allocator = self.allocator,
             .stop = std.atomic.Value(bool).init(false),
             .ref = std.atomic.Value(u32).init(2),
