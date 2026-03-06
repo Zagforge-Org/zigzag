@@ -37,15 +37,26 @@ const SharedQueue = struct {
     }
 };
 
-/// Context passed to each background watch thread
+/// Context passed to each background watch thread.
+/// Ref-counted (init=2: one for watcher, one for thread) so deinit() can signal
+/// stop and release its ref without freeing memory the thread is still using.
 const WatchCtx = struct {
     path: []const u8,
     queue: *SharedQueue,
     allocator: std.mem.Allocator,
     stop: std.atomic.Value(bool),
+    ref: std.atomic.Value(u32),
+
+    fn release(self: *WatchCtx) void {
+        if (self.ref.fetchSub(1, .acq_rel) == 1) {
+            self.allocator.free(self.path);
+            self.allocator.destroy(self);
+        }
+    }
 };
 
 fn watchThread(ctx: *WatchCtx) void {
+    defer ctx.release();
     // Convert path to null-terminated UTF-16
     var path_w_buf: [std.fs.max_path_bytes]u16 = undefined;
     const path_w_len = std.unicode.utf8ToUtf16Le(&path_w_buf, ctx.path) catch return;
@@ -133,8 +144,7 @@ pub const Watcher = struct {
     pub fn deinit(self: *Watcher) void {
         for (self.ctxs.items) |ctx| {
             ctx.stop.store(true, .release);
-            self.allocator.free(ctx.path);
-            self.allocator.destroy(ctx);
+            ctx.release(); // release watcher's ref; thread frees ctx when it exits
         }
         self.ctxs.deinit(self.allocator);
         self.queue.deinit();
@@ -147,6 +157,7 @@ pub const Watcher = struct {
             .queue = &self.queue,
             .allocator = self.allocator,
             .stop = std.atomic.Value(bool).init(false),
+            .ref = std.atomic.Value(u32).init(2),
         };
         try self.ctxs.append(self.allocator, ctx);
         const t = try std.Thread.spawn(.{}, watchThread, .{ctx});

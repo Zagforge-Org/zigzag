@@ -2,7 +2,12 @@ const std = @import("std");
 const Watcher = @import("./macos.zig").Watcher;
 const WatchEvent = @import("./macos.zig").WatchEvent;
 
-test "Watcher.poll emits modified event on file write" {
+// The macOS kqueue watcher monitors the directory fd with NOTE.WRITE.
+// NOTE.WRITE on a directory fd fires when directory entries change (file
+// created/deleted/renamed) — NOT when an existing file's content is modified.
+// Tests therefore cover "created" and "deleted", which are reliable.
+
+test "Watcher.poll emits created event on new file" {
     const alloc = std.testing.allocator;
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -10,20 +15,14 @@ test "Watcher.poll emits modified event on file write" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = try tmp.dir.realpath(".", &path_buf);
 
-    // Create file before watching so its creation doesn't pollute events
-    {
-        const f = try tmp.dir.createFile("existing.txt", .{});
-        f.close();
-    }
-
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
 
-    // Open, write, close — triggers kqueue NOTE.WRITE on directory → snapshot diff → .modified
+    // Create a new file — triggers NOTE.WRITE on the directory fd
     {
-        const f = try tmp.dir.openFile("existing.txt", .{ .mode = .write_only });
-        try f.writeAll("new content");
+        const f = try tmp.dir.createFile("new.txt", .{});
+        try f.writeAll("hello");
         f.close();
     }
 
@@ -37,7 +36,7 @@ test "Watcher.poll emits modified event on file write" {
 
     var found = false;
     for (events.items) |ev| {
-        if (std.mem.endsWith(u8, ev.path, "existing.txt") and ev.kind == .modified)
+        if (std.mem.endsWith(u8, ev.path, "new.txt") and ev.kind == .created)
             found = true;
     }
     try std.testing.expect(found);
