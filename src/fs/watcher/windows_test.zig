@@ -19,6 +19,8 @@ test "Watcher.poll emits modified event on file write" {
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
+    // Let the background thread start and enter ReadDirectoryChangesW
+    std.Thread.sleep(100 * std.time.ns_per_ms);
 
     // Open, write, close — background thread picks up ReadDirectoryChangesW event
     {
@@ -62,6 +64,8 @@ test "Watcher.poll emits deleted event on file removal" {
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
+    // Let the background thread start and enter ReadDirectoryChangesW
+    std.Thread.sleep(100 * std.time.ns_per_ms);
 
     try tmp.dir.deleteFile("to_delete.txt");
 
