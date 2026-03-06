@@ -37,6 +37,7 @@ import "prismjs/components/prism-kotlin";
 import "prismjs/components/prism-less";
 import "prismjs/components/prism-lua";
 import "prismjs/components/prism-markdown";
+import "prismjs/components/prism-markup-templating";
 import "prismjs/components/prism-php";
 import "prismjs/components/prism-python";
 import "prismjs/components/prism-ruby";
@@ -46,6 +47,7 @@ import "prismjs/components/prism-scss";
 import "prismjs/components/prism-sql";
 import "prismjs/components/prism-swift";
 import "prismjs/components/prism-toml";
+import "prismjs/components/prism-basic";
 import "prismjs/components/prism-vbnet";
 import "prismjs/components/prism-yaml";
 
