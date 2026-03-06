@@ -26,7 +26,7 @@ test {
     _ = @import("./cli/commands/config/config.zig");
     _ = @import("./cli/commands/runner.zig");
     _ = @import("./cli/commands/watch.zig");
-    _ = @import("./cli/version.zig");
+    _ = @import("./cli/version/version_test.zig");
     _ = @import("./cli/commands/stats.zig");
 
     // report sub-module tests
