@@ -58,5 +58,6 @@ test {
         .linux => {
             _ = @import("./fs/watcher/linux_test.zig");
         },
+        else => {},
     }
 }
