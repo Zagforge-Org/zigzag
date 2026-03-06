@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../commands/config.zig").Config;
+const Config = @import("../commands/config/config.zig").Config;
 const stdoutPrint = @import("../../fs/stdout.zig").stdoutPrint;
 const makeTestConfig = @import("./test_config.zig").makeTestConfig;
 
