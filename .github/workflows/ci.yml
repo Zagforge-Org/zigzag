@@ -92,10 +92,37 @@ jobs:
                   name: ${{ matrix.archive }}
                   path: ${{ matrix.archive }}
 
+    sign-macos:
+        name: Sign macOS binaries (ad-hoc)
+        runs-on: macos-latest
+        needs: build
+        if: startsWith(github.ref, 'refs/tags/')
+        strategy:
+            matrix:
+                include:
+                    - archive: zigzag-aarch64-macos.tar.gz
+                    - archive: zigzag-x86_64-macos.tar.gz
+        steps:
+            - uses: actions/download-artifact@v4
+              with:
+                  name: ${{ matrix.archive }}
+
+            - name: Sign binary
+              run: |
+                  tar -xzf ${{ matrix.archive }}
+                  codesign --sign - --force --options runtime zigzag
+                  tar -czf ${{ matrix.archive }} zigzag
+
+            - uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.archive }}
+                  path: ${{ matrix.archive }}
+                  overwrite: true
+
     release:
         name: Publish release
         runs-on: ubuntu-latest
-        needs: build
+        needs: [sign-macos, build]
         if: startsWith(github.ref, 'refs/tags/')
         steps:
             - uses: actions/download-artifact@v4
@@ -112,3 +139,29 @@ jobs:
                       zigzag-aarch64-macos.tar.gz
                       zigzag-x86_64-windows.zip
                   generate_release_notes: true
+
+            - name: Update Homebrew formula
+              env:
+                  TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+              if: env.TAP_TOKEN != ''
+              run: |
+                  VERSION="${GITHUB_REF_NAME#v}"
+                  AARCH64_MAC_SHA=$(sha256sum zigzag-aarch64-macos.tar.gz | awk '{print $1}')
+                  X86_64_MAC_SHA=$(sha256sum zigzag-x86_64-macos.tar.gz | awk '{print $1}')
+                  AARCH64_LINUX_SHA=$(sha256sum zigzag-aarch64-linux.tar.gz | awk '{print $1}')
+                  X86_64_LINUX_SHA=$(sha256sum zigzag-x86_64-linux.tar.gz | awk '{print $1}')
+
+                  git clone https://x-access-token:${TAP_TOKEN}@github.com/LegationPro/homebrew-zigzag.git tap
+                  cd tap
+
+                  sed -i "s/ZIGZAG_VERSION/${VERSION}/g" Formula/zigzag.rb
+                  sed -i "s/AARCH64_SHA256/${AARCH64_MAC_SHA}/" Formula/zigzag.rb
+                  sed -i "s/X86_64_SHA256/${X86_64_MAC_SHA}/" Formula/zigzag.rb
+                  sed -i "s/AARCH64_LINUX_SHA256/${AARCH64_LINUX_SHA}/" Formula/zigzag.rb
+                  sed -i "s/X86_64_LINUX_SHA256/${X86_64_LINUX_SHA}/" Formula/zigzag.rb
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add Formula/zigzag.rb
+                  git commit -m "zigzag ${VERSION}"
+                  git push
