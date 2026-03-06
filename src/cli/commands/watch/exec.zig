@@ -11,7 +11,7 @@ const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
-/// for incremental updates. Keeps all file content in memory; only re-reads changed files.
+/// for incremental updates. Keeps all file content in memory; only re-read changed files.
 pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     if (cfg.paths.items.len == 0) return;
 
@@ -21,7 +21,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     try pool.init(.{ .allocator = allocator, .n_jobs = cfg.n_threads });
     defer pool.deinit();
 
-    // --- Initial full scan for each configured path ---
+    // Scan all configured paths for initial state.
     var states: std.ArrayList(*State) = .empty;
     defer {
         for (states.items) |s| s.deinit();
@@ -43,7 +43,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     if (states.items.len == 0) return;
 
-    // --- Start SSE dev server when both --watch and --html are active ---
+    // Start SSE dev server when both --watch and --html are active
     var sse_server: ?*SseServer = null;
     if (cfg.html_output) {
         const first_html_path = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
@@ -79,7 +79,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     }
     defer if (sse_server) |srv| srv.deinit();
 
-    // --- Set up OS-level filesystem watcher ---
+    // Set up OS-level filesystem watcher
     var watcher = try Watcher.init(allocator);
     defer watcher.deinit();
 
@@ -91,7 +91,8 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
 
     std.log.info("Watching {d} path(s) for changes. Press Ctrl+C to stop.", .{states.items.len});
 
-    // --- Event loop with debounce ---
+    // Event loop with debounce to group multiple events into a single update.
+    // Ensures that updates are not triggered by rapid-fire events and preserves CPU resources.
     var events: std.ArrayList(WatchEvent) = .empty;
     defer events.deinit(allocator);
 
