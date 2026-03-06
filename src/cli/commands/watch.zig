@@ -2,7 +2,7 @@ const std = @import("std");
 const walk = @import("../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../jobs/process.zig").processFileJob;
-const Config = @import("config.zig").Config;
+const Config = @import("config/config.zig").Config;
 const FileContext = @import("../context.zig").FileContext;
 const Pool = @import("../../workers/pool.zig").Pool;
 const WaitGroup = @import("../../workers/wait_group.zig").WaitGroup;
@@ -60,7 +60,6 @@ const PathWatchState = struct {
         };
 
         // Build ignore list — order matches runner.zig: output dir, md, json, html, llm, user patterns
-        // Auto-ignore output directory to prevent scanning report artifacts
         const base_output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
         const output_dir_ignore = try allocator.dupe(u8, base_output_dir);
         try self.file_ctx.ignore_list.append(allocator, output_dir_ignore);
@@ -83,12 +82,9 @@ const PathWatchState = struct {
             try self.file_ctx.ignore_list.append(allocator, llm_ignore_path);
         }
 
-        if (cfg.ignore_patterns.len != 0) {
-            var it = std.mem.splitSequence(u8, cfg.ignore_patterns, ",");
-            while (it.next()) |pattern| {
-                const owned = try allocator.dupe(u8, pattern);
-                try self.file_ctx.ignore_list.append(allocator, owned);
-            }
+        for (cfg.ignore_patterns.items) |pattern| {
+            const owned = try allocator.dupe(u8, pattern);
+            try self.file_ctx.ignore_list.append(allocator, owned);
         }
 
         // Run initial full scan via thread pool
@@ -192,6 +188,67 @@ const PathWatchState = struct {
             std.heap.page_allocator.free(kv.value.extension);
         }
     }
+
+    /// Build ReportData once and write all enabled report formats.
+    /// The optional sse_server receives the SSE payload when html_output is active.
+    fn writeAllReports(
+        self: *PathWatchState,
+        cfg: *const Config,
+        sse_server: ?*SseServer,
+        allocator: std.mem.Allocator,
+    ) void {
+        var report_data = report.ReportData.init(
+            allocator,
+            &self.file_entries,
+            &self.binary_entries,
+            cfg.timezone_offset,
+        ) catch |err| {
+            std.log.err("Failed to aggregate report data for '{s}': {s}", .{ self.root_path, @errorName(err) });
+            return;
+        };
+        defer report_data.deinit();
+
+        report.writeReport(&report_data, &self.file_entries, self.md_path, self.root_path, cfg, allocator) catch |err| {
+            std.log.err("Failed to write report for '{s}': {s}", .{ self.root_path, @errorName(err) });
+        };
+
+        if (cfg.json_output) {
+            const json_path = report.deriveJsonPath(allocator, self.md_path) catch null;
+            if (json_path) |jp| {
+                defer allocator.free(jp);
+                report.writeJsonReport(&report_data, jp, self.root_path, cfg, allocator) catch |err| {
+                    std.log.err("Failed to write JSON report for '{s}': {s}", .{ self.root_path, @errorName(err) });
+                };
+            }
+        }
+
+        if (cfg.html_output) {
+            const html_path = report.deriveHtmlPath(allocator, self.md_path) catch null;
+            if (html_path) |hp| {
+                defer allocator.free(hp);
+                report.writeHtmlReport(&report_data, hp, self.root_path, cfg, allocator) catch |err| {
+                    std.log.err("Failed to write HTML report for '{s}': {s}", .{ self.root_path, @errorName(err) });
+                };
+                if (sse_server) |srv| {
+                    const payload = report.buildSsePayload(&report_data, self.root_path, cfg, allocator) catch null;
+                    if (payload) |p| {
+                        defer allocator.free(p);
+                        srv.broadcast(p);
+                    }
+                }
+            }
+        }
+
+        if (cfg.llm_report) {
+            const llm_path = report.deriveLlmPath(allocator, self.md_path) catch null;
+            if (llm_path) |lp| {
+                defer allocator.free(lp);
+                report.writeLlmReport(&report_data, self.binary_entries.count(), lp, self.root_path, cfg, allocator) catch |err| {
+                    std.log.err("Failed to write LLM report for '{s}': {s}", .{ self.root_path, @errorName(err) });
+                };
+            }
+        }
+    }
 };
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
@@ -221,37 +278,8 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
             continue;
         };
         try states.append(allocator, state);
-
-        report.writeReport(&state.file_entries, state.md_path, state.root_path, cfg, allocator) catch |err| {
-            std.log.err("Failed to write initial report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-        };
-        if (cfg.json_output) {
-            const json_path = report.deriveJsonPath(allocator, state.md_path) catch null;
-            if (json_path) |jp| {
-                defer allocator.free(jp);
-                report.writeJsonReport(&state.file_entries, &state.binary_entries, jp, state.root_path, cfg, allocator) catch |err| {
-                    std.log.err("Failed to write initial JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                };
-            }
-        }
-        if (cfg.html_output) {
-            const html_path = report.deriveHtmlPath(allocator, state.md_path) catch null;
-            if (html_path) |hp| {
-                defer allocator.free(hp);
-                report.writeHtmlReport(&state.file_entries, &state.binary_entries, hp, state.root_path, cfg, allocator) catch |err| {
-                    std.log.err("Failed to write initial HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                };
-            }
-        }
-        if (cfg.llm_report) {
-            const llm_path = report.deriveLlmPath(allocator, state.md_path) catch null;
-            if (llm_path) |lp| {
-                defer allocator.free(lp);
-                report.writeLlmReport(&state.file_entries, &state.binary_entries, lp, state.root_path, cfg, allocator) catch |err| {
-                    std.log.err("Failed to write initial LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                };
-            }
-        }
+        // Write initial reports (no SSE server yet — will be started after all paths init)
+        state.writeAllReports(cfg, null, allocator);
     }
 
     if (states.items.len == 0) return;
@@ -259,7 +287,6 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     // --- Start SSE dev server when both --watch and --html are active ---
     var sse_server: ?*SseServer = null;
     if (cfg.html_output) {
-        // Derive HTML path from the first path's state for the server's static fallback
         const first_html_path = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
         defer if (first_html_path) |p| allocator.free(p);
 
@@ -277,12 +304,16 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                 if (sse_server != null) {
                     std.log.info("Dashboard: http://127.0.0.1:{d}", .{cfg.serve_port});
                     // Broadcast initial payload so connecting clients get data immediately.
-                    const payload = report.buildSsePayload(&states.items[0].file_entries, &states.items[0].binary_entries, states.items[0].root_path, cfg, allocator) catch null;
-                    if (payload) |p| {
-                        defer allocator.free(p);
-                        srv.broadcast(p);
+                    const first = states.items[0];
+                    var init_data = report.ReportData.init(allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
+                    if (init_data) |*d| {
+                        defer d.deinit();
+                        const payload = report.buildSsePayload(d, first.root_path, cfg, allocator) catch null;
+                        if (payload) |p| {
+                            defer allocator.free(p);
+                            sse_server.?.broadcast(p);
+                        }
                     }
-                    srv.openBrowser();
                 }
             }
         }
@@ -306,13 +337,11 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     defer events.deinit(allocator);
 
     var dirty = false;
-    // Debounce: wait for a 50ms quiet window after last event before writing
     const DEBOUNCE_MS: i32 = 50;
 
     while (true) {
         events.clearRetainingCapacity();
 
-        // Block indefinitely when idle; drain quickly when events are pending
         const timeout: i32 = if (dirty) DEBOUNCE_MS else -1;
         const n = watcher.poll(&events, timeout) catch |err| {
             std.log.err("Watcher poll error: {s}", .{@errorName(err)});
@@ -323,13 +352,11 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
             for (events.items) |event| {
                 defer allocator.free(event.path);
 
-                // Ignore .cache/.zig-cache directories and the output reports to avoid cycles
                 if (std.mem.indexOf(u8, event.path, ".cache") != null) continue;
                 if (std.mem.indexOf(u8, event.path, ".zig-cache") != null) continue;
                 const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
                 if (std.mem.indexOf(u8, event.path, base_out_dir) != null) continue;
 
-                // Find the PathWatchState that owns this path
                 for (states.items) |state| {
                     if (!std.mem.startsWith(u8, event.path, state.root_path)) continue;
 
@@ -348,43 +375,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
         } else if (dirty) {
             // Quiet period elapsed — write all reports from in-memory state
             for (states.items) |state| {
-                report.writeReport(&state.file_entries, state.md_path, state.root_path, cfg, allocator) catch |err| {
-                    std.log.err("Failed to write report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                };
-                if (cfg.json_output) {
-                    const json_path = report.deriveJsonPath(allocator, state.md_path) catch null;
-                    if (json_path) |jp| {
-                        defer allocator.free(jp);
-                        report.writeJsonReport(&state.file_entries, &state.binary_entries, jp, state.root_path, cfg, allocator) catch |err| {
-                            std.log.err("Failed to write JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                        };
-                    }
-                }
-                if (cfg.html_output) {
-                    const html_path = report.deriveHtmlPath(allocator, state.md_path) catch null;
-                    if (html_path) |hp| {
-                        defer allocator.free(hp);
-                        report.writeHtmlReport(&state.file_entries, &state.binary_entries, hp, state.root_path, cfg, allocator) catch |err| {
-                            std.log.err("Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                        };
-                        if (sse_server) |srv| {
-                            const payload = report.buildSsePayload(&state.file_entries, &state.binary_entries, state.root_path, cfg, allocator) catch null;
-                            if (payload) |p| {
-                                defer allocator.free(p);
-                                srv.broadcast(p);
-                            }
-                        }
-                    }
-                }
-                if (cfg.llm_report) {
-                    const llm_path = report.deriveLlmPath(allocator, state.md_path) catch null;
-                    if (llm_path) |lp| {
-                        defer allocator.free(lp);
-                        report.writeLlmReport(&state.file_entries, &state.binary_entries, lp, state.root_path, cfg, allocator) catch |err| {
-                            std.log.err("Failed to write LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-                        };
-                    }
-                }
+                state.writeAllReports(cfg, sse_server, allocator);
             }
             dirty = false;
         }
