@@ -29,17 +29,15 @@ test {
     _ = @import("./cli/version.zig");
     _ = @import("./cli/commands/stats.zig");
 
-    // report module — facade triggers all sub-module tests
-    _ = @import("./cli/commands/report.zig");
-    // Sub-modules imported explicitly for clarity and direct test discovery
-    _ = @import("./cli/commands/report/paths.zig");
-    _ = @import("./cli/commands/report/content.zig");
-    _ = @import("./cli/commands/report/aggregator.zig");
-    _ = @import("./cli/commands/report/writers/markdown.zig");
+    // report sub-module tests
+    _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
+    _ = @import("./cli/commands/report/content/content_test.zig");
+    _ = @import("./cli/commands/report/paths/paths_test.zig");
+    _ = @import("./cli/commands/report/writers/markdown/markdown_test.zig");
     _ = @import("./cli/commands/report/writers/json/json_test.zig");
     _ = @import("./cli/commands/report/writers/html/html_test.zig");
-    _ = @import("./cli/commands/report/writers/llm.zig");
-    _ = @import("./cli/commands/report/writers/sse.zig");
+    _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
+    _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
     // _ = @import("./conf/file.zig");
     _ = @import("./conf/file_test.zig");
