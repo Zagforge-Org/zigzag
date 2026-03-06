@@ -23,6 +23,7 @@ test {
     _ = @import("./cli/handlers/html.zig");
     _ = @import("./cli/handlers/llm_report.zig");
     _ = @import("./cli/handlers/port.zig");
+    _ = @import("./cli/handlers/log.zig");
     _ = @import("./cli/commands/config/config.zig");
     _ = @import("./cli/commands/runner.zig");
 
@@ -51,12 +52,19 @@ test {
     _ = @import("./jobs/entry.zig");
     _ = @import("./jobs/process.zig");
 
+    _ = @import("./cli/commands/logger/logger_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
 
     switch (builtin.os.tag) {
         .linux => {
             _ = @import("./fs/watcher/linux_test.zig");
+        },
+        .macos, .freebsd, .netbsd, .openbsd, .dragonfly => {
+            _ = @import("./fs/watcher/macos_test.zig");
+        },
+        .windows => {
+            _ = @import("./fs/watcher/windows_test.zig");
         },
         else => {},
     }
