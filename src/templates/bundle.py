@@ -6,7 +6,9 @@ Build pipeline (run automatically when invoked as __main__):
   1. npm install  (skipped if node_modules already exists)
   2. esbuild src/main.ts          → dist/bundle.js
   3. esbuild src/highlight.worker.ts → dist/highlight.worker.js
-  4. Python injection pass        → dashboard.html
+  4. esbuild src/combined.ts      → dist/combined.js
+  5. Python injection pass        → dashboard.html
+  6. Python injection pass        → combined-dashboard.html
 
 Injection markers in template.html:
   <!-- @inject: file.css -->            → <style>content</style>
