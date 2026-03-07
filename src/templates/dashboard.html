@@ -359,6 +359,51 @@ table.ln-table td.lc {
     padding-right: 1rem;
 }
 
+/* ── Truncation badge (long lines) ──────────────────── */
+.truncate-badge {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 0.5em;
+    padding: 0 0.35em;
+    border-radius: 3px;
+    font-size: 10px;
+    line-height: 16px;
+    font-family: system-ui, sans-serif;
+    background: #2d3748;
+    color: #718096;
+    white-space: nowrap;
+    user-select: none;
+    cursor: default;
+}
+
+/* ── Minified-file viewer ────────────────────────────── */
+.minified-banner {
+    padding: 0.5rem 1rem;
+    font-size: 12px;
+    font-family: system-ui, sans-serif;
+    color: #f6c90e;
+    background: #1e1b00;
+    border-left: 3px solid #f6c90e;
+    margin-bottom: 0.5rem;
+}
+.minified-preview {
+    margin: 0;
+    padding: 0 1rem;
+    font-size: 13px;
+    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+    line-height: 20px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #abb2bf;
+}
+.minified-more {
+    padding: 0.4rem 1rem;
+    font-size: 11px;
+    font-family: system-ui, sans-serif;
+    color: #6c757d;
+    font-style: italic;
+}
+
 </style>
         <style>
 /* Prism.js Tomorrow Night theme — source: https://prismjs.com/themes/ */
@@ -5800,6 +5845,7 @@ prismjs/prism.js:
   // src/content.ts
   var _cache = null;
   var _failed = false;
+  var _overrideUrl = null;
   var _pending = [];
   var _fetching = false;
   function showOfflineBanner() {
@@ -5817,6 +5863,7 @@ prismjs/prism.js:
     }
   }
   function resolveContentUrl() {
+    if (_overrideUrl !== null) return _overrideUrl;
     const pageUrl = location.href.replace(/[?#].*$/, "");
     const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
     return dir + "report-content.json";
@@ -5865,6 +5912,14 @@ prismjs/prism.js:
     _failed = false;
     drainPending();
   }
+  function updateContentEntry(path, content) {
+    if (_cache === null) _cache = {};
+    _cache[path] = content;
+    _failed = false;
+  }
+  function removeContentEntry(path) {
+    if (_cache !== null) delete _cache[path];
+  }
   function resetContent() {
     _cache = null;
     _failed = false;
@@ -5878,6 +5933,10 @@ prismjs/prism.js:
   var VIEWER_LINE_HEIGHT = 20;
   var VIEWER_OVERSCAN = 15;
   var HL_CHUNK_SIZE = 200;
+  var DISPLAY_TRUNCATE_AT = 2e3;
+  var MINIFIED_LINE_THRESHOLD = 1e4;
+  var MINIFIED_FILE_THRESHOLD = 5e4;
+  var MINIFIED_DISPLAY_CHARS = 1e4;
   var PRISM_MAP = {
     zig: "zig",
     js: "javascript",
@@ -5991,28 +6050,51 @@ prismjs/prism.js:
   var virtSpacerBotEl = null;
   var virtGutterW = "3ch";
   var virtRafPending = false;
+  var virtLastScrollTop = -1;
   var hlChunkCache = {};
   var hlChunkPending = {};
-  function openSimpleViewer(content, lines, langKey, myToken) {
+  function isMinifiedFile(lines, rawLen) {
+    if (lines.length <= 5 && rawLen > MINIFIED_FILE_THRESHOLD) return true;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].length > MINIFIED_LINE_THRESHOLD) return true;
+    }
+    return false;
+  }
+  function openMinifiedViewer(rawContent) {
+    const body = document.getElementById("viewer-body");
+    const preview = esc(rawContent.slice(0, MINIFIED_DISPLAY_CHARS));
+    const remaining = rawContent.length - MINIFIED_DISPLAY_CHARS;
+    body.innerHTML = '<div class="minified-banner">This file appears to be minified or machine-generated. Showing first ' + MINIFIED_DISPLAY_CHARS.toLocaleString() + ' characters.</div><pre class="minified-preview">' + preview + "</pre>" + (remaining > 0 ? '<div class="minified-more">\u2026 ' + remaining.toLocaleString() + " more characters not shown</div>" : "");
+    body.scrollTop = 0;
+  }
+  function truncateBadge(line) {
+    const over = line.length - DISPLAY_TRUNCATE_AT;
+    return over > 0 ? '<span class="truncate-badge">+' + over.toLocaleString() + "\xA0chars</span>" : "";
+  }
+  function openSimpleViewer(lines, langKey, myToken) {
     const body = document.getElementById("viewer-body");
     const numWidth = "calc(" + String(lines.length).length + "ch + 2rem)";
     const rows = [];
     for (let i = 0; i < lines.length; i++) {
+      const display = lines[i].length > DISPLAY_TRUNCATE_AT ? lines[i].slice(0, DISPLAY_TRUNCATE_AT) : lines[i];
       rows.push(
-        '<tr><td class="ln" style="min-width:' + numWidth + '">' + (i + 1) + '</td><td class="lc" data-line="' + i + '">' + esc(lines[i]) + "</td></tr>"
+        '<tr><td class="ln" style="min-width:' + numWidth + '">' + (i + 1) + '</td><td class="lc" data-line="' + i + '">' + esc(display) + truncateBadge(lines[i]) + "</td></tr>"
       );
     }
     body.innerHTML = '<table class="ln-table"><tbody>' + rows.join("") + "</tbody></table>";
     body.scrollTop = 0;
     if (!langKey) return;
-    highlightAsync(content, langKey, function(highlighted) {
+    const truncatedContent = lines.map(function(l) {
+      return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l;
+    }).join("\n");
+    highlightAsync(truncatedContent, langKey, function(highlighted) {
       if (viewerToken !== myToken) return;
       if (!highlighted) return;
       const hlLines = highlighted.split("\n");
       const cells = body.querySelectorAll("td.lc[data-line]");
       for (let j = 0; j < cells.length; j++) {
         const idx = parseInt(cells[j].dataset.line, 10);
-        if (hlLines[idx] !== void 0) cells[j].innerHTML = hlLines[idx];
+        if (hlLines[idx] !== void 0) cells[j].innerHTML = hlLines[idx] + truncateBadge(lines[idx]);
       }
     });
   }
@@ -6028,6 +6110,8 @@ prismjs/prism.js:
     if (!virtLines || !virtBodyEl || !virtWindowEl) return;
     const total = virtLines.length;
     const scrollTop = virtBodyEl.scrollTop;
+    if (scrollTop === virtLastScrollTop) return;
+    virtLastScrollTop = scrollTop;
     const viewH = virtBodyEl.clientHeight;
     const start = Math.max(0, Math.floor(scrollTop / VIEWER_LINE_HEIGHT) - VIEWER_OVERSCAN);
     const end = Math.min(
@@ -6051,9 +6135,10 @@ prismjs/prism.js:
       const chunkIdx = Math.floor(i / HL_CHUNK_SIZE);
       const lineInChunk = i - chunkIdx * HL_CHUNK_SIZE;
       if (hlChunkCache[chunkIdx] && hlChunkCache[chunkIdx][lineInChunk] !== void 0) {
-        lc.innerHTML = hlChunkCache[chunkIdx][lineInChunk];
+        lc.innerHTML = hlChunkCache[chunkIdx][lineInChunk] + truncateBadge(virtLines[i]);
       } else {
-        lc.textContent = virtLines[i];
+        const display = virtLines[i].length > DISPLAY_TRUNCATE_AT ? virtLines[i].slice(0, DISPLAY_TRUNCATE_AT) : virtLines[i];
+        lc.innerHTML = esc(display) + truncateBadge(virtLines[i]);
       }
       row.appendChild(ln);
       row.appendChild(lc);
@@ -6073,7 +6158,9 @@ prismjs/prism.js:
       (function(chunkIdx, myToken) {
         const chunkStart = chunkIdx * HL_CHUNK_SIZE;
         const chunkEnd = Math.min(virtLines.length, chunkStart + HL_CHUNK_SIZE);
-        const chunkText = virtLines.slice(chunkStart, chunkEnd).join("\n");
+        const chunkText = virtLines.slice(chunkStart, chunkEnd).map(function(l) {
+          return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l;
+        }).join("\n");
         highlightAsync(chunkText, virtLangKey, function(html) {
           if (viewerToken !== myToken || !virtLines) return;
           delete hlChunkPending[chunkIdx];
@@ -6086,7 +6173,7 @@ prismjs/prism.js:
             const lineIdx = parseInt(cells[j].dataset.line, 10);
             if (Math.floor(lineIdx / HL_CHUNK_SIZE) !== chunkIdx) continue;
             const lineInChunk = lineIdx - chunkStart;
-            cells[j].innerHTML = hlLines[lineInChunk] !== void 0 ? hlLines[lineInChunk] : esc(virtLines[lineIdx]);
+            cells[j].innerHTML = hlLines[lineInChunk] !== void 0 ? hlLines[lineInChunk] + truncateBadge(virtLines[lineIdx]) : esc(virtLines[lineIdx].length > DISPLAY_TRUNCATE_AT ? virtLines[lineIdx].slice(0, DISPLAY_TRUNCATE_AT) : virtLines[lineIdx]) + truncateBadge(virtLines[lineIdx]);
           }
         });
       })(c, token);
@@ -6095,11 +6182,13 @@ prismjs/prism.js:
   function openVirtualViewer(lines, langKey, myToken) {
     virtLines = lines;
     virtLangKey = langKey;
+    virtLastScrollTop = -1;
     const digits = String(lines.length).length;
     virtGutterW = "calc(" + digits + "ch + 2rem)";
     let maxLen = 0;
     for (let mi = 0; mi < lines.length; mi++) {
-      if (lines[mi].length > maxLen) maxLen = lines[mi].length;
+      const len = Math.min(lines[mi].length, DISPLAY_TRUNCATE_AT);
+      if (len > maxLen) maxLen = len;
     }
     const body = document.getElementById("viewer-body");
     body.innerHTML = "";
@@ -6126,6 +6215,7 @@ prismjs/prism.js:
     virtLines = null;
     virtLangKey = null;
     virtRafPending = false;
+    virtLastScrollTop = -1;
     hlChunkCache = {};
     hlChunkPending = {};
     if (virtBodyEl) {
@@ -6142,13 +6232,15 @@ prismjs/prism.js:
     body.scrollTop = 0;
     fetchContent(f.path, function(raw) {
       if (viewerToken !== myToken) return;
-      const content = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-      const lines = content.split("\n");
+      const rawContent = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const lines = rawContent.split("\n");
       const langKey = PRISM_MAP[f.language || ""] || null;
-      if (lines.length > VIRT_LINE_THRESHOLD || content.length > VIRT_BYTE_THRESHOLD) {
+      if (isMinifiedFile(lines, rawContent.length)) {
+        openMinifiedViewer(rawContent);
+      } else if (lines.length > VIRT_LINE_THRESHOLD || rawContent.length > VIRT_BYTE_THRESHOLD) {
         openVirtualViewer(lines, langKey, myToken);
       } else {
-        openSimpleViewer(content, lines, langKey, myToken);
+        openSimpleViewer(lines, langKey, myToken);
       }
     });
   }
@@ -6159,6 +6251,7 @@ prismjs/prism.js:
     virtLines = null;
     virtLangKey = null;
     virtRafPending = false;
+    virtLastScrollTop = -1;
     hlChunkCache = {};
     hlChunkPending = {};
     if (virtBodyEl) {
@@ -6379,6 +6472,40 @@ prismjs/prism.js:
       received = true;
       try {
         const msg = JSON.parse(e.data);
+        if (msg.type === "file_update" && msg.path !== void 0) {
+          if ("content" in msg && typeof msg.content === "string") {
+            const c = msg.content;
+            updateContentEntry(msg.path, c);
+          }
+          if (msg.meta) {
+            const existing = F.findIndex((f) => f.path === msg.path);
+            const updated = {
+              path: msg.path,
+              size: msg.meta.size,
+              lines: msg.meta.lines,
+              language: msg.meta.language
+            };
+            if (existing >= 0) {
+              F[existing] = updated;
+            } else {
+              F.push(updated);
+            }
+          }
+          renderTable();
+          if (currentFile?.path === msg.path) {
+            const fileEntry = F.find((f) => f.path === msg.path);
+            if (fileEntry) openViewer(fileEntry);
+          }
+          return;
+        }
+        if (msg.type === "file_delete" && msg.path !== void 0) {
+          removeContentEntry(msg.path);
+          const idx = F.findIndex((f) => f.path === msg.path);
+          if (idx >= 0) F.splice(idx, 1);
+          renderTable();
+          if (currentFile?.path === msg.path) closeViewer();
+          return;
+        }
         if (msg.report) softUpdate(msg.report, msg.content ?? null);
       } catch {
       }

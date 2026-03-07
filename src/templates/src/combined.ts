@@ -1,4 +1,7 @@
-import { fetchContent, updateContentEntry } from "./content";
+import { fetchContent, updateContentEntry, setContentUrl } from "./content";
+
+// Combined sidecar uses "combined-content.json" at the same URL origin.
+setContentUrl("combined-content.json");
 import { openViewer } from "./viewer";
 import { esc, fmt } from "./utils";
 import type { CombinedFile, CombinedPathReport } from "./combined-types";

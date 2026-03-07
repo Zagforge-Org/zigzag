@@ -13,10 +13,8 @@ const lg = @import("../logger.zig");
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
-pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
+pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
-
-    const allocator = std.heap.page_allocator;
 
     var pool = Pool{};
     try pool.init(.{ .allocator = allocator, .n_jobs = cfg.n_threads });
@@ -48,14 +46,28 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
     // Without this, defer cache.deinit() in main.zig never runs on SIGINT.
     if (cache) |c| c.saveToDisk() catch {};
 
+    // Write combined HTML report (initial, before SSE server starts).
+    reporter.writeCombinedReport(states.items, cfg, allocator);
+
     // Start SSE dev server when both --watch and --html are active
     var sse_server: ?*SseServer = null;
     if (cfg.html_output) {
-        const first_html_path = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
-        defer if (first_html_path) |p| allocator.free(p);
+        const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+        const multi = states.items.len > 1;
 
-        if (first_html_path) |hp| {
-            sse_server = SseServer.init(cfg.serve_port, hp, allocator) catch |err| blk: {
+        // For multi-path: serve from base output dir so combined-content.json is at root.
+        // For single path: serve from per-path subdir so report-content.json is at root.
+        var first_html_buf: ?[]u8 = null;
+        defer if (first_html_buf) |b| allocator.free(b);
+        const srv_root: []const u8 = if (multi) base_out_dir else blk: {
+            first_html_buf = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
+            if (first_html_buf) |hp| break :blk std.fs.path.dirname(hp) orelse base_out_dir;
+            break :blk base_out_dir;
+        };
+        const default_page: []const u8 = if (multi) "combined.html" else "report.html";
+
+        {
+            sse_server = SseServer.init(cfg.serve_port, srv_root, default_page, allocator) catch |err| blk: {
                 lg.printWarn("SSE server failed to start on port {d}: {s}", .{ cfg.serve_port, @errorName(err) });
                 break :blk null;
             };
@@ -130,18 +142,42 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl) !void {
                             state.updateFile(event.path, cache, &pool) catch |err| {
                                 lg.printError("Failed to process {s}: {s}", .{ event.path, @errorName(err) });
                             };
+                            // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
+                            if (sse_server) |srv| {
+                                state.entries_mutex.lock();
+                                const entry_opt = state.file_entries.get(event.path);
+                                state.entries_mutex.unlock();
+                                if (entry_opt) |entry| {
+                                    const delta = report.buildFileDeltaPayload(allocator, &entry, .updated) catch null;
+                                    if (delta) |d| {
+                                        defer allocator.free(d);
+                                        srv.broadcast(d);
+                                    }
+                                }
+                            }
                         },
-                        .deleted => state.removeFile(event.path),
+                        .deleted => {
+                            state.removeFile(event.path);
+                            if (sse_server) |srv| {
+                                const delta = report.buildFileDeletePayload(allocator, event.path) catch null;
+                                if (delta) |d| {
+                                    defer allocator.free(d);
+                                    srv.broadcast(d);
+                                }
+                            }
+                        },
                     }
                     dirty = true;
                     break;
                 }
             }
         } else if (dirty) {
-            // Quiet period elapsed — write all reports from in-memory state
+            // Quiet period elapsed — write all reports to disk.
+            // SSE delta was already broadcast immediately on each file event above.
             for (states.items) |state| {
-                reporter.writeAllReports(state, cfg, sse_server, allocator);
+                reporter.writeAllReports(state, cfg, null, allocator);
             }
+            reporter.writeCombinedReport(states.items, cfg, allocator);
             dirty = false;
         }
     }

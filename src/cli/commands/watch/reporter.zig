@@ -5,6 +5,77 @@ const Config = @import("../config/config.zig").Config;
 const report = @import("../report.zig");
 const lg = @import("../logger.zig");
 
+/// Write the combined multi-path HTML dashboard and its content sidecar.
+/// No-op when html_output is false or fewer than 2 states are active.
+pub fn writeCombinedReport(
+    states: []*State,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) void {
+    if (!cfg.html_output or states.len < 2) return;
+
+    const combined_html_path = report.resolveCombinedHtmlPath(allocator, cfg) catch |err| {
+        lg.printError("Failed to resolve combined HTML path: {s}", .{@errorName(err)});
+        return;
+    };
+    defer allocator.free(combined_html_path);
+
+    const combined_content_path = report.resolveCombinedContentPath(allocator, cfg) catch |err| {
+        lg.printError("Failed to resolve combined content path: {s}", .{@errorName(err)});
+        return;
+    };
+    defer allocator.free(combined_content_path);
+
+    const all_report_data = allocator.alloc(report.ReportData, states.len) catch |err| {
+        lg.printError("Failed to alloc combined report data: {s}", .{@errorName(err)});
+        return;
+    };
+    var n_initialized: usize = 0;
+    defer {
+        for (all_report_data[0..n_initialized]) |*d| d.deinit();
+        allocator.free(all_report_data);
+    }
+
+    const path_data = allocator.alloc(report.CombinedPathData, states.len) catch |err| {
+        lg.printError("Failed to alloc combined path data: {s}", .{@errorName(err)});
+        return;
+    };
+    defer allocator.free(path_data);
+
+    const content_paths = allocator.alloc(report.CombinedContentPath, states.len) catch |err| {
+        lg.printError("Failed to alloc combined content paths: {s}", .{@errorName(err)});
+        return;
+    };
+    defer allocator.free(content_paths);
+
+    for (states, 0..) |state, i| {
+        all_report_data[i] = report.ReportData.init(
+            allocator,
+            &state.file_entries,
+            &state.binary_entries,
+            cfg.timezone_offset,
+        ) catch |err| {
+            lg.printError("Failed to init report data for '{s}': {s}", .{ state.root_path, @errorName(err) });
+            return;
+        };
+        n_initialized += 1;
+        path_data[i] = .{ .root_path = state.root_path, .data = &all_report_data[i] };
+        content_paths[i] = .{ .root_path = state.root_path, .file_entries = &state.file_entries };
+    }
+
+    report.writeCombinedContentJson(content_paths, combined_content_path, allocator) catch |err| {
+        lg.printError("Combined content write failed: {s}", .{@errorName(err)});
+        return;
+    };
+
+    report.writeCombinedHtmlReport(path_data, combined_html_path, 0, cfg, allocator) catch |err| {
+        lg.printError("Combined HTML write failed: {s}", .{@errorName(err)});
+        return;
+    };
+
+    lg.printStep("Rebuilt: combined.html", .{});
+}
+
 /// Build ReportData once and write all enabled report formats.
 /// The optional sse_server receives the SSE payload when html_output is active.
 pub fn writeAllReports(

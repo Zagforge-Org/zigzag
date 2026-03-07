@@ -5751,6 +5751,7 @@ prismjs/prism.js:
   // src/content.ts
   var _cache = null;
   var _failed = false;
+  var _overrideUrl = null;
   var _pending = [];
   var _fetching = false;
   function showOfflineBanner() {
@@ -5768,6 +5769,7 @@ prismjs/prism.js:
     }
   }
   function resolveContentUrl() {
+    if (_overrideUrl !== null) return _overrideUrl;
     const pageUrl = location.href.replace(/[?#].*$/, "");
     const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
     return dir + "report-content.json";
@@ -5789,6 +5791,9 @@ prismjs/prism.js:
       _fetching = false;
       drainPending();
     });
+  }
+  function setContentUrl(url) {
+    _overrideUrl = url;
   }
   function fetchContent(path, cb) {
     if (_cache !== null) {
@@ -6166,6 +6171,7 @@ prismjs/prism.js:
   });
 
   // src/combined.ts
+  setContentUrl("combined-content.json");
   var R = window.COMBINED_REPORT;
   var M = R.meta;
   var S = R.summary;

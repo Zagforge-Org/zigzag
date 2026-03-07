@@ -3,6 +3,7 @@
 // null = not yet attempted, false = failed, object = loaded
 let _cache: Record<string, string> | null = null;
 let _failed = false;
+let _overrideUrl: string | null = null;
 
 // Pending callbacks waiting for the first fetch to complete
 const _pending: Array<{ path: string; cb: (s: string) => void }> = [];
@@ -25,6 +26,7 @@ function drainPending(): void {
 }
 
 function resolveContentUrl(): string {
+    if (_overrideUrl !== null) return _overrideUrl;
     const pageUrl = location.href.replace(/[?#].*$/, "");
     const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
     return dir + "report-content.json";
@@ -50,6 +52,11 @@ function doFetch(): void {
             _fetching = false;
             drainPending();
         });
+}
+
+/** Override the URL used to fetch the content sidecar JSON (default: derived from location). */
+export function setContentUrl(url: string): void {
+    _overrideUrl = url;
 }
 
 export function fetchContent(path: string, cb: (s: string) => void): void {
@@ -86,6 +93,18 @@ export function setContentCache(data: Record<string, string>): void {
     _failed = false;
     // Drain any callbacks that were waiting before the watch update arrived
     drainPending();
+}
+
+/** Update or insert a single entry in the content cache (used by delta SSE events). */
+export function updateContentEntry(path: string, content: string): void {
+    if (_cache === null) _cache = {};
+    _cache[path] = content;
+    _failed = false;
+}
+
+/** Remove a single entry from the content cache (used by file_delete delta events). */
+export function removeContentEntry(path: string): void {
+    if (_cache !== null) delete _cache[path];
 }
 
 /** Reset all content state (used when watch mode receives a full reload). */
