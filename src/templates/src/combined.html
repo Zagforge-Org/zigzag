@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>ZigZag Combined Report</title>
+        <!-- @inject: dashboard.css -->
+        <!-- @inject: prism-theme.css -->
+        <style>
+.path-section { border: 1px solid var(--border, #2d3748); border-radius: 6px; margin-bottom: 1.25rem; overflow: hidden; }
+.path-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.25rem; cursor: pointer; background: var(--card-bg, #1a202c); user-select: none; }
+.path-header:hover { background: var(--card-hover, #2d3748); }
+.path-toggle { font-size: 0.9rem; color: var(--accent, #63b3ed); min-width: 1ch; }
+.path-name { font-family: monospace; font-size: 1rem; font-weight: 600; color: var(--text, #e2e8f0); }
+.path-stats { margin-left: auto; font-size: 0.8rem; color: var(--muted, #718096); }
+.path-body { padding: 1.25rem; }
+.path-summary-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.path-summary-row .card { flex: 1; min-width: 100px; }
+.path-file-count { font-size: 0.8rem; color: var(--muted, #718096); margin: 0.5rem 0; }
+.lang-table, .file-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 1rem; }
+.lang-table th, .lang-table td, .file-table th, .file-table td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #2d3748); }
+.lang-table th, .file-table th { color: var(--muted, #718096); font-weight: 500; }
+.file-row { cursor: pointer; }
+.file-row:hover td { background: var(--row-hover, #2d3748); }
+        </style>
+    </head>
+    <body>
+        <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#1a1a2e;color:#e2e8f0;padding:1.25rem 2rem;font-family:monospace;font-size:14px;
+  border-bottom:2px solid #f6ad55;line-height:1.8">
+            <strong style="color:#f6ad55">&#9888; Source files require a local server to load.</strong><br>
+            Run: <code style="background:#2d3748;padding:2px 8px;border-radius:4px">zigzag serve</code>
+            then open
+            <code style="background:#2d3748;padding:2px 8px;border-radius:4px">http://localhost:8787</code>
+            <button onclick="document.getElementById('offline-banner').style.display='none'"
+                style="float:right;background:none;border:1px solid #718096;color:#a0aec0;
+    padding:4px 12px;cursor:pointer;border-radius:4px;font-family:monospace">&#x2715; Dismiss</button>
+        </div>
+        <header>
+            <h1 id="report-title">Combined Report</h1>
+            <p id="report-meta"></p>
+        </header>
+        <div class="container">
+            <div class="section">
+                <h2>Global Summary</h2>
+                <div class="cards" id="cards"></div>
+            </div>
+            <div class="section">
+                <h2>Paths</h2>
+                <input type="search" id="search" placeholder="Filter by path…" />
+                <div id="path-sections"></div>
+            </div>
+        </div>
+        <!-- Source viewer slide-in panel -->
+        <div id="viewer">
+            <div id="viewer-header">
+                <span id="viewer-path"></span>
+                <button id="viewer-close" title="Close (Esc)">&#x2715;</button>
+            </div>
+            <div id="viewer-body"></div>
+        </div>
+        <!-- Prism highlight worker source (embedded, no CDN required) -->
+        <!-- @inject-text: dist/highlight.worker.js as prism-src -->
+        <!-- Report data (injected by ZigZag at report-generation time) -->
+        <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
+        <!-- Parse report data before app logic runs -->
+        <script>window.COMBINED_REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
+        <!-- App logic -->
+        <!-- @inject: dist/combined.js -->
+    </body>
+</html>
