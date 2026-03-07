@@ -5,6 +5,7 @@ const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
 
 const dashboard_template = @embedFile("../../../../../templates/dashboard.html");
+const combined_dashboard_template = @embedFile("../../../../../templates/combined-dashboard.html");
 
 /// Write a self-contained HTML dashboard alongside the markdown report.
 /// The template is loaded from src/templates/dashboard.html via @embedFile.
@@ -222,4 +223,169 @@ pub fn writeCombinedContentJson(
         }
     }
     try file.writeAll("}");
+}
+
+/// Per-path entry for the combined HTML report writer.
+pub const CombinedPathData = struct {
+    root_path: []const u8,
+    data: *const ReportData,
+};
+
+/// Write a combined multi-path HTML dashboard to html_path.
+/// Uses the combined-dashboard.html template (separate from the single-path template).
+pub fn writeCombinedHtmlReport(
+    paths: []const CombinedPathData,
+    html_path: []const u8,
+    failed_paths: usize,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+) !void {
+    const marker = "__ZIGZAG_DATA__";
+    const split_pos = std.mem.indexOf(u8, combined_dashboard_template, marker) orelse
+        return error.MissingTemplateMarker;
+
+    // --- Compute global totals ---
+    var total_files: usize = 0;
+    var total_binary: usize = 0;
+    var total_lines: usize = 0;
+    var total_size: u64 = 0;
+    for (paths) |p| {
+        total_files += p.data.sorted_files.items.len;
+        total_binary += p.data.sorted_binaries.items.len;
+        total_lines += p.data.total_lines;
+        total_size += p.data.total_size;
+    }
+
+    const generated_at: []const u8 = if (paths.len > 0)
+        paths[0].data.generated_at_str
+    else
+        "unknown";
+
+    // --- Build combined JSON ---
+    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    defer json_aw.deinit();
+
+    var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
+    try ws.beginObject();
+
+    // meta
+    try ws.objectField("meta");
+    try ws.beginObject();
+    try ws.objectField("combined");
+    try ws.write(true);
+    try ws.objectField("path_count");
+    try ws.write(paths.len);
+    try ws.objectField("successful_paths");
+    try ws.write(paths.len);
+    try ws.objectField("failed_paths");
+    try ws.write(failed_paths);
+    try ws.objectField("file_count");
+    try ws.write(total_files);
+    try ws.objectField("generated_at");
+    try ws.write(generated_at);
+    try ws.objectField("version");
+    try ws.write(cfg.version);
+    try ws.endObject();
+
+    // global summary
+    try ws.objectField("summary");
+    try ws.beginObject();
+    try ws.objectField("source_files");
+    try ws.write(total_files);
+    try ws.objectField("binary_files");
+    try ws.write(total_binary);
+    try ws.objectField("total_lines");
+    try ws.write(total_lines);
+    try ws.objectField("total_size_bytes");
+    try ws.write(total_size);
+    try ws.endObject();
+
+    // paths array
+    try ws.objectField("paths");
+    try ws.beginArray();
+    for (paths) |p| {
+        try ws.beginObject();
+
+        try ws.objectField("root_path");
+        try ws.write(p.root_path);
+
+        // per-path summary
+        try ws.objectField("summary");
+        try ws.beginObject();
+        try ws.objectField("source_files");
+        try ws.write(p.data.sorted_files.items.len);
+        try ws.objectField("binary_files");
+        try ws.write(p.data.sorted_binaries.items.len);
+        try ws.objectField("total_lines");
+        try ws.write(p.data.total_lines);
+        try ws.objectField("total_size_bytes");
+        try ws.write(p.data.total_size);
+        try ws.objectField("languages");
+        try ws.beginArray();
+        for (p.data.lang_list.items) |ls| {
+            try ws.beginObject();
+            try ws.objectField("name");
+            try ws.write(ls.name);
+            try ws.objectField("files");
+            try ws.write(ls.files);
+            try ws.objectField("lines");
+            try ws.write(ls.lines);
+            try ws.objectField("size_bytes");
+            try ws.write(ls.size_bytes);
+            try ws.endObject();
+        }
+        try ws.endArray();
+        try ws.endObject(); // summary
+
+        // files (include root_path in each entry)
+        try ws.objectField("files");
+        try ws.beginArray();
+        for (p.data.sorted_files.items) |e| {
+            try ws.beginObject();
+            try ws.objectField("path");
+            try ws.write(e.path);
+            try ws.objectField("root_path");
+            try ws.write(p.root_path);
+            try ws.objectField("size");
+            try ws.write(e.size);
+            try ws.objectField("lines");
+            try ws.write(e.line_count);
+            try ws.objectField("language");
+            try ws.write(e.getLanguage());
+            try ws.endObject();
+        }
+        try ws.endArray();
+
+        // binaries
+        try ws.objectField("binaries");
+        try ws.beginArray();
+        for (p.data.sorted_binaries.items) |b| {
+            try ws.beginObject();
+            try ws.objectField("path");
+            try ws.write(b.path);
+            try ws.objectField("size");
+            try ws.write(b.size);
+            try ws.endObject();
+        }
+        try ws.endArray();
+
+        try ws.endObject(); // path entry
+    }
+    try ws.endArray(); // paths
+
+    try ws.endObject(); // root
+
+    const json_raw = json_aw.written();
+    const json_safe = try std.mem.replaceOwned(u8, allocator, json_raw, "</script>", "<\\/script>");
+    defer allocator.free(json_safe);
+
+    var aw: std.io.Writer.Allocating = .init(allocator);
+    defer aw.deinit();
+    try aw.writer.writeAll(combined_dashboard_template[0..split_pos]);
+    try aw.writer.writeAll(json_safe);
+    try aw.writer.writeAll(combined_dashboard_template[split_pos + marker.len ..]);
+
+    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
+    defer html_file.close();
+    try html_file.writeAll(aw.written());
 }

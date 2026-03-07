@@ -8,6 +8,8 @@ const writeHtmlReport = @import("./html.zig").writeHtmlReport;
 const writeContentJson = @import("./html.zig").writeContentJson;
 const writeCombinedContentJson = @import("./html.zig").writeCombinedContentJson;
 const CombinedContentPath = @import("./html.zig").CombinedContentPath;
+const writeCombinedHtmlReport = @import("./html.zig").writeCombinedHtmlReport;
+const CombinedPathData = @import("./html.zig").CombinedPathData;
 
 test "writeHtmlReport creates file with expected HTML structure" {
     const alloc = std.testing.allocator;
@@ -378,4 +380,103 @@ test "writeCombinedContentJson produces valid JSON with two paths" {
     defer parsed.deinit();
     try std.testing.expectEqual(std.json.Value.object, std.meta.activeTag(parsed.value));
     try std.testing.expectEqual(@as(usize, 2), parsed.value.object.count());
+}
+
+test "writeCombinedHtmlReport creates file with combined:true in JSON" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var file_entries_a = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries_a.deinit();
+    var binary_entries_a = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries_a.deinit();
+
+    var file_entries_b = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries_b.deinit();
+    var binary_entries_b = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries_b.deinit();
+
+    var data_a = try ReportData.init(alloc, &file_entries_a, &binary_entries_a, null);
+    defer data_a.deinit();
+    var data_b = try ReportData.init(alloc, &file_entries_b, &binary_entries_b, null);
+    defer data_b.deinit();
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+
+    const paths = [_]CombinedPathData{
+        .{ .root_path = "./src", .data = &data_a },
+        .{ .root_path = "./lib", .data = &data_b },
+    };
+    try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "<!doctype html>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"combined\":true") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"path_count\":2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "window.COMBINED_REPORT") != null);
+}
+
+test "writeCombinedHtmlReport includes root_path for each path section" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var fe = std.StringHashMap(JobEntry).init(alloc);
+    defer fe.deinit();
+    var be = std.StringHashMap(BinaryEntry).init(alloc);
+    defer be.deinit();
+
+    var data = try ReportData.init(alloc, &fe, &be, null);
+    defer data.deinit();
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+
+    const paths = [_]CombinedPathData{
+        .{ .root_path = "./myproject", .data = &data },
+        .{ .root_path = "./myproject/tests", .data = &data },
+    };
+    try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "./myproject") != null);
+    try std.testing.expect(std.mem.indexOf(u8, content, "./myproject/tests") != null);
+}
+
+test "writeCombinedHtmlReport with zero paths produces valid HTML" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
+    defer alloc.free(html_path);
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+
+    const paths: []const CombinedPathData = &.{};
+    try writeCombinedHtmlReport(paths, html_path, 0, &cfg, alloc);
+
+    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    defer alloc.free(content);
+
+    try std.testing.expect(std.mem.indexOf(u8, content, "\"path_count\":0") != null);
 }
