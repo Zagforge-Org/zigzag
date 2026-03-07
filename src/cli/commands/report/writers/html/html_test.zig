@@ -6,6 +6,8 @@ const ReportData = @import("../aggregator.zig").ReportData;
 
 const writeHtmlReport = @import("./html.zig").writeHtmlReport;
 const writeContentJson = @import("./html.zig").writeContentJson;
+const writeCombinedContentJson = @import("./html.zig").writeCombinedContentJson;
+const CombinedContentPath = @import("./html.zig").CombinedContentPath;
 
 test "writeHtmlReport creates file with expected HTML structure" {
     const alloc = std.testing.allocator;
@@ -300,4 +302,80 @@ test "writeContentJson produces empty object for empty map" {
     const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
     defer alloc.free(written);
     try std.testing.expectEqualStrings("{}", written);
+}
+
+test "writeCombinedContentJson uses root_path:path as key to avoid collisions" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "combined-content.json" });
+    defer alloc.free(content_path);
+
+    // Two paths each with a file at "src/main.zig"
+    var entries_a = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_a.deinit();
+    const ca: []u8 = try alloc.dupe(u8, "backend content");
+    defer alloc.free(ca);
+    try entries_a.put("src/main.zig", .{ .path = "src/main.zig", .content = ca, .size = 15, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    var entries_b = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_b.deinit();
+    const cb: []u8 = try alloc.dupe(u8, "frontend content");
+    defer alloc.free(cb);
+    try entries_b.put("src/main.zig", .{ .path = "src/main.zig", .content = cb, .size = 16, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    const paths = [_]CombinedContentPath{
+        .{ .root_path = "./backend", .file_entries = &entries_a },
+        .{ .root_path = "./frontend", .file_entries = &entries_b },
+    };
+    try writeCombinedContentJson(&paths, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    // Both keys must be present — no collision
+    try std.testing.expect(std.mem.indexOf(u8, written, "./backend:src/main.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "./frontend:src/main.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "backend content") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "frontend content") != null);
+}
+
+test "writeCombinedContentJson produces valid JSON with two paths" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "combined-content.json" });
+    defer alloc.free(content_path);
+
+    var entries_a = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_a.deinit();
+    const ca: []u8 = try alloc.dupe(u8, "hello");
+    defer alloc.free(ca);
+    try entries_a.put("a.zig", .{ .path = "a.zig", .content = ca, .size = 5, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    var entries_b = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_b.deinit();
+    const cb: []u8 = try alloc.dupe(u8, "world");
+    defer alloc.free(cb);
+    try entries_b.put("b.zig", .{ .path = "b.zig", .content = cb, .size = 5, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    const paths = [_]CombinedContentPath{
+        .{ .root_path = "./src", .file_entries = &entries_a },
+        .{ .root_path = "./lib", .file_entries = &entries_b },
+    };
+    try writeCombinedContentJson(&paths, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, written, .{});
+    defer parsed.deinit();
+    try std.testing.expectEqual(std.json.Value.object, std.meta.activeTag(parsed.value));
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.object.count());
 }

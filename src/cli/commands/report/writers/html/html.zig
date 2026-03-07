@@ -176,3 +176,50 @@ pub fn writeContentJson(
     }
     try file.writeAll("}");
 }
+
+/// Per-path entry for the combined content writer.
+pub const CombinedContentPath = struct {
+    root_path: []const u8,
+    file_entries: *const std.StringHashMap(JobEntry),
+};
+
+/// Write a merged content sidecar for the combined report.
+/// Keys use the format "{root_path}:{relative_path}" to prevent collisions
+/// when two scanned paths contain files with the same relative path.
+pub fn writeCombinedContentJson(
+    paths: []const CombinedContentPath,
+    content_path: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
+    defer file.close();
+
+    try file.writeAll("{");
+    var first = true;
+    for (paths) |p| {
+        var it = p.file_entries.iterator();
+        while (it.next()) |kv| {
+            if (!first) try file.writeAll(",");
+            first = false;
+
+            // Key: "{root_path}:{path}"
+            const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
+            defer allocator.free(combined_key);
+
+            var key_aw: std.io.Writer.Allocating = .init(allocator);
+            defer key_aw.deinit();
+            var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
+            try kws.write(combined_key);
+            try file.writeAll(key_aw.written());
+
+            try file.writeAll(":");
+
+            var val_aw: std.io.Writer.Allocating = .init(allocator);
+            defer val_aw.deinit();
+            var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
+            try vws.write(kv.value_ptr.content);
+            try file.writeAll(val_aw.written());
+        }
+    }
+    try file.writeAll("}");
+}
