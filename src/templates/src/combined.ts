@@ -1,19 +1,11 @@
 import { fetchContent, updateContentEntry } from "./content";
-import { openViewer, closeViewer } from "./viewer";
-import { esc } from "./utils";
+import { openViewer } from "./viewer";
+import { esc, fmt } from "./utils";
 import type { CombinedFile, CombinedPathReport } from "./combined-types";
 
 const R = window.COMBINED_REPORT;
 const M = R.meta;
 const S = R.summary;
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-
-function fmtSize(bytes: number): string {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-}
 
 // ── Global summary cards ───────────────────────────────────────────────────────
 
@@ -24,7 +16,7 @@ function renderGlobalSummary(): void {
         { label: "Source Files", value: String(S.source_files) },
         { label: "Binary Files", value: String(S.binary_files) },
         { label: "Total Lines",  value: S.total_lines.toLocaleString() },
-        { label: "Total Size",   value: fmtSize(S.total_size_bytes) },
+        { label: "Total Size",   value: fmt(S.total_size_bytes) },
     ];
     cards.innerHTML = items
         .map((c) => `<div class="card"><div class="card-value">${esc(c.value)}</div><div class="card-label">${esc(c.label)}</div></div>`)
@@ -32,8 +24,6 @@ function renderGlobalSummary(): void {
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────────
-
-let _searchQuery = "";
 
 function matchesSearch(f: CombinedFile, q: string): boolean {
     if (!q) return true;
@@ -46,7 +36,6 @@ function matchesSearch(f: CombinedFile, q: string): boolean {
 }
 
 function filterAllSections(q: string): void {
-    _searchQuery = q;
     document.querySelectorAll<HTMLElement>(".path-section").forEach((section) => {
         const rootPath = section.dataset.rootPath!;
         const pathData = R.paths.find((p) => p.root_path === rootPath)!;
@@ -68,7 +57,7 @@ function renderFileRow(f: CombinedFile): string {
         <td>${esc(f.path)}</td>
         <td>${esc(f.language)}</td>
         <td>${f.lines.toLocaleString()}</td>
-        <td>${fmtSize(f.size)}</td>
+        <td>${fmt(f.size)}</td>
     </tr>`;
 }
 
@@ -102,7 +91,7 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
     const expanded = index === 0;
     const langRows = p.summary.languages
         .slice(0, 5)
-        .map((l) => `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmtSize(l.size_bytes)}</td></tr>`)
+        .map((l) => `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmt(l.size_bytes)}</td></tr>`)
         .join("");
 
     const fileRows = p.files.map((f) => renderFileRow(f)).join("");
@@ -112,14 +101,14 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
     <div class="path-header" role="button" tabindex="0">
         <span class="path-toggle">${expanded ? "▾" : "▸"}</span>
         <span class="path-name">${esc(p.root_path)}</span>
-        <span class="path-stats">${p.summary.source_files} files · ${p.summary.total_lines.toLocaleString()} lines · ${fmtSize(p.summary.total_size_bytes)}</span>
+        <span class="path-stats">${esc(p.summary.source_files)} files · ${esc(p.summary.total_lines.toLocaleString())} lines · ${esc(fmt(p.summary.total_size_bytes))}</span>
     </div>
     <div class="path-body" style="${expanded ? "" : "display:none"}">
         <div class="path-summary-row">
-            <div class="card"><div class="card-value">${p.summary.source_files}</div><div class="card-label">Source Files</div></div>
-            <div class="card"><div class="card-value">${p.summary.binary_files}</div><div class="card-label">Binary Files</div></div>
-            <div class="card"><div class="card-value">${p.summary.total_lines.toLocaleString()}</div><div class="card-label">Total Lines</div></div>
-            <div class="card"><div class="card-value">${fmtSize(p.summary.total_size_bytes)}</div><div class="card-label">Total Size</div></div>
+            <div class="card"><div class="card-value">${esc(p.summary.source_files)}</div><div class="card-label">Source Files</div></div>
+            <div class="card"><div class="card-value">${esc(p.summary.binary_files)}</div><div class="card-label">Binary Files</div></div>
+            <div class="card"><div class="card-value">${esc(p.summary.total_lines.toLocaleString())}</div><div class="card-label">Total Lines</div></div>
+            <div class="card"><div class="card-value">${esc(fmt(p.summary.total_size_bytes))}</div><div class="card-label">Total Size</div></div>
         </div>
         ${langRows ? `
         <table class="lang-table">
@@ -159,13 +148,6 @@ function renderPathSections(): void {
         attachRowListeners(section.querySelector<HTMLElement>(".file-tbody")!);
     });
 }
-
-// ── Keyboard: Escape closes viewer ────────────────────────────────────────────
-
-document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeViewer();
-});
-document.getElementById("viewer-close")?.addEventListener("click", closeViewer);
 
 // ── Search bar ────────────────────────────────────────────────────────────────
 
