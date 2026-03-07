@@ -228,6 +228,57 @@ fn writePathReports(
     }
 }
 
+/// Write the combined multi-path HTML report and its content sidecar.
+/// Only called when html_output is true and at least 2 paths succeeded.
+fn writeCombinedReports(
+    results: []const ScanResult,
+    failed_paths: usize,
+    cfg: *const Config,
+    allocator: std.mem.Allocator,
+    logger: ?*Logger,
+) !void {
+    const combined_html_path = try report.resolveCombinedHtmlPath(allocator, cfg);
+    defer allocator.free(combined_html_path);
+
+    const combined_content_path = try report.resolveCombinedContentPath(allocator, cfg);
+    defer allocator.free(combined_content_path);
+
+    // Build per-path ReportData (cheap: aggregates in-memory entries).
+    const all_report_data = try allocator.alloc(report.ReportData, results.len);
+    defer {
+        for (all_report_data) |*d| d.deinit();
+        allocator.free(all_report_data);
+    }
+
+    const path_data = try allocator.alloc(report.CombinedPathData, results.len);
+    defer allocator.free(path_data);
+
+    const content_paths = try allocator.alloc(report.CombinedContentPath, results.len);
+    defer allocator.free(content_paths);
+
+    for (results, 0..) |*result, i| {
+        all_report_data[i] = try report.ReportData.init(
+            allocator,
+            &result.file_entries,
+            &result.binary_entries,
+            cfg.timezone_offset,
+        );
+        path_data[i] = .{ .root_path = result.root_path, .data = &all_report_data[i] };
+        content_paths[i] = .{ .root_path = result.root_path, .file_entries = &result.file_entries };
+    }
+
+    try report.writeCombinedContentJson(content_paths, combined_content_path, allocator);
+    lg.printSuccess("Combined content: {s}", .{combined_content_path});
+
+    try report.writeCombinedHtmlReport(path_data, combined_html_path, failed_paths, cfg, allocator);
+    lg.printSuccess("Combined HTML:    {s}", .{combined_html_path});
+
+    if (logger) |l| {
+        l.log("Combined HTML written: {s}", .{combined_html_path});
+        l.log("Combined content written: {s}", .{combined_content_path});
+    }
+}
+
 /// Executes the runner command for all configured paths.
 pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
@@ -256,8 +307,18 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
 
     lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
 
+    // Collect all scan results so we can write individual reports and then the
+    // combined multi-path report (when html_output is true and >1 paths succeed).
+    var all_results: std.ArrayList(ScanResult) = .empty;
+    defer {
+        for (all_results.items) |*r| r.deinit(allocator);
+        all_results.deinit(allocator);
+    }
+
+    var failed_paths: usize = 0;
+
     for (cfg.paths.items) |path| {
-        var result = scanPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
+        const result = scanPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
             switch (err) {
                 error.NotADirectory => {
                     lg.printError("Path '{s}' is not a directory", .{path});
@@ -267,14 +328,30 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
                 else => {
                     lg.printError("Unexpected error: {s}", .{@errorName(err)});
                     if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
+                    failed_paths += 1;
                     continue;
                 },
             }
         };
-        defer result.deinit(allocator);
-        writePathReports(&result, cfg, &pool, allocator, logger) catch |err| {
+        all_results.append(allocator, result) catch |err| {
+            var r = result;
+            r.deinit(allocator);
+            return err;
+        };
+    }
+
+    for (all_results.items) |*result| {
+        writePathReports(result, cfg, &pool, allocator, logger) catch |err| {
             lg.printError("Unexpected error: {s}", .{@errorName(err)});
             if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
+        };
+    }
+
+    // Write combined HTML dashboard when multiple paths produced results.
+    if (cfg.html_output and all_results.items.len > 1) {
+        writeCombinedReports(all_results.items, failed_paths, cfg, allocator, logger) catch |err| {
+            lg.printError("Combined report error: {s}", .{@errorName(err)});
+            if (logger) |l| l.log("ERROR writing combined report: {s}", .{@errorName(err)});
         };
     }
 

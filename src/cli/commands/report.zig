@@ -17,3 +17,5 @@ pub const writeCombinedHtmlReport = @import("report/writers/html/html.zig").writ
 pub const writeCombinedContentJson = @import("report/writers/html/html.zig").writeCombinedContentJson;
 pub const CombinedPathData = @import("report/writers/html/html.zig").CombinedPathData;
 pub const CombinedContentPath = @import("report/writers/html/html.zig").CombinedContentPath;
+pub const resolveCombinedHtmlPath = @import("report/paths/paths.zig").resolveCombinedHtmlPath;
+pub const resolveCombinedContentPath = @import("report/paths/paths.zig").resolveCombinedContentPath;
