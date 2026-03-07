@@ -47,7 +47,7 @@
             </div>
             <div class="section">
                 <h2>Paths</h2>
-                <input type="search" id="search" placeholder="Filter by path…" />
+                <input type="search" id="search" placeholder="Filter by path, language…" />
                 <div id="path-sections"></div>
             </div>
         </div>
@@ -61,11 +61,11 @@
         </div>
         <!-- Prism highlight worker source (embedded, no CDN required) -->
         <!-- @inject-text: dist/highlight.worker.js as prism-src -->
-        <!-- Report data (injected by ZigZag at report-generation time) -->
+        <!-- Combined report data (injected by ZigZag at report-generation time) -->
         <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
         <!-- Parse report data before app logic runs -->
         <script>window.COMBINED_REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
-        <!-- App logic -->
+        <!-- Combined app logic -->
         <!-- @inject: dist/combined.js -->
     </body>
 </html>
