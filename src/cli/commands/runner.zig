@@ -69,7 +69,9 @@ fn scanPath(
     };
     defer file_ctx.ignore_list.deinit(allocator);
 
-    // Auto-ignore the output directory to prevent scanning report artifacts
+    // Auto-ignore the output directory to prevent scanning report artifacts.
+    // This also excludes combined.html and combined-content.json which live
+    // directly inside base_output_dir (not in a per-path subdirectory).
     const base_output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
     const output_dir_ignore = try allocator.dupe(u8, base_output_dir);
     try file_ctx.ignore_list.append(allocator, output_dir_ignore);
@@ -245,8 +247,9 @@ fn writeCombinedReports(
 
     // Build per-path ReportData (cheap: aggregates in-memory entries).
     const all_report_data = try allocator.alloc(report.ReportData, results.len);
+    var n_initialized: usize = 0;
     defer {
-        for (all_report_data) |*d| d.deinit();
+        for (all_report_data[0..n_initialized]) |*d| d.deinit();
         allocator.free(all_report_data);
     }
 
@@ -263,6 +266,7 @@ fn writeCombinedReports(
             &result.binary_entries,
             cfg.timezone_offset,
         );
+        n_initialized += 1;
         path_data[i] = .{ .root_path = result.root_path, .data = &all_report_data[i] };
         content_paths[i] = .{ .root_path = result.root_path, .file_entries = &result.file_entries };
     }
