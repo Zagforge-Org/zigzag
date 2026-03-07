@@ -15,15 +15,39 @@ const lg = @import("logger.zig");
 
 const Logger = lg.Logger;
 
-/// Process a single directory path (one-shot mode)
-fn processPath(
+/// Owned result of scanning one path. Caller (exec) controls lifetime.
+const ScanResult = struct {
+    root_path: []const u8, // not owned — points into cfg.paths item
+    file_entries: std.StringHashMap(JobEntry),
+    binary_entries: std.StringHashMap(BinaryEntry),
+    stats: ProcessStats,
+
+    pub fn deinit(self: *ScanResult, allocator: std.mem.Allocator) void {
+        var it = self.file_entries.iterator();
+        while (it.next()) |entry| {
+            allocator.free(entry.value_ptr.path);
+            allocator.free(entry.value_ptr.content);
+            allocator.free(entry.value_ptr.extension);
+        }
+        self.file_entries.deinit();
+        var bit = self.binary_entries.iterator();
+        while (bit.next()) |entry| {
+            allocator.free(entry.value_ptr.path);
+            allocator.free(entry.value_ptr.extension);
+        }
+        self.binary_entries.deinit();
+    }
+};
+
+/// Scan a single directory path and return collected entries. Caller owns the result.
+fn scanPath(
     cfg: *const Config,
     cache: ?*CacheImpl,
     path: []const u8,
     pool: *Pool,
     allocator: std.mem.Allocator,
     logger: ?*Logger,
-) !void {
+) !ScanResult {
     if (path.len != 0) {
         lg.printStep("Processing path: {s}", .{path});
         if (logger) |l| l.log("Processing path: {s}", .{path});
@@ -80,7 +104,7 @@ fn processPath(
     var stats = ProcessStats.init();
 
     var file_entries = std.StringHashMap(JobEntry).init(allocator);
-    defer {
+    errdefer {
         var it = file_entries.iterator();
         while (it.next()) |entry| {
             allocator.free(entry.value_ptr.path);
@@ -91,7 +115,7 @@ fn processPath(
     }
 
     var binary_entries = std.StringHashMap(BinaryEntry).init(allocator);
-    defer {
+    errdefer {
         var it = binary_entries.iterator();
         while (it.next()) |entry| {
             allocator.free(entry.value_ptr.path);
@@ -132,30 +156,49 @@ fn processPath(
         }
     }
 
-    // Write source content to sidecar file (O(max_file_size) peak RAM).
-    // Content.json must be complete before HTML report generation (which no longer embeds content).
+    return ScanResult{
+        .root_path = path,
+        .file_entries = file_entries,
+        .binary_entries = binary_entries,
+        .stats = stats,
+    };
+}
+
+/// Write all configured reports for a completed scan result.
+fn writePathReports(
+    result: *const ScanResult,
+    cfg: *const Config,
+    pool: *Pool,
+    allocator: std.mem.Allocator,
+    logger: ?*Logger,
+) !void {
+    _ = pool; // reserved for future use
+
+    const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
+    const md_path = try report.resolveOutputPath(allocator, cfg, result.root_path, output_filename);
+    defer allocator.free(md_path);
+
     if (cfg.html_output) {
         const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path_for_content);
         const content_path = try report.deriveContentPath(allocator, html_path_for_content);
         defer allocator.free(content_path);
-        try report.writeContentJson(&file_entries, content_path, allocator);
+        try report.writeContentJson(&result.file_entries, content_path, allocator);
         lg.printSuccess("Content JSON:  {s}", .{content_path});
         if (logger) |l| l.log("Content JSON written: {s}", .{content_path});
     }
 
-    // Build ReportData once; all writers share the pre-aggregated result.
-    var report_data = try report.ReportData.init(allocator, &file_entries, &binary_entries, cfg.timezone_offset);
+    var report_data = try report.ReportData.init(allocator, &result.file_entries, &result.binary_entries, cfg.timezone_offset);
     defer report_data.deinit();
 
-    try report.writeReport(&report_data, &file_entries, md_path, path, cfg, allocator);
+    try report.writeReport(&report_data, &result.file_entries, md_path, result.root_path, cfg, allocator);
     lg.printSuccess("Report written: {s}", .{md_path});
     if (logger) |l| l.log("Report written: {s}", .{md_path});
 
     if (cfg.json_output) {
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
-        try report.writeJsonReport(&report_data, json_path, path, cfg, allocator);
+        try report.writeJsonReport(&report_data, json_path, result.root_path, cfg, allocator);
         lg.printSuccess("JSON report: {s}", .{json_path});
         if (logger) |l| l.log("JSON report written: {s}", .{json_path});
     }
@@ -163,7 +206,7 @@ fn processPath(
     if (cfg.html_output) {
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
-        try report.writeHtmlReport(&report_data, html_path, path, cfg, allocator);
+        try report.writeHtmlReport(&report_data, html_path, result.root_path, cfg, allocator);
         lg.printSuccess("HTML report: {s}", .{html_path});
         if (logger) |l| l.log("HTML report written: {s}", .{html_path});
     }
@@ -171,13 +214,13 @@ fn processPath(
     if (cfg.llm_report) {
         const llm_path = try report.deriveLlmPath(allocator, md_path);
         defer allocator.free(llm_path);
-        try report.writeLlmReport(&report_data, binary_entries.count(), llm_path, path, cfg, allocator);
+        try report.writeLlmReport(&report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, allocator);
         lg.printSuccess("LLM report: {s}", .{llm_path});
         if (logger) |l| l.log("LLM report written: {s}", .{llm_path});
     }
 
-    const sv = stats.getSummary();
-    lg.printSummary(path, sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored);
+    const sv = result.stats.getSummary();
+    lg.printSummary(result.root_path, sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored);
     if (logger) |l| {
         l.log("Summary: total={d}, source={d}, cached={d}, fresh={d}, binary={d}, ignored={d}", .{
             sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored,
@@ -186,10 +229,8 @@ fn processPath(
 }
 
 /// Executes the runner command for all configured paths.
-pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
+pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
-
-    const allocator = std.heap.page_allocator;
 
     // Set up file logger if --log is enabled
     var logger_storage: ?Logger = null;
@@ -216,7 +257,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
     lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
 
     for (cfg.paths.items) |path| {
-        processPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
+        var result = scanPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
             switch (err) {
                 error.NotADirectory => {
                     lg.printError("Path '{s}' is not a directory", .{path});
@@ -226,8 +267,14 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl) !void {
                 else => {
                     lg.printError("Unexpected error: {s}", .{@errorName(err)});
                     if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
+                    continue;
                 },
             }
+        };
+        defer result.deinit(allocator);
+        writePathReports(&result, cfg, &pool, allocator, logger) catch |err| {
+            lg.printError("Unexpected error: {s}", .{@errorName(err)});
+            if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
         };
     }
 
