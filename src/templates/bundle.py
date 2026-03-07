@@ -144,7 +144,25 @@ def run_esbuild() -> None:
         check=True,
     )
 
+    print("bundle.py: building dist/combined.js...")
+    subprocess.run(
+        [
+            _esbuild_bin(),
+            str(TEMPLATES_DIR / "src" / "combined.ts"),
+            *esbuild_common,
+            f"--outfile={dist_dir / 'combined.js'}",
+        ],
+        cwd=TEMPLATES_DIR,
+        check=True,
+    )
+
 
 if __name__ == "__main__":
     run_esbuild()
     bundle()
+    bundle(
+        template_path=TEMPLATES_DIR / "src" / "combined.html",
+        src_dir=TEMPLATES_DIR / "src",
+        output_path=TEMPLATES_DIR / "combined-dashboard.html",
+        templates_dir=TEMPLATES_DIR,
+    )
