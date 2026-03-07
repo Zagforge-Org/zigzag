@@ -18,6 +18,7 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
             .binary_entries = walker_ctx.binary_entries,
             .entries_mutex = walker_ctx.entries_mutex,
             .allocator = walker_ctx.allocator,
+            .thread_allocator = walker_ctx.allocator, // placeholder; Task 2.3 wires real arena
         };
 
         try walker_ctx.pool.spawnWg(walker_ctx.wg, processFileJob, .{job});

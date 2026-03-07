@@ -47,6 +47,13 @@ pub fn writeAllReports(
             report.writeHtmlReport(&report_data, hp, state.root_path, cfg, allocator) catch |err| {
                 lg.printError("Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
             };
+            const content_path = report.deriveContentPath(allocator, hp) catch null;
+            if (content_path) |cp| {
+                defer allocator.free(cp);
+                report.writeContentJson(&state.file_entries, cp, allocator) catch |err| {
+                    lg.printError("content.json write failed: {s}", .{@errorName(err)});
+                };
+            }
             if (sse_server) |srv| {
                 const payload = report.buildSsePayload(&report_data, state.root_path, cfg, allocator) catch null;
                 if (payload) |p| {

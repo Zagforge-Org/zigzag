@@ -3,6 +3,7 @@ const computeOutputSegment = @import("paths.zig").computeOutputSegment;
 const deriveJsonPath = @import("paths.zig").deriveJsonPath;
 const deriveHtmlPath = @import("paths.zig").deriveHtmlPath;
 const deriveLlmPath = @import("paths.zig").deriveLlmPath;
+const deriveContentPath = @import("paths.zig").deriveContentPath;
 const resolveOutputPath = @import("paths.zig").resolveOutputPath;
 
 test "computeOutputSegment strips leading ./" {
@@ -75,6 +76,20 @@ test "deriveLlmPath appends .llm.md when no .md extension" {
     const result = try deriveLlmPath(std.testing.allocator, "zigzag-reports/src/report");
     defer std.testing.allocator.free(result);
     try std.testing.expectEqualStrings("zigzag-reports/src/report.llm.md", result);
+}
+
+test "deriveContentPath replaces .html with -content.json" {
+    const alloc = std.testing.allocator;
+    const result = try deriveContentPath(alloc, "zigzag-reports/report.html");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/report-content.json", result);
+}
+
+test "deriveContentPath handles no .html extension" {
+    const alloc = std.testing.allocator;
+    const result = try deriveContentPath(alloc, "zigzag-reports/report");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/report-content.json", result);
 }
 
 test "resolveOutputPath returns path under configured output_dir" {

@@ -5,6 +5,7 @@ const Config = @import("../../../config/config.zig").Config;
 const ReportData = @import("../aggregator.zig").ReportData;
 
 const writeHtmlReport = @import("./html.zig").writeHtmlReport;
+const writeContentJson = @import("./html.zig").writeContentJson;
 
 test "writeHtmlReport creates file with expected HTML structure" {
     const alloc = std.testing.allocator;
@@ -187,4 +188,116 @@ test "writeHtmlReport sanitizes </script> in content" {
 
     // The raw </script> from file content must be escaped as <\/script>
     try std.testing.expect(std.mem.indexOf(u8, content, "<\\/script>") != null);
+}
+
+test "writeContentJson produces valid JSON object with single entry" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
+    defer alloc.free(content_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    const content1: []u8 = try alloc.dupe(u8, "hello world");
+    defer alloc.free(content1);
+    try file_entries.put("src/main.zig", .{
+        .path = "src/main.zig", .content = content1,
+        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+    });
+
+    try writeContentJson(&file_entries, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    try std.testing.expect(std.mem.indexOf(u8, written, "src/main.zig") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "hello world") != null);
+    try std.testing.expectEqual(written[0], '{');
+    try std.testing.expectEqual(written[written.len - 1], '}');
+}
+
+test "writeContentJson produces valid parseable JSON with multiple entries" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
+    defer alloc.free(content_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    const c1: []u8 = try alloc.dupe(u8, "aaa");
+    const c2: []u8 = try alloc.dupe(u8, "bbb");
+    defer alloc.free(c1);
+    defer alloc.free(c2);
+    try file_entries.put("a.zig", .{ .path = "a.zig", .content = c1, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
+    try file_entries.put("b.zig", .{ .path = "b.zig", .content = c2, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    try writeContentJson(&file_entries, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, written, .{});
+    defer parsed.deinit();
+    try std.testing.expectEqual(std.json.Value.object, std.meta.activeTag(parsed.value));
+    try std.testing.expectEqual(@as(usize, 2), parsed.value.object.count());
+}
+
+test "writeContentJson escapes special characters in content" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
+    defer alloc.free(content_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    // Content with characters that need JSON escaping
+    const special_content: []u8 = try alloc.dupe(u8, "line1\nline2\t\"quoted\"\\backslash");
+    defer alloc.free(special_content);
+    try file_entries.put("test.txt", .{ .path = "test.txt", .content = special_content, .size = 30, .mtime = 0, .extension = ".txt", .line_count = 2 });
+
+    try writeContentJson(&file_entries, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    // Must parse as valid JSON
+    const parsed = try std.json.parseFromSlice(std.json.Value, alloc, written, .{});
+    defer parsed.deinit();
+    const val = parsed.value.object.get("test.txt") orelse return error.MissingKey;
+    try std.testing.expectEqualStrings("line1\nline2\t\"quoted\"\\backslash", val.string);
+}
+
+test "writeContentJson produces empty object for empty map" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(out_path);
+    const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
+    defer alloc.free(content_path);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    try writeContentJson(&file_entries, content_path, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    defer alloc.free(written);
+    try std.testing.expectEqualStrings("{}", written);
 }

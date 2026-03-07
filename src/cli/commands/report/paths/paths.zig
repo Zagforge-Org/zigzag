@@ -47,6 +47,17 @@ pub fn deriveHtmlPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
     return std.fmt.allocPrint(allocator, "{s}.html", .{md_path});
 }
 
+/// Derive the content JSON sidecar path from an HTML report path.
+/// "report.html"  → "report-content.json"
+/// "report"       → "report-content.json"
+pub fn deriveContentPath(allocator: std.mem.Allocator, html_path: []const u8) ![]u8 {
+    if (std.mem.endsWith(u8, html_path, ".html")) {
+        const base = html_path[0 .. html_path.len - ".html".len];
+        return std.fmt.allocPrint(allocator, "{s}-content.json", .{base});
+    }
+    return std.fmt.allocPrint(allocator, "{s}-content.json", .{html_path});
+}
+
 /// Derives the LLM report path by replacing the .md extension with .llm.md.
 pub fn deriveLlmPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
     if (std.mem.endsWith(u8, md_path, ".md")) {

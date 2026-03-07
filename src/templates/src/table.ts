@@ -1,6 +1,6 @@
 import { F } from "./state";
 import { el, esc, fmt, fmtNum } from "./utils";
-import { contentCache, fetchContent } from "./content";
+import { isContentCached, fetchContent } from "./content";
 import { openViewer } from "./viewer";
 import type { ReportFile } from "./types";
 
@@ -84,7 +84,7 @@ export function buildTableDOM(): HTMLElement {
         const idx = parseInt(span.dataset.idx!, 10);
         if (isNaN(idx)) return;
         const f = tableFiles[idx];
-        if (f && !Object.prototype.hasOwnProperty.call(contentCache, f.path)) {
+        if (f && !isContentCached(f.path)) {
             fetchContent(f.path, function () {});
         }
     });

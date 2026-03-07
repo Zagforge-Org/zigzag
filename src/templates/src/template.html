@@ -8,6 +8,17 @@
         <!-- @inject: prism-theme.css -->
     </head>
     <body>
+        <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
+  background:#1a1a2e;color:#e2e8f0;padding:1.25rem 2rem;font-family:monospace;font-size:14px;
+  border-bottom:2px solid #f6ad55;line-height:1.8">
+            <strong style="color:#f6ad55">&#9888; Source files require a local server to load.</strong><br>
+            Run: <code style="background:#2d3748;padding:2px 8px;border-radius:4px">zigzag serve</code>
+            then open
+            <code style="background:#2d3748;padding:2px 8px;border-radius:4px">http://localhost:8787</code>
+            <button onclick="document.getElementById('offline-banner').style.display='none'"
+                style="float:right;background:none;border:1px solid #718096;color:#a0aec0;
+    padding:4px 12px;cursor:pointer;border-radius:4px;font-family:monospace">&#x2715; Dismiss</button>
+        </div>
         <header>
             <h1 id="report-title">Code Report</h1>
             <p id="report-meta"></p>
@@ -43,7 +54,6 @@
         <!-- @inject-text: dist/highlight.worker.js as prism-src -->
         <!-- Report data (injected by ZigZag at report-generation time) -->
         <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
-        <script type="application/json" id="fc">__ZIGZAG_CONTENT__</script>
         <!-- Parse report data before app logic runs -->
         <script>window.REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
         <!-- App logic -->

@@ -1,5 +1,5 @@
 import { M, setReport } from "./state";
-import { initContentWorker } from "./content";
+import { setContentCache, resetContent } from "./content";
 import { renderHeader, renderCards } from "./header";
 import { renderLangChart, renderSizeChart } from "./charts";
 import { renderTable } from "./table";
@@ -12,16 +12,10 @@ function extractReport(html: string): Report | null {
     try { return JSON.parse(m[1]) as Report; } catch { return null; }
 }
 
-function extractContent(html: string): string | null {
-    const m = /id="fc"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
-    return m ? m[1] : null;
-}
-
-export function softUpdate(newR: Report, newContentText: string | null): void {
+export function softUpdate(newR: Report, newContent: Record<string, string> | null): void {
     setReport(newR);
-    if (newContentText) {
-        document.getElementById("fc")!.textContent = newContentText;
-        initContentWorker(newContentText);
+    if (newContent !== null) {
+        setContentCache(newContent);
     }
     renderHeader();
     renderCards();
@@ -43,18 +37,27 @@ function startPolling(): void {
             .then(function (r) { return r.ok ? r.text() : Promise.resolve<string | null>(null); })
             .then(function (ts) {
                 if (!ts || ts.trim() === M.generated_at) return;
-                return fetch(location.href, { cache: "no-store" })
-                    .then((r) => r.text())
-                    .then(function (html) {
-                        const newR = extractReport(html);
-                        const newContent = extractContent(html);
-                        if (newR) softUpdate(newR, newContent);
-                    });
+                // Fetch fresh report data and content sidecar in parallel
+                return Promise.all([
+                    fetch(location.href, { cache: "no-store" }).then((r) => r.text()),
+                    fetch(resolveContentUrl(), { cache: "no-store" })
+                        .then((r) => r.ok ? r.json() as Promise<Record<string, string>> : Promise.resolve(null))
+                        .catch(() => null),
+                ]).then(function ([html, content]) {
+                    const newR = extractReport(html);
+                    if (newR) softUpdate(newR, content);
+                });
             })
             .catch(function () {})
             .then(function () { setTimeout(poll, 2000); });
     }
     setTimeout(poll, 2000);
+}
+
+function resolveContentUrl(): string {
+    const pageUrl = location.href.replace(/[?#].*$/, "");
+    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
+    return dir + "report-content.json";
 }
 
 export function startWatchMode(): void {
@@ -84,7 +87,7 @@ export function startWatchMode(): void {
     es.addEventListener("report", function (e: MessageEvent<string>) {
         received = true;
         try {
-            const msg = JSON.parse(e.data) as { report: Report; content: string | null };
+            const msg = JSON.parse(e.data) as { report: Report; content: Record<string, string> | null };
             if (msg.report) softUpdate(msg.report, msg.content ?? null);
         } catch { /* ignore malformed messages */ }
     });
@@ -92,6 +95,7 @@ export function startWatchMode(): void {
     // Named event: server requests a full page reload (e.g. template changed).
     es.addEventListener("reload", function () {
         received = true;
+        resetContent();
         location.reload();
     });
 

@@ -61,6 +61,9 @@ fn processPath(
     if (cfg.html_output) {
         const html_ignore = try report.deriveHtmlPath(allocator, md_path);
         try file_ctx.ignore_list.append(allocator, html_ignore);
+        // Also ignore the content sidecar so it doesn't appear as source
+        const content_ignore = try report.deriveContentPath(allocator, html_ignore);
+        try file_ctx.ignore_list.append(allocator, content_ignore);
     }
 
     if (cfg.llm_report) {
@@ -91,8 +94,8 @@ fn processPath(
     defer {
         var it = binary_entries.iterator();
         while (it.next()) |entry| {
-            std.heap.page_allocator.free(entry.value_ptr.path);
-            std.heap.page_allocator.free(entry.value_ptr.extension);
+            allocator.free(entry.value_ptr.path);
+            allocator.free(entry.value_ptr.extension);
         }
         binary_entries.deinit();
     }
@@ -127,6 +130,18 @@ fn processPath(
                 entry.value_ptr.line_count,
             });
         }
+    }
+
+    // Write source content to sidecar file (O(max_file_size) peak RAM).
+    // Content.json must be complete before HTML report generation (which no longer embeds content).
+    if (cfg.html_output) {
+        const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
+        defer allocator.free(html_path_for_content);
+        const content_path = try report.deriveContentPath(allocator, html_path_for_content);
+        defer allocator.free(content_path);
+        try report.writeContentJson(&file_entries, content_path, allocator);
+        lg.printSuccess("Content JSON:  {s}", .{content_path});
+        if (logger) |l| l.log("Content JSON written: {s}", .{content_path});
     }
 
     // Build ReportData once; all writers share the pre-aggregated result.

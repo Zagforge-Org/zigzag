@@ -15,14 +15,9 @@ pub fn writeHtmlReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    // --- Split template on two markers ---
-    // __ZIGZAG_DATA__    → report JSON (no file content) parsed eagerly
-    // __ZIGZAG_CONTENT__ → content map {"path": "source"} loaded lazily
+    // --- Split template on __ZIGZAG_DATA__ marker ---
     const marker = "__ZIGZAG_DATA__";
-    const content_marker = "__ZIGZAG_CONTENT__";
     const split_pos = std.mem.indexOf(u8, dashboard_template, marker) orelse
-        return error.MissingTemplateMarker;
-    const content_split_pos = std.mem.indexOf(u8, dashboard_template, content_marker) orelse
         return error.MissingTemplateMarker;
 
     // --- Build report JSON (metadata + stats, no content) ---
@@ -115,35 +110,17 @@ pub fn writeHtmlReport(
 
     try ws.endObject();
 
-    // --- Build the content map {"path": "source", ...} ---
-    var content_aw: std.io.Writer.Allocating = .init(allocator);
-    defer content_aw.deinit();
-
-    var cws: std.json.Stringify = .{ .writer = &content_aw.writer, .options = .{} };
-    try cws.beginObject();
-    for (data.sorted_files.items) |e| {
-        try cws.objectField(e.path);
-        try cws.write(e.content);
-    }
-    try cws.endObject();
-
-    // Sanitize both payloads: </script> → <\/script> (valid JSON, HTML-safe)
+    // Sanitize report payload: </script> → <\/script> (valid JSON, HTML-safe)
     const json_raw = json_aw.written();
     const json_safe = try std.mem.replaceOwned(u8, allocator, json_raw, "</script>", "<\\/script>");
     defer allocator.free(json_safe);
 
-    const content_raw = content_aw.written();
-    const content_safe = try std.mem.replaceOwned(u8, allocator, content_raw, "</script>", "<\\/script>");
-    defer allocator.free(content_safe);
-
-    // Assemble: template_prefix + report_json + middle + content_json + suffix
+    // Assemble: template_prefix + report_json + rest_of_template
     var aw: std.io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     try aw.writer.writeAll(dashboard_template[0..split_pos]);
     try aw.writer.writeAll(json_safe);
-    try aw.writer.writeAll(dashboard_template[split_pos + marker.len .. content_split_pos]);
-    try aw.writer.writeAll(content_safe);
-    try aw.writer.writeAll(dashboard_template[content_split_pos + content_marker.len ..]);
+    try aw.writer.writeAll(dashboard_template[split_pos + marker.len ..]);
 
     // Write to disk
     var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
@@ -160,4 +137,42 @@ pub fn writeHtmlReport(
         defer stamp_file.close();
         try stamp_file.writeAll(data.generated_at_str);
     }
+}
+
+/// Stream source content to a sidecar JSON file: {"path":"content",...}.
+/// Iterates file_entries and JSON-encodes each key+value individually using
+/// std.json.Stringify — O(max_file_size) peak RAM.
+/// Caller must ensure the output directory exists.
+pub fn writeContentJson(
+    file_entries: *const std.StringHashMap(JobEntry),
+    content_path: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
+    defer file.close();
+
+    try file.writeAll("{");
+    var first = true;
+    var it = file_entries.iterator();
+    while (it.next()) |kv| {
+        if (!first) try file.writeAll(",");
+        first = false;
+
+        // Encode key as JSON string using a small allocating writer
+        var key_aw: std.io.Writer.Allocating = .init(allocator);
+        defer key_aw.deinit();
+        var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
+        try kws.write(kv.key_ptr.*);
+        try file.writeAll(key_aw.written());
+
+        try file.writeAll(":");
+
+        // Encode value as JSON string using a small allocating writer
+        var val_aw: std.io.Writer.Allocating = .init(allocator);
+        defer val_aw.deinit();
+        var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
+        try vws.write(kv.value_ptr.content);
+        try file.writeAll(val_aw.written());
+    }
+    try file.writeAll("}");
 }

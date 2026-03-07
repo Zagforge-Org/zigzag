@@ -1,61 +1,97 @@
-/** Off-thread JSON.parse for file content, with in-memory cache. */
+/** Lazily fetch report-content.json on first file open, with in-memory cache. */
 
-const WORKER_SRC = [
-    "var m=null,q=[];",
-    "self.onmessage=function(e){",
-    "  var d=e.data;",
-    '  if(d.cmd==="init"){',
-    "    try{m=JSON.parse(d.json);}catch(x){m={};}",
-    '    q.forEach(function(r){self.postMessage({id:r.id,c:m[r.k]||""});});',
-    "    q=[];",
-    '  }else if(d.cmd==="get"){',
-    '    if(m!==null){self.postMessage({id:d.id,c:m[d.k]||""});}',
-    "    else{q.push({id:d.id,k:d.k});}",
-    "  }",
-    "};",
-].join("\n");
+// null = not yet attempted, false = failed, object = loaded
+let _cache: Record<string, string> | null = null;
+let _failed = false;
 
-export let contentCache: Record<string, string> = {};
-let contentReqId = 0;
-const contentReqMap: Record<number, { key: string; cb: (s: string) => void }> = {};
-let contentWorker: Worker | null = null;
+// Pending callbacks waiting for the first fetch to complete
+const _pending: Array<{ path: string; cb: (s: string) => void }> = [];
+let _fetching = false;
 
-function createWorker(): Worker {
-    const blob = new Blob([WORKER_SRC], { type: "text/javascript" });
-    const w = new Worker(URL.createObjectURL(blob));
-    w.onmessage = function (e: MessageEvent<{ id: number; c: string }>) {
-        const req = contentReqMap[e.data.id];
-        if (!req) return;
-        delete contentReqMap[e.data.id];
-        contentCache[req.key] = e.data.c;
-        req.cb(e.data.c);
-    };
-    return w;
+function showOfflineBanner(): void {
+    const banner = document.getElementById("offline-banner");
+    if (banner) banner.style.display = "block";
+}
+
+function drainPending(): void {
+    while (_pending.length > 0) {
+        const req = _pending.shift()!;
+        if (_failed || _cache === null) {
+            req.cb("");
+        } else {
+            req.cb(_cache[req.path] ?? "");
+        }
+    }
+}
+
+function resolveContentUrl(): string {
+    const pageUrl = location.href.replace(/[?#].*$/, "");
+    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
+    return dir + "report-content.json";
+}
+
+function doFetch(): void {
+    _fetching = true;
+    fetch(resolveContentUrl(), { cache: "no-store" })
+        .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json() as Promise<Record<string, string>>;
+        })
+        .then(function (data) {
+            _cache = data;
+            _fetching = false;
+            drainPending();
+        })
+        .catch(function (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.warn("ZigZag: failed to load report-content.json:", msg);
+            _failed = true;
+            showOfflineBanner();
+            _fetching = false;
+            drainPending();
+        });
 }
 
 export function fetchContent(path: string, cb: (s: string) => void): void {
-    if (Object.prototype.hasOwnProperty.call(contentCache, path)) {
-        cb(contentCache[path]);
+    // Already have data
+    if (_cache !== null) {
+        cb(_cache[path] ?? "");
         return;
     }
-    if (!contentWorker) { cb(""); return; }
-    const id = contentReqId++;
-    contentReqMap[id] = { key: path, cb };
-    contentWorker.postMessage({ cmd: "get", id, k: path });
+    // Previously failed
+    if (_failed) {
+        cb("");
+        return;
+    }
+    // file:// — fetch is blocked, show guidance immediately
+    if (location.protocol === "file:") {
+        showOfflineBanner();
+        _failed = true;
+        cb("");
+        return;
+    }
+    // Enqueue and kick off fetch if not already in flight
+    _pending.push({ path, cb });
+    if (!_fetching) doFetch();
 }
 
-export function initContentWorker(jsonText: string): void {
-    if (contentWorker) {
-        try { contentWorker.terminate(); } catch { /* ignore */ }
-    }
-    contentCache = {};
-    Object.keys(contentReqMap).forEach((k) => delete contentReqMap[+k]);
-    try {
-        contentWorker = createWorker();
-        contentWorker.postMessage({ cmd: "init", json: jsonText });
-    } catch {
-        contentWorker = null;
-        try { contentCache = JSON.parse(jsonText) as Record<string, string>; }
-        catch { contentCache = {}; }
-    }
+/** Returns true if content for the given path is already in the cache. */
+export function isContentCached(path: string): boolean {
+    return _cache !== null && Object.prototype.hasOwnProperty.call(_cache, path);
+}
+
+/** Replace cached content map (used by watch-mode updates). */
+export function setContentCache(data: Record<string, string>): void {
+    _cache = data;
+    _failed = false;
+    // Drain any callbacks that were waiting before the watch update arrived
+    drainPending();
+}
+
+/** Reset all content state (used when watch mode receives a full reload). */
+export function resetContent(): void {
+    _cache = null;
+    _failed = false;
+    _fetching = false;
+    _pending.length = 0;
 }
