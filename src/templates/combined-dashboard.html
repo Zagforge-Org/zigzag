@@ -778,6 +778,31 @@ td.lc {
 }
 .banner-dismiss:hover { border-color: var(--border-hover); }
 
+/* ── Per-path section search ────────────────────────────────────────────── */
+.section-search {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.375rem 0.625rem;
+    background: var(--bg-inset);
+    color: var(--text);
+    font-size: 0.8rem;
+    outline: none;
+    margin-bottom: 0.5rem;
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+}
+.section-search:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.12);
+    background: var(--bg-card);
+}
+.section-search::placeholder { color: var(--text-subtle); }
+
+/* ── Combined-dashboard per-section virtual table ───────────────────────── */
+.path-section .table-viewport {
+    max-height: 600px;
+}
+
 </style>
         <style>
 /* Prism.js Tomorrow Night theme — source: https://prismjs.com/themes/ */
@@ -6113,9 +6138,33 @@ prismjs/prism.js:
 "use strict";
 (() => {
   // src/content.ts
-  var _cache = null;
+  var _fileCache = {};
+  var _inflight = {};
+  var _callbacks = {};
+  var _prefix = null;
   var _failed = false;
-  var _overrideUrl = null;
+  function fnv1a32(s) {
+    const bytes = new TextEncoder().encode(s);
+    let h = 2166136261 >>> 0;
+    for (const b of bytes) {
+      h ^= b;
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+  }
+  function resolveFileUrl(path) {
+    const hash = fnv1a32(path);
+    if (_prefix !== null) {
+      return _prefix + "/" + hash;
+    }
+    const pageUrl = location.href.replace(/[?#].*$/, "");
+    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
+    return dir + "report-content/" + hash;
+  }
+  function showOfflineBanner() {
+    const banner = document.getElementById("offline-banner");
+    if (banner) banner.style.display = "block";
+  }
   if (location.protocol === "file:") {
     _failed = true;
     document.addEventListener("DOMContentLoaded", function() {
@@ -6127,52 +6176,12 @@ prismjs/prism.js:
       if (banner) banner.style.display = "block";
     }
   }
-  var _pending = [];
-  var _fetching = false;
-  function showOfflineBanner() {
-    const banner = document.getElementById("offline-banner");
-    if (banner) banner.style.display = "block";
-  }
-  function drainPending() {
-    while (_pending.length > 0) {
-      const req = _pending.shift();
-      if (_failed || _cache === null) {
-        req.cb("");
-      } else {
-        req.cb(_cache[req.path] ?? "");
-      }
-    }
-  }
-  function resolveContentUrl() {
-    if (_overrideUrl !== null) return _overrideUrl;
-    const pageUrl = location.href.replace(/[?#].*$/, "");
-    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
-    return dir + "report-content.json";
-  }
-  function doFetch() {
-    _fetching = true;
-    fetch(resolveContentUrl(), { cache: "no-store" }).then(function(r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.json();
-    }).then(function(data) {
-      _cache = data;
-      _fetching = false;
-      drainPending();
-    }).catch(function(e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.warn("ZigZag: failed to load report-content.json:", msg);
-      _failed = true;
-      showOfflineBanner();
-      _fetching = false;
-      drainPending();
-    });
-  }
-  function setContentUrl(url) {
-    _overrideUrl = url;
+  function setContentPrefix(prefix) {
+    _prefix = prefix;
   }
   function fetchContent(path, cb) {
-    if (_cache !== null) {
-      cb(_cache[path] ?? "");
+    if (path in _fileCache) {
+      cb(_fileCache[path]);
       return;
     }
     if (_failed) {
@@ -6185,13 +6194,35 @@ prismjs/prism.js:
       cb("");
       return;
     }
-    _pending.push({ path, cb });
-    if (!_fetching) doFetch();
+    if (!(path in _callbacks)) _callbacks[path] = [];
+    _callbacks[path].push(cb);
+    if (_inflight[path]) return;
+    _inflight[path] = true;
+    fetch(resolveFileUrl(path), { cache: "default" }).then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function(text) {
+      _fileCache[path] = text;
+      delete _inflight[path];
+      const cbs = _callbacks[path] ?? [];
+      delete _callbacks[path];
+      cbs.forEach(function(f) {
+        f(text);
+      });
+    }).catch(function(e) {
+      console.warn("ZigZag: content fetch failed for", path, ":", e instanceof Error ? e.message : e);
+      _fileCache[path] = "";
+      delete _inflight[path];
+      const cbs = _callbacks[path] ?? [];
+      delete _callbacks[path];
+      cbs.forEach(function(f) {
+        f("");
+      });
+      showOfflineBanner();
+    });
   }
   function updateContentEntry(path, content) {
-    if (_cache === null) _cache = {};
-    _cache[path] = content;
-    _failed = false;
+    _fileCache[path] = content;
   }
 
   // src/constants.ts
@@ -6562,7 +6593,7 @@ prismjs/prism.js:
   }
 
   // src/combined.ts
-  setContentUrl("combined-content.json");
+  setContentPrefix("combined-content");
   var R = window.COMBINED_REPORT;
   var M = R.meta;
   var S = R.summary;
@@ -6647,6 +6678,7 @@ prismjs/prism.js:
                 <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
                 <tbody>${langRows}</tbody>
             </table>` : ""}
+            <input class="section-search" type="text" placeholder="Filter files\u2026" data-root="${esc(p.root_path)}">
             <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
             <table class="file-table">
                 <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
@@ -6668,12 +6700,26 @@ prismjs/prism.js:
       }
     });
   }
+  function attachSectionSearch(section, pathData) {
+    const input = section.querySelector(".section-search");
+    if (!input) return;
+    const tbody = section.querySelector(".file-tbody");
+    const countEl2 = section.querySelector(".path-file-count");
+    input.addEventListener("input", function() {
+      const q = input.value.trim().toLowerCase();
+      const visible = q ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q)) : pathData.files;
+      tbody.innerHTML = visible.map(renderFileRow).join("");
+      attachRowListeners(tbody);
+      countEl2.textContent = visible.length + " / " + pathData.files.length + " files";
+    });
+  }
   function renderPathSections() {
     const container = document.getElementById("path-sections");
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
-    container.querySelectorAll(".path-section").forEach((section) => {
+    container.querySelectorAll(".path-section").forEach((section, i) => {
       attachSectionToggle(section);
       attachRowListeners(section.querySelector(".file-tbody"));
+      attachSectionSearch(section, R.paths[i]);
     });
   }
   document.getElementById("report-title").textContent = "Code Report: " + M.path_count + " paths";

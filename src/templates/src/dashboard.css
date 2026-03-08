@@ -769,3 +769,28 @@ td.lc {
     transition: border-color 120ms;
 }
 .banner-dismiss:hover { border-color: var(--border-hover); }
+
+/* ── Per-path section search ────────────────────────────────────────────── */
+.section-search {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.375rem 0.625rem;
+    background: var(--bg-inset);
+    color: var(--text);
+    font-size: 0.8rem;
+    outline: none;
+    margin-bottom: 0.5rem;
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+}
+.section-search:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.12);
+    background: var(--bg-card);
+}
+.section-search::placeholder { color: var(--text-subtle); }
+
+/* ── Combined-dashboard per-section virtual table ───────────────────────── */
+.path-section .table-viewport {
+    max-height: 600px;
+}
