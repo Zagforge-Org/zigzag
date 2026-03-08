@@ -120,8 +120,8 @@ function attachSectionToggle(section: HTMLElement, pathData: CombinedPathReport)
         if (!section.classList.contains("expanded")) return;
         if (sectionTables.has(rootPath)) return;
         const vtable = new VirtualTable(openCombinedViewer);
-        vtable.setFiles(currentFilteredFiles(pathData));
         mount.appendChild(vtable.getElement());
+        vtable.setFiles(currentFilteredFiles(pathData));
         sectionTables.set(rootPath, vtable);
     }
 
