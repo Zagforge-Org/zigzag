@@ -1,7 +1,5 @@
-import { fetchContent, updateContentEntry, setContentUrl } from "./content";
-
-// Combined sidecar uses "combined-content.json" at the same URL origin.
-setContentUrl("combined-content.json");
+import { fetchContent, updateContentEntry, setContentPrefix } from "./content";
+setContentPrefix("combined-content");
 import { openViewer } from "./viewer";
 import { esc, fmt } from "./utils";
 import type { CombinedFile, CombinedPathReport } from "./combined-types";
@@ -61,14 +59,6 @@ function filterAllSections(q: string): void {
 
 // ── File rows ─────────────────────────────────────────────────────────────────
 
-function renderFileRow(f: CombinedFile): string {
-    return `<tr class="file-row" data-path="${esc(f.path)}" data-root="${esc(f.root_path)}">
-        <td>${esc(f.path)}</td>
-        <td>${esc(f.language)}</td>
-        <td>${f.lines.toLocaleString()}</td>
-        <td>${fmt(f.size)}</td>
-    </tr>`;
-}
 
 function attachRowListeners(tbody: HTMLElement): void {
     tbody.querySelectorAll<HTMLElement>(".file-row").forEach((row) => {
@@ -103,8 +93,6 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
         .map((l) => `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmt(l.size_bytes)}</td></tr>`)
         .join("");
 
-    const fileRows = p.files.map((f) => renderFileRow(f)).join("");
-
     return `
 <div class="path-section${expanded ? " expanded" : ""}" data-root-path="${esc(p.root_path)}">
     <div class="path-header" role="button" tabindex="0">
@@ -125,11 +113,9 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
                 <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
                 <tbody>${langRows}</tbody>
             </table>` : ""}
+            <input class="section-search" type="text" placeholder="Filter files\u2026" data-root="${esc(p.root_path)}">
             <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
-            <table class="file-table">
-                <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
-                <tbody class="file-tbody">${fileRows}</tbody>
-            </table>
+            <div class="vtable-mount"></div>
         </div>
     </div>
 </div>`;
@@ -143,14 +129,31 @@ function attachSectionToggle(section: HTMLElement): void {
     });
 }
 
+function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport): void {
+    const input = section.querySelector<HTMLInputElement>(".section-search");
+    if (!input) return;
+    const tbody = section.querySelector<HTMLElement>(".file-tbody")!;
+    const countEl = section.querySelector<HTMLElement>(".path-file-count")!;
+    input.addEventListener("input", function () {
+        const q = input.value.trim().toLowerCase();
+        const visible = q
+            ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q))
+            : pathData.files;
+        tbody.innerHTML = visible.map(renderFileRow).join("");
+        attachRowListeners(tbody);
+        countEl.textContent = visible.length + " / " + pathData.files.length + " files";
+    });
+}
+
 // ── Render all path sections ──────────────────────────────────────────────────
 
 function renderPathSections(): void {
     const container = document.getElementById("path-sections")!;
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
-    container.querySelectorAll<HTMLElement>(".path-section").forEach((section) => {
+    container.querySelectorAll<HTMLElement>(".path-section").forEach((section, i) => {
         attachSectionToggle(section);
         attachRowListeners(section.querySelector<HTMLElement>(".file-tbody")!);
+        attachSectionSearch(section, R.paths[i]);
     });
 }
 

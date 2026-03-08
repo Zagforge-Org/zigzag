@@ -6628,14 +6628,6 @@ prismjs/prism.js:
       attachRowListeners(tbody);
     });
   }
-  function renderFileRow(f) {
-    return `<tr class="file-row" data-path="${esc(f.path)}" data-root="${esc(f.root_path)}">
-        <td>${esc(f.path)}</td>
-        <td>${esc(f.language)}</td>
-        <td>${f.lines.toLocaleString()}</td>
-        <td>${fmt(f.size)}</td>
-    </tr>`;
-  }
   function attachRowListeners(tbody) {
     tbody.querySelectorAll(".file-row").forEach((row) => {
       row.addEventListener("click", () => {
@@ -6657,7 +6649,6 @@ prismjs/prism.js:
   function renderPathSection(p, index) {
     const expanded = index === 0;
     const langRows = p.summary.languages.slice(0, 5).map((l) => `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmt(l.size_bytes)}</td></tr>`).join("");
-    const fileRows = p.files.map((f) => renderFileRow(f)).join("");
     return `
 <div class="path-section${expanded ? " expanded" : ""}" data-root-path="${esc(p.root_path)}">
     <div class="path-header" role="button" tabindex="0">
@@ -6680,10 +6671,7 @@ prismjs/prism.js:
             </table>` : ""}
             <input class="section-search" type="text" placeholder="Filter files\u2026" data-root="${esc(p.root_path)}">
             <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
-            <table class="file-table">
-                <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
-                <tbody class="file-tbody">${fileRows}</tbody>
-            </table>
+            <div class="vtable-mount"></div>
         </div>
     </div>
 </div>`;
