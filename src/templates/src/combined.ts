@@ -4,10 +4,13 @@ import { openViewer } from "./viewer";
 import { esc, fmt } from "./utils";
 import type { CombinedFile, CombinedPathReport } from "./combined-types";
 import { initTheme, toggleTheme } from "./theme";
+import { VirtualTable } from "./virtual-table";
 
 const R = window.COMBINED_REPORT;
 const M = R.meta;
 const S = R.summary;
+
+const sectionTables = new Map<string, VirtualTable>();
 
 // Theme must run before any rendering
 initTheme();
@@ -42,6 +45,11 @@ function matchesSearch(f: CombinedFile, q: string): boolean {
     );
 }
 
+function currentFilteredFiles(pathData: CombinedPathReport): CombinedFile[] {
+    const q = searchEl ? searchEl.value.trim().toLowerCase() : "";
+    return q ? pathData.files.filter((f) => matchesSearch(f, q)) : pathData.files;
+}
+
 function filterAllSections(q: string): void {
     document.querySelectorAll<HTMLElement>(".path-section").forEach((section) => {
         const rootPath = section.dataset.rootPath!;
@@ -49,6 +57,8 @@ function filterAllSections(q: string): void {
         const count = section.querySelector<HTMLElement>(".path-file-count")!;
         const visible = pathData.files.filter((f) => matchesSearch(f, q));
         count.textContent = visible.length + " / " + pathData.files.length + " files";
+        const vtable = sectionTables.get(rootPath);
+        if (vtable) vtable.setFiles(visible);
     });
 }
 
@@ -101,12 +111,32 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
 </div>`;
 }
 
-function attachSectionToggle(section: HTMLElement): void {
+function attachSectionToggle(section: HTMLElement, pathData: CombinedPathReport): void {
     const header = section.querySelector<HTMLElement>(".path-header")!;
-    header.addEventListener("click", () => { section.classList.toggle("expanded"); });
+    const mount = section.querySelector<HTMLElement>(".vtable-mount")!;
+    const rootPath = pathData.root_path;
+
+    function maybeMount(): void {
+        if (!section.classList.contains("expanded")) return;
+        if (sectionTables.has(rootPath)) return;
+        const vtable = new VirtualTable(openCombinedViewer);
+        vtable.setFiles(currentFilteredFiles(pathData));
+        mount.appendChild(vtable.getElement());
+        sectionTables.set(rootPath, vtable);
+    }
+
+    header.addEventListener("click", () => {
+        section.classList.toggle("expanded");
+        maybeMount();
+    });
     header.addEventListener("keydown", (e: KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); header.click(); }
     });
+
+    // First section starts expanded — mount immediately
+    if (section.classList.contains("expanded")) {
+        maybeMount();
+    }
 }
 
 function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport): void {
@@ -118,6 +148,8 @@ function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport)
         const visible = q
             ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q))
             : pathData.files;
+        const vtable = sectionTables.get(pathData.root_path);
+        if (vtable) vtable.setFiles(visible);
         countEl.textContent = visible.length + " / " + pathData.files.length + " files";
     });
 }
@@ -128,7 +160,7 @@ function renderPathSections(): void {
     const container = document.getElementById("path-sections")!;
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
     container.querySelectorAll<HTMLElement>(".path-section").forEach((section, i) => {
-        attachSectionToggle(section);
+        attachSectionToggle(section, R.paths[i]);
         attachSectionSearch(section, R.paths[i]);
     });
 }

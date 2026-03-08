@@ -6138,8 +6138,33 @@ prismjs/prism.js:
 "use strict";
 (() => {
   // src/content.ts
+  var _fileCache = {};
+  var _inflight = {};
+  var _callbacks = {};
   var _prefix = null;
   var _failed = false;
+  function fnv1a32(s) {
+    const bytes = new TextEncoder().encode(s);
+    let h = 2166136261 >>> 0;
+    for (const b of bytes) {
+      h ^= b;
+      h = Math.imul(h, 16777619) >>> 0;
+    }
+    return h.toString(16).padStart(8, "0");
+  }
+  function resolveFileUrl(path) {
+    const hash = fnv1a32(path);
+    if (_prefix !== null) {
+      return _prefix + "/" + hash;
+    }
+    const pageUrl = location.href.replace(/[?#].*$/, "");
+    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
+    return dir + "report-content/" + hash;
+  }
+  function showOfflineBanner() {
+    const banner = document.getElementById("offline-banner");
+    if (banner) banner.style.display = "block";
+  }
   if (location.protocol === "file:") {
     _failed = true;
     document.addEventListener("DOMContentLoaded", function() {
@@ -6154,13 +6179,128 @@ prismjs/prism.js:
   function setContentPrefix(prefix) {
     _prefix = prefix;
   }
+  function fetchContent(path, cb) {
+    if (path in _fileCache) {
+      cb(_fileCache[path]);
+      return;
+    }
+    if (_failed) {
+      cb("");
+      return;
+    }
+    if (location.protocol === "file:") {
+      showOfflineBanner();
+      _failed = true;
+      cb("");
+      return;
+    }
+    if (!(path in _callbacks)) _callbacks[path] = [];
+    _callbacks[path].push(cb);
+    if (_inflight[path]) return;
+    _inflight[path] = true;
+    fetch(resolveFileUrl(path), { cache: "default" }).then(function(r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.text();
+    }).then(function(text) {
+      _fileCache[path] = text;
+      delete _inflight[path];
+      const cbs = _callbacks[path] ?? [];
+      delete _callbacks[path];
+      cbs.forEach(function(f) {
+        f(text);
+      });
+    }).catch(function(e) {
+      console.warn("ZigZag: content fetch failed for", path, ":", e instanceof Error ? e.message : e);
+      _fileCache[path] = "";
+      delete _inflight[path];
+      const cbs = _callbacks[path] ?? [];
+      delete _callbacks[path];
+      cbs.forEach(function(f) {
+        f("");
+      });
+      showOfflineBanner();
+    });
+  }
+  function isContentCached(path) {
+    return path in _fileCache;
+  }
+  function updateContentEntry(path, content) {
+    _fileCache[path] = content;
+  }
 
   // src/constants.ts
+  var VIRT_LINE_THRESHOLD = 500;
   var VIRT_BYTE_THRESHOLD = 200 * 1024;
   var VIEWER_LINE_HEIGHT = 20;
   var VIEWER_OVERSCAN = 15;
   var HL_CHUNK_SIZE = 200;
   var DISPLAY_TRUNCATE_AT = 2e3;
+  var MINIFIED_LINE_THRESHOLD = 1e4;
+  var MINIFIED_FILE_THRESHOLD = 5e4;
+  var MINIFIED_DISPLAY_CHARS = 1e4;
+  var PRISM_MAP = {
+    zig: "zig",
+    js: "javascript",
+    javascript: "javascript",
+    mjs: "javascript",
+    cjs: "javascript",
+    jsx: "jsx",
+    lua: "lua",
+    ts: "typescript",
+    typescript: "typescript",
+    tsx: "tsx",
+    json: "json",
+    html: "markup",
+    htm: "markup",
+    xml: "markup",
+    svg: "markup",
+    vue: "markup",
+    svelte: "markup",
+    astro: "markup",
+    css: "css",
+    scss: "scss",
+    less: "less",
+    bash: "bash",
+    sh: "bash",
+    zsh: "bash",
+    c: "c",
+    h: "c",
+    cpp: "cpp",
+    hpp: "cpp",
+    cc: "cpp",
+    cxx: "cpp",
+    hh: "cpp",
+    rs: "rust",
+    go: "go",
+    mod: "go",
+    py: "python",
+    pyw: "python",
+    pyi: "python",
+    rb: "ruby",
+    java: "java",
+    kt: "kotlin",
+    kts: "kotlin",
+    groovy: "groovy",
+    scala: "scala",
+    cs: "csharp",
+    fs: "fsharp",
+    vb: "vbnet",
+    php: "php",
+    swift: "swift",
+    dart: "dart",
+    jl: "julia",
+    hs: "haskell",
+    elm: "elm",
+    clj: "clojure",
+    ex: "elixir",
+    exs: "elixir",
+    erl: "erlang",
+    md: "markdown",
+    toml: "toml",
+    yaml: "yaml",
+    yml: "yaml",
+    sql: "sql"
+  };
 
   // src/utils.ts
   function fmt(n) {
@@ -6168,6 +6308,9 @@ prismjs/prism.js:
     if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
     if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
     return n + " B";
+  }
+  function fmtNum(n) {
+    return n.toLocaleString();
   }
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -6225,9 +6368,50 @@ prismjs/prism.js:
   var virtLastScrollTop = -1;
   var hlChunkCache = {};
   var hlChunkPending = {};
+  function isMinifiedFile(lines, rawLen) {
+    if (lines.length <= 5 && rawLen > MINIFIED_FILE_THRESHOLD) return true;
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].length > MINIFIED_LINE_THRESHOLD) return true;
+    }
+    return false;
+  }
+  function openMinifiedViewer(rawContent) {
+    const body = document.getElementById("viewer-body");
+    const preview = esc(rawContent.slice(0, MINIFIED_DISPLAY_CHARS));
+    const remaining = rawContent.length - MINIFIED_DISPLAY_CHARS;
+    body.innerHTML = '<div class="minified-banner">This file appears to be minified or machine-generated. Showing first ' + MINIFIED_DISPLAY_CHARS.toLocaleString() + ' characters.</div><pre class="minified-preview">' + preview + "</pre>" + (remaining > 0 ? '<div class="minified-more">\u2026 ' + remaining.toLocaleString() + " more characters not shown</div>" : "");
+    body.scrollTop = 0;
+  }
   function truncateBadge(line) {
     const over = line.length - DISPLAY_TRUNCATE_AT;
     return over > 0 ? '<span class="truncate-badge">+' + over.toLocaleString() + "\xA0chars</span>" : "";
+  }
+  function openSimpleViewer(lines, langKey, myToken) {
+    const body = document.getElementById("viewer-body");
+    const numWidth = "calc(" + String(lines.length).length + "ch + 2rem)";
+    const rows = [];
+    for (let i = 0; i < lines.length; i++) {
+      const display = lines[i].length > DISPLAY_TRUNCATE_AT ? lines[i].slice(0, DISPLAY_TRUNCATE_AT) : lines[i];
+      rows.push(
+        '<tr><td class="ln" style="min-width:' + numWidth + '">' + (i + 1) + '</td><td class="lc" data-line="' + i + '">' + esc(display) + truncateBadge(lines[i]) + "</td></tr>"
+      );
+    }
+    body.innerHTML = '<table class="ln-table"><tbody>' + rows.join("") + "</tbody></table>";
+    body.scrollTop = 0;
+    if (!langKey) return;
+    const truncatedContent = lines.map(function(l) {
+      return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l;
+    }).join("\n");
+    highlightAsync(truncatedContent, langKey, function(highlighted) {
+      if (viewerToken !== myToken) return;
+      if (!highlighted) return;
+      const hlLines = highlighted.split("\n");
+      const cells = body.querySelectorAll("td.lc[data-line]");
+      for (let j = 0; j < cells.length; j++) {
+        const idx = parseInt(cells[j].dataset.line, 10);
+        if (hlLines[idx] !== void 0) cells[j].innerHTML = hlLines[idx] + truncateBadge(lines[idx]);
+      }
+    });
   }
   function scheduleVirtualViewerRender() {
     if (virtRafPending || !virtLines) return;
@@ -6310,6 +6494,71 @@ prismjs/prism.js:
       })(c, token);
     }
   }
+  function openVirtualViewer(lines, langKey, myToken) {
+    virtLines = lines;
+    virtLangKey = langKey;
+    virtLastScrollTop = -1;
+    const digits = String(lines.length).length;
+    virtGutterW = "calc(" + digits + "ch + 2rem)";
+    let maxLen = 0;
+    for (let mi = 0; mi < lines.length; mi++) {
+      const len = Math.min(lines[mi].length, DISPLAY_TRUNCATE_AT);
+      if (len > maxLen) maxLen = len;
+    }
+    const body = document.getElementById("viewer-body");
+    body.innerHTML = "";
+    body.scrollTop = 0;
+    virtBodyEl = body;
+    const spacerTop = document.createElement("div");
+    const win = document.createElement("div");
+    win.className = "vwindow";
+    win.style.minWidth = "calc(" + (digits + maxLen) + "ch + 3rem)";
+    const spacerBot = document.createElement("div");
+    body.appendChild(spacerTop);
+    body.appendChild(win);
+    body.appendChild(spacerBot);
+    virtSpacerTopEl = spacerTop;
+    virtWindowEl = win;
+    virtSpacerBotEl = spacerBot;
+    body.addEventListener("scroll", scheduleVirtualViewerRender);
+    renderVirtualWindow();
+  }
+  function openViewer(f) {
+    currentFile = f;
+    viewerToken++;
+    const myToken = viewerToken;
+    virtLines = null;
+    virtLangKey = null;
+    virtRafPending = false;
+    virtLastScrollTop = -1;
+    hlChunkCache = {};
+    hlChunkPending = {};
+    if (virtBodyEl) {
+      virtBodyEl.removeEventListener("scroll", scheduleVirtualViewerRender);
+      virtBodyEl = null;
+    }
+    virtWindowEl = null;
+    virtSpacerTopEl = null;
+    virtSpacerBotEl = null;
+    vpathEl.textContent = f.path;
+    viewer.classList.add("open");
+    const body = document.getElementById("viewer-body");
+    body.innerHTML = '<div style="padding:0.75rem 1rem;color:#adb5bd;font-size:0.8rem">Loading\u2026</div>';
+    body.scrollTop = 0;
+    fetchContent(f.path, function(raw) {
+      if (viewerToken !== myToken) return;
+      const rawContent = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+      const lines = rawContent.split("\n");
+      const langKey = PRISM_MAP[f.language || ""] || null;
+      if (isMinifiedFile(lines, rawContent.length)) {
+        openMinifiedViewer(rawContent);
+      } else if (lines.length > VIRT_LINE_THRESHOLD || rawContent.length > VIRT_BYTE_THRESHOLD) {
+        openVirtualViewer(lines, langKey, myToken);
+      } else {
+        openSimpleViewer(lines, langKey, myToken);
+      }
+    });
+  }
   function closeViewer() {
     viewer.classList.remove("open");
     currentFile = null;
@@ -6349,11 +6598,106 @@ prismjs/prism.js:
     localStorage.setItem(STORAGE_KEY, current);
   }
 
+  // src/virtual-table.ts
+  var ROW_H = 40;
+  var OVERSCAN = 10;
+  var VirtualTable = class {
+    constructor(onRowClick) {
+      this.files = [];
+      this.rafPending = false;
+      this.onRowClick = onRowClick;
+      this.viewport = document.createElement("div");
+      this.viewport.className = "table-viewport";
+      const table = document.createElement("table");
+      const thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr>";
+      table.appendChild(thead);
+      this.tbody = document.createElement("tbody");
+      this.topSpacer = document.createElement("tr");
+      this.topSpacer.style.height = "0";
+      const topTd = document.createElement("td");
+      topTd.colSpan = 4;
+      topTd.style.cssText = "padding:0;border:none;";
+      this.topSpacer.appendChild(topTd);
+      this.botSpacer = document.createElement("tr");
+      this.botSpacer.style.height = "0";
+      const botTd = document.createElement("td");
+      botTd.colSpan = 4;
+      botTd.style.cssText = "padding:0;border:none;";
+      this.botSpacer.appendChild(botTd);
+      this.tbody.appendChild(this.topSpacer);
+      this.tbody.appendChild(this.botSpacer);
+      table.appendChild(this.tbody);
+      this.viewport.appendChild(table);
+      this.viewport.addEventListener("scroll", () => this.scheduleRender());
+      this.viewport.addEventListener("click", (e) => {
+        const span = e.target;
+        if (span.className === "file-link") {
+          const idx = parseInt(span.dataset.idx, 10);
+          if (!isNaN(idx) && this.files[idx]) {
+            this.onRowClick(this.files[idx]);
+          }
+        }
+      });
+      this.viewport.addEventListener("mouseover", (e) => {
+        const span = e.target;
+        if (span.className !== "file-link") return;
+        const idx = parseInt(span.dataset.idx, 10);
+        if (isNaN(idx)) return;
+        const f = this.files[idx];
+        if (f && !isContentCached(f.root_path + ":" + f.path)) {
+          fetchContent(f.root_path + ":" + f.path, function() {
+          });
+        }
+      });
+    }
+    /** Replace the displayed file list and re-render from the top. */
+    setFiles(files) {
+      this.files = files;
+      this.viewport.scrollTop = 0;
+      this.renderVisible();
+    }
+    /** Return the DOM element to mount into the page. */
+    getElement() {
+      return this.viewport;
+    }
+    scheduleRender() {
+      if (this.rafPending) return;
+      this.rafPending = true;
+      requestAnimationFrame(() => {
+        this.rafPending = false;
+        this.renderVisible();
+      });
+    }
+    renderVisible() {
+      const total = this.files.length;
+      const scrollTop = this.viewport.scrollTop;
+      const viewH = this.viewport.clientHeight;
+      const start = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
+      const end = Math.min(total, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+      this.topSpacer.style.height = start * ROW_H + "px";
+      this.botSpacer.style.height = (total - end) * ROW_H + "px";
+      while (this.topSpacer.nextSibling !== this.botSpacer) {
+        this.tbody.removeChild(this.topSpacer.nextSibling);
+      }
+      const frag = document.createDocumentFragment();
+      for (let i = start; i < end; i++) {
+        const f = this.files[i];
+        const tr = document.createElement("tr");
+        tr.style.height = ROW_H + "px";
+        tr.innerHTML = '<td><span class="file-link" data-idx="' + i + '">' + esc(f.path) + '</span></td><td><span class="tag">' + esc(f.language || "\u2014") + "</span></td><td><span>" + fmtNum(f.lines) + "</span></td><td><span>" + fmt(f.size) + "</span></td>";
+        frag.appendChild(tr);
+      }
+      this.tbody.insertBefore(frag, this.botSpacer);
+    }
+  };
+
   // src/combined.ts
   setContentPrefix("combined-content");
   var R = window.COMBINED_REPORT;
   var M = R.meta;
   var S = R.summary;
+  var sectionTables = /* @__PURE__ */ new Map();
   initTheme();
   var themeBtn = document.getElementById("theme-toggle");
   if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
@@ -6373,6 +6717,10 @@ prismjs/prism.js:
     const lower = q.toLowerCase();
     return f.path.toLowerCase().includes(lower) || f.root_path.toLowerCase().includes(lower) || f.language.toLowerCase().includes(lower);
   }
+  function currentFilteredFiles(pathData) {
+    const q = searchEl ? searchEl.value.trim().toLowerCase() : "";
+    return q ? pathData.files.filter((f) => matchesSearch(f, q)) : pathData.files;
+  }
   function filterAllSections(q) {
     document.querySelectorAll(".path-section").forEach((section) => {
       const rootPath = section.dataset.rootPath;
@@ -6380,6 +6728,15 @@ prismjs/prism.js:
       const count = section.querySelector(".path-file-count");
       const visible = pathData.files.filter((f) => matchesSearch(f, q));
       count.textContent = visible.length + " / " + pathData.files.length + " files";
+      const vtable = sectionTables.get(rootPath);
+      if (vtable) vtable.setFiles(visible);
+    });
+  }
+  function openCombinedViewer(file) {
+    const contentKey = file.root_path + ":" + file.path;
+    fetchContent(contentKey, (src) => {
+      updateContentEntry(file.path, src);
+      openViewer({ path: file.path, size: file.size, lines: file.lines, language: file.language });
     });
   }
   function renderPathSection(p, index) {
@@ -6412,10 +6769,21 @@ prismjs/prism.js:
     </div>
 </div>`;
   }
-  function attachSectionToggle(section) {
+  function attachSectionToggle(section, pathData) {
     const header = section.querySelector(".path-header");
+    const mount = section.querySelector(".vtable-mount");
+    const rootPath = pathData.root_path;
+    function maybeMount() {
+      if (!section.classList.contains("expanded")) return;
+      if (sectionTables.has(rootPath)) return;
+      const vtable = new VirtualTable(openCombinedViewer);
+      vtable.setFiles(currentFilteredFiles(pathData));
+      mount.appendChild(vtable.getElement());
+      sectionTables.set(rootPath, vtable);
+    }
     header.addEventListener("click", () => {
       section.classList.toggle("expanded");
+      maybeMount();
     });
     header.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -6423,6 +6791,9 @@ prismjs/prism.js:
         header.click();
       }
     });
+    if (section.classList.contains("expanded")) {
+      maybeMount();
+    }
   }
   function attachSectionSearch(section, pathData) {
     const input = section.querySelector(".section-search");
@@ -6431,6 +6802,8 @@ prismjs/prism.js:
     input.addEventListener("input", function() {
       const q = input.value.trim().toLowerCase();
       const visible = q ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q)) : pathData.files;
+      const vtable = sectionTables.get(pathData.root_path);
+      if (vtable) vtable.setFiles(visible);
       countEl2.textContent = visible.length + " / " + pathData.files.length + " files";
     });
   }
@@ -6438,7 +6811,7 @@ prismjs/prism.js:
     const container = document.getElementById("path-sections");
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
     container.querySelectorAll(".path-section").forEach((section, i) => {
-      attachSectionToggle(section);
+      attachSectionToggle(section, R.paths[i]);
       attachSectionSearch(section, R.paths[i]);
     });
   }
