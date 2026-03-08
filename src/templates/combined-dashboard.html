@@ -6138,33 +6138,8 @@ prismjs/prism.js:
 "use strict";
 (() => {
   // src/content.ts
-  var _fileCache = {};
-  var _inflight = {};
-  var _callbacks = {};
   var _prefix = null;
   var _failed = false;
-  function fnv1a32(s) {
-    const bytes = new TextEncoder().encode(s);
-    let h = 2166136261 >>> 0;
-    for (const b of bytes) {
-      h ^= b;
-      h = Math.imul(h, 16777619) >>> 0;
-    }
-    return h.toString(16).padStart(8, "0");
-  }
-  function resolveFileUrl(path) {
-    const hash = fnv1a32(path);
-    if (_prefix !== null) {
-      return _prefix + "/" + hash;
-    }
-    const pageUrl = location.href.replace(/[?#].*$/, "");
-    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
-    return dir + "report-content/" + hash;
-  }
-  function showOfflineBanner() {
-    const banner = document.getElementById("offline-banner");
-    if (banner) banner.style.display = "block";
-  }
   if (location.protocol === "file:") {
     _failed = true;
     document.addEventListener("DOMContentLoaded", function() {
@@ -6179,125 +6154,13 @@ prismjs/prism.js:
   function setContentPrefix(prefix) {
     _prefix = prefix;
   }
-  function fetchContent(path, cb) {
-    if (path in _fileCache) {
-      cb(_fileCache[path]);
-      return;
-    }
-    if (_failed) {
-      cb("");
-      return;
-    }
-    if (location.protocol === "file:") {
-      showOfflineBanner();
-      _failed = true;
-      cb("");
-      return;
-    }
-    if (!(path in _callbacks)) _callbacks[path] = [];
-    _callbacks[path].push(cb);
-    if (_inflight[path]) return;
-    _inflight[path] = true;
-    fetch(resolveFileUrl(path), { cache: "default" }).then(function(r) {
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      return r.text();
-    }).then(function(text) {
-      _fileCache[path] = text;
-      delete _inflight[path];
-      const cbs = _callbacks[path] ?? [];
-      delete _callbacks[path];
-      cbs.forEach(function(f) {
-        f(text);
-      });
-    }).catch(function(e) {
-      console.warn("ZigZag: content fetch failed for", path, ":", e instanceof Error ? e.message : e);
-      _fileCache[path] = "";
-      delete _inflight[path];
-      const cbs = _callbacks[path] ?? [];
-      delete _callbacks[path];
-      cbs.forEach(function(f) {
-        f("");
-      });
-      showOfflineBanner();
-    });
-  }
-  function updateContentEntry(path, content) {
-    _fileCache[path] = content;
-  }
 
   // src/constants.ts
-  var VIRT_LINE_THRESHOLD = 500;
   var VIRT_BYTE_THRESHOLD = 200 * 1024;
   var VIEWER_LINE_HEIGHT = 20;
   var VIEWER_OVERSCAN = 15;
   var HL_CHUNK_SIZE = 200;
   var DISPLAY_TRUNCATE_AT = 2e3;
-  var MINIFIED_LINE_THRESHOLD = 1e4;
-  var MINIFIED_FILE_THRESHOLD = 5e4;
-  var MINIFIED_DISPLAY_CHARS = 1e4;
-  var PRISM_MAP = {
-    zig: "zig",
-    js: "javascript",
-    javascript: "javascript",
-    mjs: "javascript",
-    cjs: "javascript",
-    jsx: "jsx",
-    lua: "lua",
-    ts: "typescript",
-    typescript: "typescript",
-    tsx: "tsx",
-    json: "json",
-    html: "markup",
-    htm: "markup",
-    xml: "markup",
-    svg: "markup",
-    vue: "markup",
-    svelte: "markup",
-    astro: "markup",
-    css: "css",
-    scss: "scss",
-    less: "less",
-    bash: "bash",
-    sh: "bash",
-    zsh: "bash",
-    c: "c",
-    h: "c",
-    cpp: "cpp",
-    hpp: "cpp",
-    cc: "cpp",
-    cxx: "cpp",
-    hh: "cpp",
-    rs: "rust",
-    go: "go",
-    mod: "go",
-    py: "python",
-    pyw: "python",
-    pyi: "python",
-    rb: "ruby",
-    java: "java",
-    kt: "kotlin",
-    kts: "kotlin",
-    groovy: "groovy",
-    scala: "scala",
-    cs: "csharp",
-    fs: "fsharp",
-    vb: "vbnet",
-    php: "php",
-    swift: "swift",
-    dart: "dart",
-    jl: "julia",
-    hs: "haskell",
-    elm: "elm",
-    clj: "clojure",
-    ex: "elixir",
-    exs: "elixir",
-    erl: "erlang",
-    md: "markdown",
-    toml: "toml",
-    yaml: "yaml",
-    yml: "yaml",
-    sql: "sql"
-  };
 
   // src/utils.ts
   function fmt(n) {
@@ -6362,50 +6225,9 @@ prismjs/prism.js:
   var virtLastScrollTop = -1;
   var hlChunkCache = {};
   var hlChunkPending = {};
-  function isMinifiedFile(lines, rawLen) {
-    if (lines.length <= 5 && rawLen > MINIFIED_FILE_THRESHOLD) return true;
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].length > MINIFIED_LINE_THRESHOLD) return true;
-    }
-    return false;
-  }
-  function openMinifiedViewer(rawContent) {
-    const body = document.getElementById("viewer-body");
-    const preview = esc(rawContent.slice(0, MINIFIED_DISPLAY_CHARS));
-    const remaining = rawContent.length - MINIFIED_DISPLAY_CHARS;
-    body.innerHTML = '<div class="minified-banner">This file appears to be minified or machine-generated. Showing first ' + MINIFIED_DISPLAY_CHARS.toLocaleString() + ' characters.</div><pre class="minified-preview">' + preview + "</pre>" + (remaining > 0 ? '<div class="minified-more">\u2026 ' + remaining.toLocaleString() + " more characters not shown</div>" : "");
-    body.scrollTop = 0;
-  }
   function truncateBadge(line) {
     const over = line.length - DISPLAY_TRUNCATE_AT;
     return over > 0 ? '<span class="truncate-badge">+' + over.toLocaleString() + "\xA0chars</span>" : "";
-  }
-  function openSimpleViewer(lines, langKey, myToken) {
-    const body = document.getElementById("viewer-body");
-    const numWidth = "calc(" + String(lines.length).length + "ch + 2rem)";
-    const rows = [];
-    for (let i = 0; i < lines.length; i++) {
-      const display = lines[i].length > DISPLAY_TRUNCATE_AT ? lines[i].slice(0, DISPLAY_TRUNCATE_AT) : lines[i];
-      rows.push(
-        '<tr><td class="ln" style="min-width:' + numWidth + '">' + (i + 1) + '</td><td class="lc" data-line="' + i + '">' + esc(display) + truncateBadge(lines[i]) + "</td></tr>"
-      );
-    }
-    body.innerHTML = '<table class="ln-table"><tbody>' + rows.join("") + "</tbody></table>";
-    body.scrollTop = 0;
-    if (!langKey) return;
-    const truncatedContent = lines.map(function(l) {
-      return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l;
-    }).join("\n");
-    highlightAsync(truncatedContent, langKey, function(highlighted) {
-      if (viewerToken !== myToken) return;
-      if (!highlighted) return;
-      const hlLines = highlighted.split("\n");
-      const cells = body.querySelectorAll("td.lc[data-line]");
-      for (let j = 0; j < cells.length; j++) {
-        const idx = parseInt(cells[j].dataset.line, 10);
-        if (hlLines[idx] !== void 0) cells[j].innerHTML = hlLines[idx] + truncateBadge(lines[idx]);
-      }
-    });
   }
   function scheduleVirtualViewerRender() {
     if (virtRafPending || !virtLines) return;
@@ -6488,71 +6310,6 @@ prismjs/prism.js:
       })(c, token);
     }
   }
-  function openVirtualViewer(lines, langKey, myToken) {
-    virtLines = lines;
-    virtLangKey = langKey;
-    virtLastScrollTop = -1;
-    const digits = String(lines.length).length;
-    virtGutterW = "calc(" + digits + "ch + 2rem)";
-    let maxLen = 0;
-    for (let mi = 0; mi < lines.length; mi++) {
-      const len = Math.min(lines[mi].length, DISPLAY_TRUNCATE_AT);
-      if (len > maxLen) maxLen = len;
-    }
-    const body = document.getElementById("viewer-body");
-    body.innerHTML = "";
-    body.scrollTop = 0;
-    virtBodyEl = body;
-    const spacerTop = document.createElement("div");
-    const win = document.createElement("div");
-    win.className = "vwindow";
-    win.style.minWidth = "calc(" + (digits + maxLen) + "ch + 3rem)";
-    const spacerBot = document.createElement("div");
-    body.appendChild(spacerTop);
-    body.appendChild(win);
-    body.appendChild(spacerBot);
-    virtSpacerTopEl = spacerTop;
-    virtWindowEl = win;
-    virtSpacerBotEl = spacerBot;
-    body.addEventListener("scroll", scheduleVirtualViewerRender);
-    renderVirtualWindow();
-  }
-  function openViewer(f) {
-    currentFile = f;
-    viewerToken++;
-    const myToken = viewerToken;
-    virtLines = null;
-    virtLangKey = null;
-    virtRafPending = false;
-    virtLastScrollTop = -1;
-    hlChunkCache = {};
-    hlChunkPending = {};
-    if (virtBodyEl) {
-      virtBodyEl.removeEventListener("scroll", scheduleVirtualViewerRender);
-      virtBodyEl = null;
-    }
-    virtWindowEl = null;
-    virtSpacerTopEl = null;
-    virtSpacerBotEl = null;
-    vpathEl.textContent = f.path;
-    viewer.classList.add("open");
-    const body = document.getElementById("viewer-body");
-    body.innerHTML = '<div style="padding:0.75rem 1rem;color:#adb5bd;font-size:0.8rem">Loading\u2026</div>';
-    body.scrollTop = 0;
-    fetchContent(f.path, function(raw) {
-      if (viewerToken !== myToken) return;
-      const rawContent = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-      const lines = rawContent.split("\n");
-      const langKey = PRISM_MAP[f.language || ""] || null;
-      if (isMinifiedFile(lines, rawContent.length)) {
-        openMinifiedViewer(rawContent);
-      } else if (lines.length > VIRT_LINE_THRESHOLD || rawContent.length > VIRT_BYTE_THRESHOLD) {
-        openVirtualViewer(lines, langKey, myToken);
-      } else {
-        openSimpleViewer(lines, langKey, myToken);
-      }
-    });
-  }
   function closeViewer() {
     viewer.classList.remove("open");
     currentFile = null;
@@ -6620,30 +6377,9 @@ prismjs/prism.js:
     document.querySelectorAll(".path-section").forEach((section) => {
       const rootPath = section.dataset.rootPath;
       const pathData = R.paths.find((p) => p.root_path === rootPath);
-      const tbody = section.querySelector(".file-tbody");
       const count = section.querySelector(".path-file-count");
       const visible = pathData.files.filter((f) => matchesSearch(f, q));
       count.textContent = visible.length + " / " + pathData.files.length + " files";
-      tbody.innerHTML = visible.map((f) => renderFileRow(f)).join("");
-      attachRowListeners(tbody);
-    });
-  }
-  function attachRowListeners(tbody) {
-    tbody.querySelectorAll(".file-row").forEach((row) => {
-      row.addEventListener("click", () => {
-        const filePath = row.dataset.path;
-        const rootPath = row.dataset.root;
-        const pathData = R.paths.find((p) => p.root_path === rootPath);
-        const file = pathData.files.find((f) => f.path === filePath);
-        openCombinedViewer(file);
-      });
-    });
-  }
-  function openCombinedViewer(file) {
-    const contentKey = file.root_path + ":" + file.path;
-    fetchContent(contentKey, (src) => {
-      updateContentEntry(file.path, src);
-      openViewer({ path: file.path, size: file.size, lines: file.lines, language: file.language });
     });
   }
   function renderPathSection(p, index) {
@@ -6691,13 +6427,10 @@ prismjs/prism.js:
   function attachSectionSearch(section, pathData) {
     const input = section.querySelector(".section-search");
     if (!input) return;
-    const tbody = section.querySelector(".file-tbody");
     const countEl2 = section.querySelector(".path-file-count");
     input.addEventListener("input", function() {
       const q = input.value.trim().toLowerCase();
       const visible = q ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q)) : pathData.files;
-      tbody.innerHTML = visible.map(renderFileRow).join("");
-      attachRowListeners(tbody);
       countEl2.textContent = visible.length + " / " + pathData.files.length + " files";
     });
   }
@@ -6706,7 +6439,6 @@ prismjs/prism.js:
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
     container.querySelectorAll(".path-section").forEach((section, i) => {
       attachSectionToggle(section);
-      attachRowListeners(section.querySelector(".file-tbody"));
       attachSectionSearch(section, R.paths[i]);
     });
   }

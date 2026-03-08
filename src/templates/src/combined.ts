@@ -46,29 +46,9 @@ function filterAllSections(q: string): void {
     document.querySelectorAll<HTMLElement>(".path-section").forEach((section) => {
         const rootPath = section.dataset.rootPath!;
         const pathData = R.paths.find((p) => p.root_path === rootPath)!;
-        const tbody = section.querySelector<HTMLElement>(".file-tbody")!;
         const count = section.querySelector<HTMLElement>(".path-file-count")!;
         const visible = pathData.files.filter((f) => matchesSearch(f, q));
         count.textContent = visible.length + " / " + pathData.files.length + " files";
-        tbody.innerHTML = visible
-            .map((f) => renderFileRow(f))
-            .join("");
-        attachRowListeners(tbody);
-    });
-}
-
-// ── File rows ─────────────────────────────────────────────────────────────────
-
-
-function attachRowListeners(tbody: HTMLElement): void {
-    tbody.querySelectorAll<HTMLElement>(".file-row").forEach((row) => {
-        row.addEventListener("click", () => {
-            const filePath = row.dataset.path!;
-            const rootPath = row.dataset.root!;
-            const pathData = R.paths.find((p) => p.root_path === rootPath)!;
-            const file = pathData.files.find((f) => f.path === filePath)!;
-            openCombinedViewer(file);
-        });
     });
 }
 
@@ -132,15 +112,12 @@ function attachSectionToggle(section: HTMLElement): void {
 function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport): void {
     const input = section.querySelector<HTMLInputElement>(".section-search");
     if (!input) return;
-    const tbody = section.querySelector<HTMLElement>(".file-tbody")!;
     const countEl = section.querySelector<HTMLElement>(".path-file-count")!;
     input.addEventListener("input", function () {
         const q = input.value.trim().toLowerCase();
         const visible = q
             ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q))
             : pathData.files;
-        tbody.innerHTML = visible.map(renderFileRow).join("");
-        attachRowListeners(tbody);
         countEl.textContent = visible.length + " / " + pathData.files.length + " files";
     });
 }
@@ -152,7 +129,6 @@ function renderPathSections(): void {
     container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
     container.querySelectorAll<HTMLElement>(".path-section").forEach((section, i) => {
         attachSectionToggle(section);
-        attachRowListeners(section.querySelector<HTMLElement>(".file-tbody")!);
         attachSectionSearch(section, R.paths[i]);
     });
 }
