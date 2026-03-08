@@ -83,6 +83,9 @@ export class VirtualTable {
     setFiles(files: CombinedFile[]): void {
         this.files = files;
         this.viewport.scrollTop = 0;
+        // Synchronous render (not scheduleRender) is required: data-idx in the DOM
+        // must always match this.files indices. An async render would leave stale
+        // indices from the previous file list clickable until the next rAF fires.
         this.renderVisible();
     }
 
@@ -123,7 +126,7 @@ export class VirtualTable {
             tr.style.height = ROW_H + "px";
             tr.innerHTML =
                 '<td><span class="file-link" data-idx="' + i + '">' + esc(f.path) + "</span></td>" +
-                "<td><span>" + esc(f.language || "\u2014") + "</span></td>" +
+                '<td><span class="tag">' + esc(f.language || "\u2014") + "</span></td>" +
                 "<td><span>" + fmtNum(f.lines) + "</span></td>" +
                 "<td><span>" + fmt(f.size) + "</span></td>";
             frag.appendChild(tr);
