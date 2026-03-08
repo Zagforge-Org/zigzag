@@ -380,6 +380,7 @@ h2 {
 .table-viewport {
     height: 440px;
     overflow-y: auto;
+    overflow-anchor: none;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg-card);
@@ -800,6 +801,7 @@ td.lc {
 
 /* ── Combined-dashboard per-section virtual table ───────────────────────── */
 .path-section .table-viewport {
+    height: auto;
     max-height: 600px;
 }
 
@@ -6817,11 +6819,11 @@ prismjs/prism.js:
   }
   document.getElementById("report-title").textContent = "Code Report: " + M.path_count + " paths";
   document.getElementById("report-meta").textContent = "Generated on " + M.generated_at + " \xB7 ZigZag v" + M.version + (M.failed_paths > 0 ? ` \xB7 \u26A0 ${M.failed_paths} path(s) failed` : "");
-  renderGlobalSummary();
-  renderPathSections();
   var searchEl = document.getElementById("search");
   var clearBtn = document.getElementById("search-clear");
   var countEl = document.getElementById("search-count");
+  renderGlobalSummary();
+  renderPathSections();
   function updateSearchCount(q) {
     if (!countEl) return;
     const total = R.paths.reduce((s, p) => s + p.files.length, 0);

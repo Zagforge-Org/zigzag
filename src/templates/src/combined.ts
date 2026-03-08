@@ -173,16 +173,16 @@ document.getElementById("report-meta")!.textContent =
     "Generated on " + M.generated_at + " · ZigZag v" + M.version +
     (M.failed_paths > 0 ? ` · \u26a0 ${M.failed_paths} path(s) failed` : "");
 
-// ── Init ──────────────────────────────────────────────────────────────────────
-
-renderGlobalSummary();
-renderPathSections();
-
 // ── Search bar ────────────────────────────────────────────────────────────────
 
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
 const clearBtn = document.getElementById("search-clear") as HTMLButtonElement | null;
 const countEl  = document.getElementById("search-count") as HTMLElement | null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+renderGlobalSummary();
+renderPathSections();
 
 function updateSearchCount(q: string): void {
     if (!countEl) return;
