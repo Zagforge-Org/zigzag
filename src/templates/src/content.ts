@@ -5,6 +5,21 @@ let _cache: Record<string, string> | null = null;
 let _failed = false;
 let _overrideUrl: string | null = null;
 
+// Proactively detect file:// so users see guidance without having to click a file first.
+if (location.protocol === "file:") {
+    _failed = true;
+    // Show banner after DOM is ready (script runs deferred, so DOM is already parsed).
+    document.addEventListener("DOMContentLoaded", function () {
+        const banner = document.getElementById("offline-banner");
+        if (banner) banner.style.display = "block";
+    }, { once: true });
+    // Also try immediately in case DOMContentLoaded already fired.
+    if (document.readyState !== "loading") {
+        const banner = document.getElementById("offline-banner");
+        if (banner) banner.style.display = "block";
+    }
+}
+
 // Pending callbacks waiting for the first fetch to complete
 const _pending: Array<{ path: string; cb: (s: string) => void }> = [];
 let _fetching = false;

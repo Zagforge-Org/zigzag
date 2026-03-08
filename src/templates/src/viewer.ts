@@ -1,4 +1,4 @@
-import { PRISM_MAP, VIRT_LINE_THRESHOLD, VIRT_BYTE_THRESHOLD, VIEWER_LINE_HEIGHT, VIEWER_OVERSCAN, HL_CHUNK_SIZE } from "./constants";
+import { PRISM_MAP, VIRT_LINE_THRESHOLD, VIRT_BYTE_THRESHOLD, VIEWER_LINE_HEIGHT, VIEWER_OVERSCAN, HL_CHUNK_SIZE, DISPLAY_TRUNCATE_AT, MINIFIED_LINE_THRESHOLD, MINIFIED_FILE_THRESHOLD, MINIFIED_DISPLAY_CHARS } from "./constants";
 import { esc } from "./utils";
 import { fetchContent } from "./content";
 import { highlightAsync } from "./highlight";
@@ -22,21 +22,53 @@ let virtSpacerTopEl: HTMLElement | null = null;
 let virtSpacerBotEl: HTMLElement | null = null;
 let virtGutterW = "3ch";
 let virtRafPending = false;
+let virtLastScrollTop = -1;
 let hlChunkCache: Record<number, string[]> = {};
 let hlChunkPending: Record<number, boolean> = {};
 
+// ── Minified-file detection ────────────────────────────────────────────────────
+
+function isMinifiedFile(lines: string[], rawLen: number): boolean {
+    if (lines.length <= 5 && rawLen > MINIFIED_FILE_THRESHOLD) return true;
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].length > MINIFIED_LINE_THRESHOLD) return true;
+    }
+    return false;
+}
+
+function openMinifiedViewer(rawContent: string): void {
+    const body = document.getElementById("viewer-body")!;
+    const preview = esc(rawContent.slice(0, MINIFIED_DISPLAY_CHARS));
+    const remaining = rawContent.length - MINIFIED_DISPLAY_CHARS;
+    body.innerHTML =
+        '<div class="minified-banner">' +
+        "This file appears to be minified or machine-generated. " +
+        "Showing first " + MINIFIED_DISPLAY_CHARS.toLocaleString() + " characters." +
+        "</div>" +
+        '<pre class="minified-preview">' + preview + "</pre>" +
+        (remaining > 0
+            ? '<div class="minified-more">\u2026 ' + remaining.toLocaleString() + " more characters not shown</div>"
+            : "");
+    body.scrollTop = 0;
+}
+
+// ── Truncation helper ─────────────────────────────────────────────────────────
+
+function truncateBadge(line: string): string {
+    const over = line.length - DISPLAY_TRUNCATE_AT;
+    return over > 0
+        ? '<span class="truncate-badge">+' + over.toLocaleString() + "\u00a0chars</span>"
+        : "";
+}
+
 // ── Simple viewer ─────────────────────────────────────────────────────────────
 
-function openSimpleViewer(
-    content: string,
-    lines: string[],
-    langKey: string | null,
-    myToken: number,
-): void {
+function openSimpleViewer(lines: string[], langKey: string | null, myToken: number): void {
     const body = document.getElementById("viewer-body")!;
     const numWidth = "calc(" + String(lines.length).length + "ch + 2rem)";
     const rows: string[] = [];
     for (let i = 0; i < lines.length; i++) {
+        const display = lines[i].length > DISPLAY_TRUNCATE_AT ? lines[i].slice(0, DISPLAY_TRUNCATE_AT) : lines[i];
         rows.push(
             '<tr><td class="ln" style="min-width:' +
                 numWidth +
@@ -45,7 +77,8 @@ function openSimpleViewer(
                 '</td><td class="lc" data-line="' +
                 i +
                 '">' +
-                esc(lines[i]) +
+                esc(display) +
+                truncateBadge(lines[i]) +
                 "</td></tr>",
         );
     }
@@ -55,14 +88,18 @@ function openSimpleViewer(
 
     if (!langKey) return;
 
-    highlightAsync(content, langKey, function (highlighted) {
+    // Highlight the truncated version of each line so token boundaries stay valid.
+    const truncatedContent = lines
+        .map(function (l) { return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l; })
+        .join("\n");
+    highlightAsync(truncatedContent, langKey, function (highlighted) {
         if (viewerToken !== myToken) return;
         if (!highlighted) return;
         const hlLines = highlighted.split("\n");
         const cells = body.querySelectorAll<HTMLElement>("td.lc[data-line]");
         for (let j = 0; j < cells.length; j++) {
             const idx = parseInt(cells[j].dataset.line!, 10);
-            if (hlLines[idx] !== undefined) cells[j].innerHTML = hlLines[idx];
+            if (hlLines[idx] !== undefined) cells[j].innerHTML = hlLines[idx] + truncateBadge(lines[idx]);
         }
     });
 }
@@ -82,6 +119,10 @@ function renderVirtualWindow(): void {
     if (!virtLines || !virtBodyEl || !virtWindowEl) return;
     const total = virtLines.length;
     const scrollTop = virtBodyEl.scrollTop;
+
+    if (scrollTop === virtLastScrollTop) return;
+    virtLastScrollTop = scrollTop;
+
     const viewH = virtBodyEl.clientHeight;
 
     const start = Math.max(0, Math.floor(scrollTop / VIEWER_LINE_HEIGHT) - VIEWER_OVERSCAN);
@@ -111,9 +152,10 @@ function renderVirtualWindow(): void {
         const chunkIdx = Math.floor(i / HL_CHUNK_SIZE);
         const lineInChunk = i - chunkIdx * HL_CHUNK_SIZE;
         if (hlChunkCache[chunkIdx] && hlChunkCache[chunkIdx][lineInChunk] !== undefined) {
-            lc.innerHTML = hlChunkCache[chunkIdx][lineInChunk];
+            lc.innerHTML = hlChunkCache[chunkIdx][lineInChunk] + truncateBadge(virtLines[i]);
         } else {
-            lc.textContent = virtLines[i];
+            const display = virtLines[i].length > DISPLAY_TRUNCATE_AT ? virtLines[i].slice(0, DISPLAY_TRUNCATE_AT) : virtLines[i];
+            lc.innerHTML = esc(display) + truncateBadge(virtLines[i]);
         }
 
         row.appendChild(ln);
@@ -138,7 +180,9 @@ function requestVisibleChunks(start: number, end: number, token: number): void {
         (function (chunkIdx: number, myToken: number) {
             const chunkStart = chunkIdx * HL_CHUNK_SIZE;
             const chunkEnd = Math.min(virtLines!.length, chunkStart + HL_CHUNK_SIZE);
-            const chunkText = virtLines!.slice(chunkStart, chunkEnd).join("\n");
+            const chunkText = virtLines!.slice(chunkStart, chunkEnd)
+                    .map(function (l) { return l.length > DISPLAY_TRUNCATE_AT ? l.slice(0, DISPLAY_TRUNCATE_AT) : l; })
+                    .join("\n");
 
             highlightAsync(chunkText, virtLangKey!, function (html) {
                 if (viewerToken !== myToken || !virtLines) return;
@@ -156,8 +200,8 @@ function requestVisibleChunks(start: number, end: number, token: number): void {
                     const lineInChunk = lineIdx - chunkStart;
                     cells[j].innerHTML =
                         hlLines[lineInChunk] !== undefined
-                            ? hlLines[lineInChunk]
-                            : esc(virtLines![lineIdx]);
+                            ? hlLines[lineInChunk] + truncateBadge(virtLines![lineIdx])
+                            : esc(virtLines![lineIdx].length > DISPLAY_TRUNCATE_AT ? virtLines![lineIdx].slice(0, DISPLAY_TRUNCATE_AT) : virtLines![lineIdx]) + truncateBadge(virtLines![lineIdx]);
                 }
             });
         })(c, token);
@@ -167,13 +211,16 @@ function requestVisibleChunks(start: number, end: number, token: number): void {
 function openVirtualViewer(lines: string[], langKey: string | null, myToken: number): void {
     virtLines = lines;
     virtLangKey = langKey;
+    virtLastScrollTop = -1;
 
     const digits = String(lines.length).length;
     virtGutterW = "calc(" + digits + "ch + 2rem)";
 
     let maxLen = 0;
     for (let mi = 0; mi < lines.length; mi++) {
-        if (lines[mi].length > maxLen) maxLen = lines[mi].length;
+        // Cap at DISPLAY_TRUNCATE_AT — that's the most we actually render per line.
+        const len = Math.min(lines[mi].length, DISPLAY_TRUNCATE_AT);
+        if (len > maxLen) maxLen = len;
     }
 
     const body = document.getElementById("viewer-body")!;
@@ -209,6 +256,7 @@ export function openViewer(f: ReportFile): void {
     virtLines = null;
     virtLangKey = null;
     virtRafPending = false;
+    virtLastScrollTop = -1;
     hlChunkCache = {};
     hlChunkPending = {};
     if (virtBodyEl) {
@@ -229,14 +277,16 @@ export function openViewer(f: ReportFile): void {
 
     fetchContent(f.path, function (raw) {
         if (viewerToken !== myToken) return;
-        const content = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-        const lines = content.split("\n");
+        const rawContent = (raw || "(binary or empty)").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+        const lines = rawContent.split("\n");
         const langKey = PRISM_MAP[f.language || ""] || null;
 
-        if (lines.length > VIRT_LINE_THRESHOLD || content.length > VIRT_BYTE_THRESHOLD) {
+        if (isMinifiedFile(lines, rawContent.length)) {
+            openMinifiedViewer(rawContent);
+        } else if (lines.length > VIRT_LINE_THRESHOLD || rawContent.length > VIRT_BYTE_THRESHOLD) {
             openVirtualViewer(lines, langKey, myToken);
         } else {
-            openSimpleViewer(content, lines, langKey, myToken);
+            openSimpleViewer(lines, langKey, myToken);
         }
     });
 }
@@ -249,6 +299,7 @@ export function closeViewer(): void {
     virtLines = null;
     virtLangKey = null;
     virtRafPending = false;
+    virtLastScrollTop = -1;
     hlChunkCache = {};
     hlChunkPending = {};
     if (virtBodyEl) {

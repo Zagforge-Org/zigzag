@@ -419,13 +419,10 @@ h2 {
 }
 .table-viewport thead th.sorted .sort-icon { opacity: 1; }
 .table-viewport tbody tr {
-    transition: background 60ms;
     cursor: pointer;
-    border-left: 2px solid transparent;
 }
 .table-viewport tbody tr:hover {
     background: var(--bg-card-hover);
-    border-left-color: var(--accent);
 }
 .table-viewport tbody tr:last-child td { border-bottom: none; }
 .table-viewport tbody td {
@@ -465,10 +462,6 @@ h2 {
     vertical-align: middle;
     margin: auto 0.875rem;
 }
-.table-viewport td:has(.tag) {
-    vertical-align: middle;
-}
-
 /* ── Accordion sections (combined dashboard) ─────────────────────────── */
 .path-section {
     background: var(--bg-card);
@@ -573,7 +566,7 @@ h2 {
     letter-spacing: 0.07em;
     background: var(--bg-inset);
 }
-.file-row { cursor: pointer; transition: background 60ms; }
+.file-row { cursor: pointer; }
 .file-row:hover td { background: var(--bg-card-hover); }
 .file-row td:first-child {
     font-family: ui-monospace, 'Cascadia Code', monospace;
@@ -6123,6 +6116,17 @@ prismjs/prism.js:
   var _cache = null;
   var _failed = false;
   var _overrideUrl = null;
+  if (location.protocol === "file:") {
+    _failed = true;
+    document.addEventListener("DOMContentLoaded", function() {
+      const banner = document.getElementById("offline-banner");
+      if (banner) banner.style.display = "block";
+    }, { once: true });
+    if (document.readyState !== "loading") {
+      const banner = document.getElementById("offline-banner");
+      if (banner) banner.style.display = "block";
+    }
+  }
   var _pending = [];
   var _fetching = false;
   function showOfflineBanner() {
