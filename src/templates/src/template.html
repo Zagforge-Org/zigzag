@@ -4,24 +4,31 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>ZigZag Report</title>
+        <!-- Theme: set data-theme before CSS renders to prevent flash of wrong theme -->
+        <script>(function(){var t=localStorage.getItem('zz-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();</script>
         <!-- @inject: dashboard.css -->
         <!-- @inject: prism-theme.css -->
     </head>
     <body>
-        <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
-  background:#1a1a2e;color:#e2e8f0;padding:1.25rem 2rem;font-family:monospace;font-size:14px;
-  border-bottom:2px solid #f6ad55;line-height:1.8">
-            <strong style="color:#f6ad55">&#9888; Source files require a local server to load.</strong><br>
-            Run: <code style="background:#2d3748;padding:2px 8px;border-radius:4px">zigzag serve</code>
-            then open
-            <code style="background:#2d3748;padding:2px 8px;border-radius:4px">http://localhost:8787</code>
-            <button onclick="document.getElementById('offline-banner').style.display='none'"
-                style="float:right;background:none;border:1px solid #718096;color:#a0aec0;
-    padding:4px 12px;cursor:pointer;border-radius:4px;font-family:monospace">&#x2715; Dismiss</button>
+        <div id="offline-banner">
+            <strong>&#9888; Source files require a local server to load.</strong><br>
+            Run: <code>zigzag serve</code> then open <code>http://localhost:8787</code>
+            <button class="banner-dismiss" onclick="document.getElementById('offline-banner').style.display='none'">&#x2715; Dismiss</button>
         </div>
+        <div class="accent-bar"></div>
         <header>
-            <h1 id="report-title">Code Report</h1>
-            <p id="report-meta"></p>
+            <div class="header-left">
+                <div class="wordmark">ZigZag</div>
+                <h1 id="report-title">Code Report</h1>
+                <p id="report-meta"></p>
+            </div>
+            <div class="header-right">
+                <span id="sse-dot" title="Watch: live"></span>
+                <button id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+                    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+            </div>
         </header>
         <div class="container">
             <div class="section">
@@ -38,11 +45,15 @@
             </div>
             <div class="section">
                 <h2>Files</h2>
-                <input type="search" id="search" placeholder="Filter by path…" />
+                <div class="search-wrap">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="search" aria-label="Search files and languages" placeholder="Search files and languages…" autocomplete="off" />
+                    <button class="search-clear" id="search-clear" title="Clear search">&#x2715;</button>
+                    <span class="search-count" id="search-count"></span>
+                </div>
                 <div id="files-table"></div>
             </div>
         </div>
-        <!-- Source viewer slide-in panel -->
         <div id="viewer">
             <div id="viewer-header">
                 <span id="viewer-path"></span>
@@ -50,13 +61,9 @@
             </div>
             <div id="viewer-body"></div>
         </div>
-        <!-- Prism highlight worker source (embedded, no CDN required) -->
         <!-- @inject-text: dist/highlight.worker.js as prism-src -->
-        <!-- Report data (injected by ZigZag at report-generation time) -->
         <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
-        <!-- Parse report data before app logic runs -->
         <script>window.REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
-        <!-- App logic -->
         <!-- @inject: dist/bundle.js -->
     </body>
 </html>

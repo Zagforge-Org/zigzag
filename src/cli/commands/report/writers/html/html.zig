@@ -285,6 +285,18 @@ pub fn writeCombinedHtmlReport(
     try ws.write(generated_at);
     try ws.objectField("version");
     try ws.write(cfg.version);
+    try ws.objectField("watch_mode");
+    try ws.write(cfg.watch);
+    if (cfg.watch and cfg.html_output) {
+        const sse_url = try std.fmt.allocPrint(
+            allocator,
+            "http://127.0.0.1:{d}/__events",
+            .{cfg.serve_port},
+        );
+        defer allocator.free(sse_url);
+        try ws.objectField("sse_url");
+        try ws.write(sse_url);
+    }
     try ws.endObject();
 
     // global summary

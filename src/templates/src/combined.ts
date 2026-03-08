@@ -5,10 +5,16 @@ setContentUrl("combined-content.json");
 import { openViewer } from "./viewer";
 import { esc, fmt } from "./utils";
 import type { CombinedFile, CombinedPathReport } from "./combined-types";
+import { initTheme, toggleTheme } from "./theme";
 
 const R = window.COMBINED_REPORT;
 const M = R.meta;
 const S = R.summary;
+
+// Theme must run before any rendering
+initTheme();
+const themeBtn = document.getElementById("theme-toggle");
+if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
 
 // ── Global summary cards ───────────────────────────────────────────────────────
 
@@ -22,7 +28,7 @@ function renderGlobalSummary(): void {
         { label: "Total Size",   value: fmt(S.total_size_bytes) },
     ];
     cards.innerHTML = items
-        .map((c) => `<div class="card"><div class="card-value">${esc(c.value)}</div><div class="card-label">${esc(c.label)}</div></div>`)
+        .map((c) => `<div class="card"><div class="val">${esc(c.value)}</div><div class="lbl">${esc(c.label)}</div></div>`)
         .join("");
 }
 
@@ -102,41 +108,37 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
     return `
 <div class="path-section${expanded ? " expanded" : ""}" data-root-path="${esc(p.root_path)}">
     <div class="path-header" role="button" tabindex="0">
-        <span class="path-toggle">${expanded ? "▾" : "▸"}</span>
+        <span class="path-toggle">&#9658;</span>
         <span class="path-name">${esc(p.root_path)}</span>
-        <span class="path-stats">${esc(p.summary.source_files)} files · ${esc(p.summary.total_lines.toLocaleString())} lines · ${esc(fmt(p.summary.total_size_bytes))}</span>
+        <span class="path-stats">${p.summary.source_files} files · ${p.summary.total_lines.toLocaleString()} lines · ${fmt(p.summary.total_size_bytes)}</span>
     </div>
-    <div class="path-body" style="${expanded ? "" : "display:none"}">
-        <div class="path-summary-row">
-            <div class="card"><div class="card-value">${esc(p.summary.source_files)}</div><div class="card-label">Source Files</div></div>
-            <div class="card"><div class="card-value">${esc(p.summary.binary_files)}</div><div class="card-label">Binary Files</div></div>
-            <div class="card"><div class="card-value">${esc(p.summary.total_lines.toLocaleString())}</div><div class="card-label">Total Lines</div></div>
-            <div class="card"><div class="card-value">${esc(fmt(p.summary.total_size_bytes))}</div><div class="card-label">Total Size</div></div>
+    <div class="path-body">
+        <div class="path-body-inner">
+            <div class="path-summary-row">
+                <div class="card"><div class="val">${esc(String(p.summary.source_files))}</div><div class="lbl">Source Files</div></div>
+                <div class="card"><div class="val">${esc(String(p.summary.binary_files))}</div><div class="lbl">Binary Files</div></div>
+                <div class="card"><div class="val">${esc(p.summary.total_lines.toLocaleString())}</div><div class="lbl">Total Lines</div></div>
+                <div class="card"><div class="val">${esc(fmt(p.summary.total_size_bytes))}</div><div class="lbl">Total Size</div></div>
+            </div>
+            ${langRows ? `
+            <table class="lang-table">
+                <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
+                <tbody>${langRows}</tbody>
+            </table>` : ""}
+            <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
+            <table class="file-table">
+                <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
+                <tbody class="file-tbody">${fileRows}</tbody>
+            </table>
         </div>
-        ${langRows ? `
-        <table class="lang-table">
-            <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
-            <tbody>${langRows}</tbody>
-        </table>` : ""}
-        <p class="path-file-count">${p.files.length} files</p>
-        <table class="file-table">
-            <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
-            <tbody class="file-tbody">${fileRows}</tbody>
-        </table>
     </div>
 </div>`;
 }
 
 function attachSectionToggle(section: HTMLElement): void {
     const header = section.querySelector<HTMLElement>(".path-header")!;
-    header.addEventListener("click", () => {
-        const expanded = section.classList.toggle("expanded");
-        const toggle = section.querySelector<HTMLElement>(".path-toggle")!;
-        const body = section.querySelector<HTMLElement>(".path-body")!;
-        toggle.textContent = expanded ? "▾" : "▸";
-        body.style.display = expanded ? "" : "none";
-    });
-    header.addEventListener("keydown", (e) => {
+    header.addEventListener("click", () => { section.classList.toggle("expanded"); });
+    header.addEventListener("keydown", (e: KeyboardEvent) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); header.click(); }
     });
 }
@@ -152,13 +154,6 @@ function renderPathSections(): void {
     });
 }
 
-// ── Search bar ────────────────────────────────────────────────────────────────
-
-const searchEl = document.getElementById("search") as HTMLInputElement | null;
-if (searchEl) {
-    searchEl.addEventListener("input", () => filterAllSections(searchEl.value.trim()));
-}
-
 // ── Header ────────────────────────────────────────────────────────────────────
 
 document.getElementById("report-title")!.textContent =
@@ -171,3 +166,58 @@ document.getElementById("report-meta")!.textContent =
 
 renderGlobalSummary();
 renderPathSections();
+
+// ── Search bar ────────────────────────────────────────────────────────────────
+
+const searchEl = document.getElementById("search") as HTMLInputElement | null;
+const clearBtn = document.getElementById("search-clear") as HTMLButtonElement | null;
+const countEl  = document.getElementById("search-count") as HTMLElement | null;
+
+function updateSearchCount(q: string): void {
+    if (!countEl) return;
+    const total = R.paths.reduce((s, p) => s + p.files.length, 0);
+    if (!q) {
+        countEl.textContent = `${total} files`;
+    } else {
+        let matched = 0;
+        R.paths.forEach((p) => {
+            matched += p.files.filter((f) => matchesSearch(f, q)).length;
+        });
+        countEl.textContent = `${matched} / ${total} files`;
+    }
+}
+
+if (searchEl) {
+    searchEl.addEventListener("input", () => {
+        const q = searchEl.value.trim();
+        filterAllSections(q);
+        if (clearBtn) clearBtn.classList.toggle("visible", q.length > 0);
+        updateSearchCount(q);
+    });
+}
+if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+        if (searchEl) { searchEl.value = ""; filterAllSections(""); updateSearchCount(""); }
+        clearBtn.classList.remove("visible");
+    });
+}
+// Initial count
+updateSearchCount("");
+
+// ── Watch mode SSE ────────────────────────────────────────────────────────────
+
+if (M.watch_mode && M.sse_url) {
+    const dot = document.getElementById("sse-dot") as HTMLElement | null;
+    function setDot(state: "live" | "reconnecting"): void {
+        if (!dot) return;
+        dot.style.display = "block";
+        dot.classList.toggle("reconnecting", state === "reconnecting");
+        dot.title = state === "live" ? "Watch: live" : "Watch: reconnecting…";
+    }
+    try {
+        const es = new EventSource(M.sse_url);
+        es.onopen = () => setDot("live");
+        es.onerror = () => setDot("reconnecting");
+        es.addEventListener("reload", () => { location.reload(); });
+    } catch { /* SSE unavailable */ }
+}

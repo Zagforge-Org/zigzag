@@ -50,6 +50,8 @@ export interface CombinedMeta {
     file_count: number;
     generated_at: string;
     version: string;
+    watch_mode?: boolean;
+    sse_url?: string;
 }
 
 export interface CombinedReport {

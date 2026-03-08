@@ -151,7 +151,7 @@ function updateHeaderSortIndicators(): void {
 
 const search = document.getElementById("search") as HTMLInputElement;
 
-export function renderTable(): void {
+export function renderTable(): number {
     const query = (search.value || "").toLowerCase();
     tableFiles = (F || []).filter(function (f) {
         return !query || f.path.toLowerCase().indexOf(query) >= 0;
@@ -167,10 +167,8 @@ export function renderTable(): void {
     updateHeaderSortIndicators();
     tableViewport!.scrollTop = 0;
     renderVisibleRows();
+    return tableFiles.length;
 }
 
-let searchTimer = 0;
-search.addEventListener("input", function () {
-    clearTimeout(searchTimer);
-    searchTimer = window.setTimeout(renderTable, 150);
-});
+export function getTotalCount(): number { return F.length; }
+

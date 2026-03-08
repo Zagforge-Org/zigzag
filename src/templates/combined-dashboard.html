@@ -4,119 +4,212 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>ZigZag Combined Report</title>
+        <script>(function(){var t=localStorage.getItem('zz-theme')||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);})();</script>
         <style>
-/* ── Reset ───────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+/* ── Reset ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Design tokens — light (default) ───────────────────────────────── */
+:root,
+[data-theme="light"] {
+    --bg:            #fafafa;
+    --bg-card:       #ffffff;
+    --bg-card-hover: #f4f4f5;
+    --border:        #e4e4e7;
+    --border-hover:  #d4d4d8;
+    --text:          #09090b;
+    --text-muted:    #71717a;
+    --text-subtle:   #d4d4d8;
+    --accent:        #4f46e5;
+    --accent-rgb:    79,70,229;
+    --accent-glow:   rgba(79,70,229,0.08);
+    --radius:        0.625rem;
 }
 
-/* ── Design tokens (light mode) ──────────────────────── */
-:root {
-    --bg: #f8f9fa;
-    --surface: #ffffff;
-    --border: #dee2e6;
-    --text: #212529;
-    --muted: #6c757d;
-    --accent: #0d6efd;
-    --radius: 8px;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+/* ── Design tokens — dark ───────────────────────────────────────────── */
+[data-theme="dark"] {
+    --bg:            #111113;
+    --bg-card:       #1c1c20;
+    --bg-card-hover: #232329;
+    --border:        #2e2e33;
+    --border-hover:  #3f3f46;
+    --text:          #fafafa;
+    --text-muted:    #a1a1aa;
+    --text-subtle:   #52525b;
+    --accent:        #6366f1;
+    --accent-rgb:    99,102,241;
+    --accent-glow:   rgba(99,102,241,0.12);
+    --radius:        0.625rem;
 }
 
-/* ── Dark mode ───────────────────────────────────────── */
-@media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #0d1117;
-        --surface: #161b22;
-        --border: #30363d;
-        --text: #e6edf3;
-        --muted: #8b949e;
-        --accent: #58a6ff;
-        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-}
-
-/* ── Base ────────────────────────────────────────────── */
+/* ── Base ───────────────────────────────────────────────────────────── */
 body {
-    font-family: system-ui, sans-serif;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.5;
+    font-size: 0.9375rem;
 }
 
+/* ── Accent bar (top of header) ─────────────────────────────────────── */
+@keyframes zz-gradient-slide {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+.accent-bar {
+    height: 3px;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #a78bfa, #6366f1);
+    background-size: 200% 200%;
+    animation: zz-gradient-slide 6s ease infinite;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
 header {
-    background: #1a1a2e;
-    color: #fff;
-    padding: 1.5rem 2rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
 }
-header h1 {
-    font-size: 1.4rem;
-    font-weight: 600;
+.header-left {
+    flex: 1;
+    min-width: 0;
 }
-header p {
-    color: #adb5bd;
-    font-size: 0.875rem;
-    margin-top: 0.25rem;
+.wordmark {
+    font-size: 0.7rem;
+    font-variant: small-caps;
+    letter-spacing: 0.1em;
+    color: var(--text-subtle);
+    margin-bottom: 0.2rem;
+}
+#report-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    background: linear-gradient(to right, var(--text), var(--text-muted));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#report-meta {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+}
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
 }
 
+/* SSE status dot */
+#sse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #22c55e;
+    flex-shrink: 0;
+    display: none;
+}
+#sse-dot.reconnecting { background: #f59e0b; }
+
+/* Theme toggle */
+#theme-toggle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 150ms, color 150ms;
+    flex-shrink: 0;
+}
+#theme-toggle:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+}
+#theme-toggle svg { width: 16px; height: 16px; pointer-events: none; }
+[data-theme="dark"]  .icon-sun  { display: none; }
+[data-theme="light"] .icon-moon { display: none; }
+
+/* ── Page container ─────────────────────────────────────────────────── */
 .container {
-    max-width: 1100px;
+    max-width: 1200px;
     margin: 0 auto;
-    padding: 1.5rem 2rem;
+    padding: 1.5rem;
 }
 
+/* ── Section heading ─────────────────────────────────────────────────── */
 h2 {
-    font-size: 1rem;
+    font-size: 0.7rem;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--text-muted);
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 1rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 0.875rem;
 }
 
-.section {
-    background: var(--surface);
+/* ── Stat cards ─────────────────────────────────────────────────────── */
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.875rem;
+    margin-bottom: 1.5rem;
+}
+.card {
+    background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    box-shadow: var(--shadow);
+    padding: 1.25rem 1rem;
+    text-align: center;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+    cursor: default;
+}
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px var(--border-hover), 0 4px 16px var(--accent-glow);
+    border-color: var(--border-hover);
+}
+.card .val {
+    font-size: 1.75rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    line-height: 1.1;
+}
+.card .lbl {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.35rem;
+}
+
+/* ── Section wrapper ─────────────────────────────────────────────────── */
+.section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
     padding: 1.25rem 1.5rem;
     margin-bottom: 1.25rem;
 }
 
-/* ── Summary cards ───────────────────────────────────── */
-.cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 1rem;
-}
-.card {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 1rem;
-    text-align: center;
-}
-.card .val {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--accent);
-}
-.card .lbl {
-    font-size: 0.8rem;
-    color: var(--muted);
-    margin-top: 0.2rem;
-}
-
-/* ── Language bar chart ──────────────────────────────── */
+/* ── Language bar chart ──────────────────────────────────────────────── */
 .bar-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     margin-bottom: 0.5rem;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
 }
 .bar-row .name {
     width: 90px;
@@ -124,13 +217,13 @@ h2 {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--muted);
+    color: var(--text-muted);
 }
 .bar-track {
     flex: 1;
     background: var(--border);
     border-radius: 3px;
-    height: 18px;
+    height: 16px;
     overflow: hidden;
 }
 .bar-fill {
@@ -141,11 +234,12 @@ h2 {
 }
 .bar-count {
     min-width: 36px;
-    color: var(--muted);
-    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
 }
 
-/* ── Size histogram ──────────────────────────────────── */
+/* ── Size histogram ──────────────────────────────────────────────────── */
 .hist {
     display: flex;
     align-items: flex-end;
@@ -164,244 +258,307 @@ h2 {
     background: var(--accent);
     border-radius: 3px 3px 0 0;
     min-height: 2px;
+    opacity: 0.8;
 }
 .hist-lbl {
-    font-size: 0.65rem;
-    color: var(--muted);
+    font-size: 0.62rem;
+    color: var(--text-muted);
     text-align: center;
     line-height: 1.2;
 }
 
-/* ── Search ──────────────────────────────────────────── */
-input[type="search"] {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
+/* ── Search bar ─────────────────────────────────────────────────────── */
+.search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    font-size: 0.875rem;
+    padding: 0 0.75rem;
     margin-bottom: 1rem;
-    background: var(--bg);
-    color: var(--text);
+    transition: border-color 150ms, box-shadow 150ms;
 }
-input[type="search"]:focus {
-    outline: 2px solid var(--accent);
+.search-wrap:focus-within {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+.search-icon { color: var(--text-subtle); flex-shrink: 0; }
+.search-wrap input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 0.875rem;
+    padding: 0.625rem 0;
+    outline: none;
+}
+.search-wrap input::placeholder { color: var(--text-subtle); }
+.search-clear {
+    background: none;
+    border: none;
+    color: var(--text-subtle);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.125rem 0.25rem;
+    line-height: 1;
+    display: none;
+}
+.search-clear.visible { display: block; }
+.search-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 0.125rem 0.5rem;
 }
 
-/* ── File table ──────────────────────────────────────── */
+/* ── File table ─────────────────────────────────────────────────────── */
 .table-viewport {
     height: 480px;
     overflow-y: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius);
 }
-
 table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
 }
 thead {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--surface);
+    background: var(--bg-card);
 }
-th {
+thead th {
+    padding: 0.6rem 0.875rem;
     text-align: left;
-    padding: 0.5rem 0.75rem;
-    border-bottom: 2px solid var(--border);
-    cursor: pointer;
-    user-select: none;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--border);
     white-space: nowrap;
 }
-th:hover {
-    color: var(--accent);
+tbody td {
+    padding: 0.55rem 0.875rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
 }
-th .sort-icon {
-    margin-left: 4px;
-    opacity: 0.4;
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background 80ms; cursor: pointer; }
+tbody tr:hover td { background: var(--bg-card-hover); }
+td.path-cell {
+    font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 0.8rem;
+    word-break: break-all;
 }
-th.sorted .sort-icon {
+td.num-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+/* ── Accordion sections (combined dashboard) ─────────────────────────── */
+.path-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    transition: border-color 200ms;
+}
+.path-section.expanded {
+    border-left: 2px solid var(--accent);
+}
+.path-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 120ms;
+}
+.path-header:hover { background: var(--bg-card-hover); }
+.path-toggle {
+    color: var(--text-muted);
+    transition: transform 200ms ease;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+}
+.path-section.expanded .path-toggle { transform: rotate(90deg); }
+.path-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.path-stats {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.path-body {
+    overflow: hidden;
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 300ms ease, opacity 250ms ease;
+}
+.path-section.expanded .path-body {
+    max-height: 9999px;
     opacity: 1;
 }
-td {
-    padding: 0;
+.path-body-inner {
+    padding: 1rem 1.25rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+.path-summary-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+}
+.path-summary-row .card {
+    flex: 1;
+    min-width: 110px;
+    padding: 0.875rem 0.75rem;
+}
+.path-summary-row .card .val { font-size: 1.35rem; }
+.path-file-count {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin: 0.5rem 0 0.375rem;
+}
+.lang-table, .file-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-bottom: 0.875rem;
+}
+.lang-table th, .lang-table td,
+.file-table th, .file-table td {
+    padding: 0.4rem 0.625rem;
+    text-align: left;
     border-bottom: 1px solid var(--border);
+}
+.lang-table th, .file-table th {
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.file-row { cursor: pointer; }
+.file-row:hover td { background: var(--bg-card-hover); }
+.file-row td:first-child {
+    font-family: ui-monospace, 'Cascadia Code', monospace;
+    font-size: 0.78rem;
     word-break: break-all;
 }
-.table-viewport td > * {
-    display: block;
-    padding: 0.4rem 0.75rem;
-}
-.table-viewport td:first-child > * {
-    word-break: break-all;
-}
-.table-viewport tr:hover td {
-    background: var(--bg);
+.file-row td:not(:first-child) {
+    white-space: nowrap;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
 }
 
-.tag {
-    display: inline-block;
-    padding: 0.1rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    background: color-mix(in srgb, var(--border) 60%, transparent);
-    color: var(--muted);
-}
-
-.file-link {
-    cursor: pointer;
-    color: var(--accent);
-    text-decoration: underline;
-}
-.file-link:hover {
-    opacity: 0.8;
-}
-
-/* ── Source viewer panel ─────────────────────────────── */
+/* ── Source viewer panel ─────────────────────────────────────────────── */
 #viewer {
     position: fixed;
-    right: 0;
-    top: 0;
-    width: 55%;
-    height: 100vh;
-    background: #1a1a2e;
-    color: #e9ecef;
-    overflow: hidden;
-    transform: translateX(100%);
-    transition: transform 0.3s;
+    top: 0; right: 0; bottom: 0;
+    width: min(720px, 100vw);
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 250ms cubic-bezier(.4,0,.2,1);
     z-index: 100;
-    box-shadow: -4px 0 16px rgba(0, 0, 0, 0.3);
 }
-#viewer.open {
-    transform: translateX(0);
-}
+#viewer.open { transform: translateX(0); }
 #viewer-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #333;
-    font-size: 0.875rem;
+    padding: 0.875rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-card);
     flex-shrink: 0;
 }
 #viewer-path {
-    color: #adb5bd;
-    word-break: break-all;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 #viewer-close {
     background: none;
-    border: none;
-    color: #adb5bd;
-    font-size: 1.25rem;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    border-radius: var(--radius);
+    padding: 0.2rem 0.5rem;
     cursor: pointer;
-    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    transition: border-color 120ms, color 120ms;
     flex-shrink: 0;
 }
-#viewer-close:hover {
-    color: #fff;
-}
+#viewer-close:hover { border-color: var(--border-hover); color: var(--text); }
 #viewer-body {
-    overflow: auto;
     flex: 1;
-    padding: 0.75rem 0;
+    overflow: auto;
     overflow-anchor: none;
-}
-
-/* ── Non-virtual line-number table ───────────────────── */
-table.ln-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-    line-height: 20px;
-    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
-}
-table.ln-table td {
     padding: 0;
-    border: none;
-    vertical-align: top;
+    font-size: 0.82rem;
+    line-height: 1.6;
 }
-table.ln-table td.ln {
-    padding: 0 1rem 0 1rem;
-    text-align: right;
-    color: #6c757d;
-    user-select: none;
-    white-space: nowrap;
-    width: 1%;
-}
-table.ln-table td.lc {
-    padding: 0 1rem 0 0;
-    white-space: pre;
-}
+#viewer-body pre[class*="language-"] { margin: 0; border-radius: 0; }
+.vwindow { overflow: hidden; }
+.vline { height: 20px; overflow: hidden; white-space: pre; }
+.table-viewport td > * { display: block; padding: 0; }
 
-/* ── Virtual viewer line rows ────────────────────────── */
-.vline {
-    display: flex;
-    height: 20px;
-    overflow: hidden;
-    font-size: 13px;
-    line-height: 20px;
-    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
+/* ── Offline banner ─────────────────────────────────────────────────── */
+#offline-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 9999;
+    background: var(--bg-card);
+    color: var(--text);
+    padding: 1rem 1.5rem;
+    font-size: 0.85rem;
+    border-bottom: 2px solid #f59e0b;
+    line-height: 1.8;
+    display: none;
 }
-.vline .ln {
-    flex-shrink: 0;
-    padding: 0 1rem 0 1rem;
-    text-align: right;
-    color: #6c757d;
-    user-select: none;
+#offline-banner strong { color: #f59e0b; }
+#offline-banner code {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, monospace;
 }
-.vline .lc {
-    flex: none;
-    white-space: pre;
-    padding-right: 1rem;
-}
-
-/* ── Truncation badge (long lines) ──────────────────── */
-.truncate-badge {
-    display: inline-block;
-    vertical-align: middle;
-    margin-left: 0.5em;
-    padding: 0 0.35em;
-    border-radius: 3px;
-    font-size: 10px;
-    line-height: 16px;
-    font-family: system-ui, sans-serif;
-    background: #2d3748;
-    color: #718096;
-    white-space: nowrap;
-    user-select: none;
-    cursor: default;
-}
-
-/* ── Minified-file viewer ────────────────────────────── */
-.minified-banner {
-    padding: 0.5rem 1rem;
-    font-size: 12px;
-    font-family: system-ui, sans-serif;
-    color: #f6c90e;
-    background: #1e1b00;
-    border-left: 3px solid #f6c90e;
-    margin-bottom: 0.5rem;
-}
-.minified-preview {
-    margin: 0;
-    padding: 0 1rem;
-    font-size: 13px;
-    font-family: Consolas, Monaco, "Andale Mono", "Ubuntu Mono", monospace;
-    line-height: 20px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    color: #abb2bf;
-}
-.minified-more {
-    padding: 0.4rem 1rem;
-    font-size: 11px;
-    font-family: system-ui, sans-serif;
-    color: #6c757d;
-    font-style: italic;
+.banner-dismiss {
+    float: right;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 3px 10px;
+    cursor: pointer;
+    border-radius: 4px;
 }
 
 </style>
@@ -416,39 +573,27 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
 }
 
 </style>
-        <style>
-.path-section { border: 1px solid var(--border, #2d3748); border-radius: 6px; margin-bottom: 1.25rem; overflow: hidden; }
-.path-header { display: flex; align-items: center; gap: 0.75rem; padding: 0.9rem 1.25rem; cursor: pointer; background: var(--card-bg, #1a202c); user-select: none; }
-.path-header:hover { background: var(--card-hover, #2d3748); }
-.path-toggle { font-size: 0.9rem; color: var(--accent, #63b3ed); min-width: 1ch; }
-.path-name { font-family: monospace; font-size: 1rem; font-weight: 600; color: var(--text, #e2e8f0); }
-.path-stats { margin-left: auto; font-size: 0.8rem; color: var(--muted, #718096); }
-.path-body { padding: 1.25rem; }
-.path-summary-row { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
-.path-summary-row .card { flex: 1; min-width: 100px; }
-.path-file-count { font-size: 0.8rem; color: var(--muted, #718096); margin: 0.5rem 0; }
-.lang-table, .file-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 1rem; }
-.lang-table th, .lang-table td, .file-table th, .file-table td { padding: 0.4rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border, #2d3748); }
-.lang-table th, .file-table th { color: var(--muted, #718096); font-weight: 500; }
-.file-row { cursor: pointer; }
-.file-row:hover td { background: var(--row-hover, #2d3748); }
-        </style>
     </head>
     <body>
-        <div id="offline-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;
-  background:#1a1a2e;color:#e2e8f0;padding:1.25rem 2rem;font-family:monospace;font-size:14px;
-  border-bottom:2px solid #f6ad55;line-height:1.8">
-            <strong style="color:#f6ad55">&#9888; Source files require a local server to load.</strong><br>
-            Run: <code style="background:#2d3748;padding:2px 8px;border-radius:4px">zigzag serve</code>
-            then open
-            <code style="background:#2d3748;padding:2px 8px;border-radius:4px">http://localhost:8787</code>
-            <button onclick="document.getElementById('offline-banner').style.display='none'"
-                style="float:right;background:none;border:1px solid #718096;color:#a0aec0;
-    padding:4px 12px;cursor:pointer;border-radius:4px;font-family:monospace">&#x2715; Dismiss</button>
+        <div id="offline-banner">
+            <strong>&#9888; Source files require a local server to load.</strong><br>
+            Run: <code>zigzag serve</code> then open <code>http://localhost:8787</code>
+            <button class="banner-dismiss" onclick="document.getElementById('offline-banner').style.display='none'">&#x2715; Dismiss</button>
         </div>
+        <div class="accent-bar"></div>
         <header>
-            <h1 id="report-title">Combined Report</h1>
-            <p id="report-meta"></p>
+            <div class="header-left">
+                <div class="wordmark">ZigZag</div>
+                <h1 id="report-title">Combined Report</h1>
+                <p id="report-meta"></p>
+            </div>
+            <div class="header-right">
+                <span id="sse-dot" title="Watch: live"></span>
+                <button id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+                    <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                    <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                </button>
+            </div>
         </header>
         <div class="container">
             <div class="section">
@@ -457,11 +602,15 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
             </div>
             <div class="section">
                 <h2>Paths</h2>
-                <input type="search" id="search" placeholder="Filter by path, language…" />
+                <div class="search-wrap">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                    <input type="text" id="search" aria-label="Search files, languages, or paths" placeholder="Search files, languages, or paths across all sections…" autocomplete="off" />
+                    <button class="search-clear" id="search-clear" title="Clear search">&#x2715;</button>
+                    <span class="search-count" id="search-count"></span>
+                </div>
                 <div id="path-sections"></div>
             </div>
         </div>
-        <!-- Source viewer slide-in panel -->
         <div id="viewer">
             <div id="viewer-header">
                 <span id="viewer-path"></span>
@@ -469,7 +618,6 @@ code[class*=language-],pre[class*=language-]{color:#ccc;background:0 0;font-fami
             </div>
             <div id="viewer-body"></div>
         </div>
-        <!-- Prism highlight worker source (embedded, no CDN required) -->
         <script type="text/plain" id="prism-src">
 self.Prism={disableWorkerMessageHandler:true};
 "use strict";
@@ -5740,11 +5888,8 @@ prismjs/prism.js:
 */
 
 </script>
-        <!-- Combined report data (injected by ZigZag at report-generation time) -->
         <script type="application/json" id="rpt">__ZIGZAG_DATA__</script>
-        <!-- Parse report data before app logic runs -->
         <script>window.COMBINED_REPORT = JSON.parse(document.getElementById('rpt').textContent);</script>
-        <!-- Combined app logic -->
         <script>
 "use strict";
 (() => {
@@ -6170,11 +6315,30 @@ prismjs/prism.js:
     if (e.key === "Escape") closeViewer();
   });
 
+  // src/theme.ts
+  var STORAGE_KEY = "zz-theme";
+  var root = document.documentElement;
+  function getSystemTheme() {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  function initTheme() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    root.setAttribute("data-theme", stored ?? getSystemTheme());
+  }
+  function toggleTheme() {
+    const current = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", current);
+    localStorage.setItem(STORAGE_KEY, current);
+  }
+
   // src/combined.ts
   setContentUrl("combined-content.json");
   var R = window.COMBINED_REPORT;
   var M = R.meta;
   var S = R.summary;
+  initTheme();
+  var themeBtn = document.getElementById("theme-toggle");
+  if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
   function renderGlobalSummary() {
     const cards = document.getElementById("cards");
     const items = [
@@ -6184,7 +6348,7 @@ prismjs/prism.js:
       { label: "Total Lines", value: S.total_lines.toLocaleString() },
       { label: "Total Size", value: fmt(S.total_size_bytes) }
     ];
-    cards.innerHTML = items.map((c) => `<div class="card"><div class="card-value">${esc(c.value)}</div><div class="card-label">${esc(c.label)}</div></div>`).join("");
+    cards.innerHTML = items.map((c) => `<div class="card"><div class="val">${esc(c.value)}</div><div class="lbl">${esc(c.label)}</div></div>`).join("");
   }
   function matchesSearch(f, q) {
     if (!q) return true;
@@ -6236,38 +6400,36 @@ prismjs/prism.js:
     return `
 <div class="path-section${expanded ? " expanded" : ""}" data-root-path="${esc(p.root_path)}">
     <div class="path-header" role="button" tabindex="0">
-        <span class="path-toggle">${expanded ? "\u25BE" : "\u25B8"}</span>
+        <span class="path-toggle">&#9658;</span>
         <span class="path-name">${esc(p.root_path)}</span>
-        <span class="path-stats">${esc(p.summary.source_files)} files \xB7 ${esc(p.summary.total_lines.toLocaleString())} lines \xB7 ${esc(fmt(p.summary.total_size_bytes))}</span>
+        <span class="path-stats">${p.summary.source_files} files \xB7 ${p.summary.total_lines.toLocaleString()} lines \xB7 ${fmt(p.summary.total_size_bytes)}</span>
     </div>
-    <div class="path-body" style="${expanded ? "" : "display:none"}">
-        <div class="path-summary-row">
-            <div class="card"><div class="card-value">${esc(p.summary.source_files)}</div><div class="card-label">Source Files</div></div>
-            <div class="card"><div class="card-value">${esc(p.summary.binary_files)}</div><div class="card-label">Binary Files</div></div>
-            <div class="card"><div class="card-value">${esc(p.summary.total_lines.toLocaleString())}</div><div class="card-label">Total Lines</div></div>
-            <div class="card"><div class="card-value">${esc(fmt(p.summary.total_size_bytes))}</div><div class="card-label">Total Size</div></div>
+    <div class="path-body">
+        <div class="path-body-inner">
+            <div class="path-summary-row">
+                <div class="card"><div class="val">${esc(String(p.summary.source_files))}</div><div class="lbl">Source Files</div></div>
+                <div class="card"><div class="val">${esc(String(p.summary.binary_files))}</div><div class="lbl">Binary Files</div></div>
+                <div class="card"><div class="val">${esc(p.summary.total_lines.toLocaleString())}</div><div class="lbl">Total Lines</div></div>
+                <div class="card"><div class="val">${esc(fmt(p.summary.total_size_bytes))}</div><div class="lbl">Total Size</div></div>
+            </div>
+            ${langRows ? `
+            <table class="lang-table">
+                <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
+                <tbody>${langRows}</tbody>
+            </table>` : ""}
+            <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
+            <table class="file-table">
+                <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
+                <tbody class="file-tbody">${fileRows}</tbody>
+            </table>
         </div>
-        ${langRows ? `
-        <table class="lang-table">
-            <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
-            <tbody>${langRows}</tbody>
-        </table>` : ""}
-        <p class="path-file-count">${p.files.length} files</p>
-        <table class="file-table">
-            <thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Size</th></tr></thead>
-            <tbody class="file-tbody">${fileRows}</tbody>
-        </table>
     </div>
 </div>`;
   }
   function attachSectionToggle(section) {
     const header = section.querySelector(".path-header");
     header.addEventListener("click", () => {
-      const expanded = section.classList.toggle("expanded");
-      const toggle = section.querySelector(".path-toggle");
-      const body = section.querySelector(".path-body");
-      toggle.textContent = expanded ? "\u25BE" : "\u25B8";
-      body.style.display = expanded ? "" : "none";
+      section.classList.toggle("expanded");
     });
     header.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") {
@@ -6284,14 +6446,65 @@ prismjs/prism.js:
       attachRowListeners(section.querySelector(".file-tbody"));
     });
   }
-  var searchEl = document.getElementById("search");
-  if (searchEl) {
-    searchEl.addEventListener("input", () => filterAllSections(searchEl.value.trim()));
-  }
   document.getElementById("report-title").textContent = "Code Report: " + M.path_count + " paths";
   document.getElementById("report-meta").textContent = "Generated on " + M.generated_at + " \xB7 ZigZag v" + M.version + (M.failed_paths > 0 ? ` \xB7 \u26A0 ${M.failed_paths} path(s) failed` : "");
   renderGlobalSummary();
   renderPathSections();
+  var searchEl = document.getElementById("search");
+  var clearBtn = document.getElementById("search-clear");
+  var countEl = document.getElementById("search-count");
+  function updateSearchCount(q) {
+    if (!countEl) return;
+    const total = R.paths.reduce((s, p) => s + p.files.length, 0);
+    if (!q) {
+      countEl.textContent = `${total} files`;
+    } else {
+      let matched = 0;
+      R.paths.forEach((p) => {
+        matched += p.files.filter((f) => matchesSearch(f, q)).length;
+      });
+      countEl.textContent = `${matched} / ${total} files`;
+    }
+  }
+  if (searchEl) {
+    searchEl.addEventListener("input", () => {
+      const q = searchEl.value.trim();
+      filterAllSections(q);
+      if (clearBtn) clearBtn.classList.toggle("visible", q.length > 0);
+      updateSearchCount(q);
+    });
+  }
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      if (searchEl) {
+        searchEl.value = "";
+        filterAllSections("");
+        updateSearchCount("");
+      }
+      clearBtn.classList.remove("visible");
+    });
+  }
+  updateSearchCount("");
+  if (M.watch_mode && M.sse_url) {
+    let setDot = function(state) {
+      if (!dot) return;
+      dot.style.display = "block";
+      dot.classList.toggle("reconnecting", state === "reconnecting");
+      dot.title = state === "live" ? "Watch: live" : "Watch: reconnecting\u2026";
+    };
+    setDot2 = setDot;
+    const dot = document.getElementById("sse-dot");
+    try {
+      const es = new EventSource(M.sse_url);
+      es.onopen = () => setDot("live");
+      es.onerror = () => setDot("reconnecting");
+      es.addEventListener("reload", () => {
+        location.reload();
+      });
+    } catch {
+    }
+  }
+  var setDot2;
 })();
 
 </script>

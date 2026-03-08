@@ -1,10 +1,10 @@
-import { M, setReport } from "./state";
-import { setContentCache, resetContent } from "./content";
+import { M, F, setReport } from "./state";
+import { setContentCache, resetContent, updateContentEntry, removeContentEntry } from "./content";
 import { renderHeader, renderCards } from "./header";
 import { renderLangChart, renderSizeChart } from "./charts";
 import { renderTable } from "./table";
 import { openViewer, closeViewer, currentFile } from "./viewer";
-import type { Report } from "./types";
+import type { Report, ReportFile } from "./types";
 
 function extractReport(html: string): Report | null {
     const m = /id="rpt"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
@@ -60,6 +60,14 @@ function resolveContentUrl(): string {
     return dir + "report-content.json";
 }
 
+function setSseDot(state: "live" | "reconnecting"): void {
+    const dot = document.getElementById("sse-dot") as HTMLElement | null;
+    if (!dot) return;
+    dot.style.display = "block";
+    dot.classList.toggle("reconnecting", state === "reconnecting");
+    dot.title = state === "live" ? "Watch: live" : "Watch: reconnecting…";
+}
+
 export function startWatchMode(): void {
     if (typeof EventSource === "undefined") {
         startPolling();
@@ -74,6 +82,7 @@ export function startWatchMode(): void {
     let es: EventSource;
     try {
         es = new EventSource(sseUrl);
+        setSseDot("live");
     } catch {
         startPolling();
         return;
@@ -87,7 +96,53 @@ export function startWatchMode(): void {
     es.addEventListener("report", function (e: MessageEvent<string>) {
         received = true;
         try {
-            const msg = JSON.parse(e.data) as { report: Report; content: Record<string, string> | null };
+            const msg = JSON.parse(e.data) as {
+                type?: string;
+                report?: Report;
+                content?: Record<string, string> | null;
+                path?: string;
+                meta?: { size: number; lines: number; language: string };
+            };
+
+            // Delta: single file was updated or created
+            if (msg.type === "file_update" && msg.path !== undefined) {
+                if ("content" in msg && typeof (msg as Record<string, unknown>).content === "string") {
+                    const c = (msg as unknown as { content: string }).content;
+                    updateContentEntry(msg.path, c);
+                }
+                if (msg.meta) {
+                    const existing = F.findIndex((f) => f.path === msg.path);
+                    const updated: ReportFile = {
+                        path: msg.path,
+                        size: msg.meta.size,
+                        lines: msg.meta.lines,
+                        language: msg.meta.language,
+                    };
+                    if (existing >= 0) {
+                        F[existing] = updated;
+                    } else {
+                        F.push(updated);
+                    }
+                }
+                renderTable();
+                if (currentFile?.path === msg.path) {
+                    const fileEntry = F.find((f) => f.path === msg.path);
+                    if (fileEntry) openViewer(fileEntry);
+                }
+                return;
+            }
+
+            // Delta: single file was deleted
+            if (msg.type === "file_delete" && msg.path !== undefined) {
+                removeContentEntry(msg.path);
+                const idx = F.findIndex((f) => f.path === msg.path);
+                if (idx >= 0) F.splice(idx, 1);
+                renderTable();
+                if (currentFile?.path === msg.path) closeViewer();
+                return;
+            }
+
+            // Full update (initial or legacy)
             if (msg.report) softUpdate(msg.report, msg.content ?? null);
         } catch { /* ignore malformed messages */ }
     });
@@ -99,11 +154,15 @@ export function startWatchMode(): void {
         location.reload();
     });
 
+    es.onopen = () => setSseDot("live");
+
     es.onerror = function () {
         if (!received) {
             // Never got a message — server is likely not running.
             es.close();
             startPolling();
+        } else {
+            setSseDot("reconnecting");
         }
         // If we already received events, let EventSource auto-reconnect
         // (browser retries after the `retry:` interval set by the server).
