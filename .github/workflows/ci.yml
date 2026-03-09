@@ -42,7 +42,7 @@ jobs:
               run: python3 src/templates/bundle.py
             - name: Run tests
               shell: bash
-              run: zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig
+              run: zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig
 
     build:
         name: Build (${{ matrix.target }})

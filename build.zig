@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) void {
     });
     // Inject options into the library module
     mod.addImport("options", opts_mod);
+    mod.link_libc = true;
 
     // Define the Executable
     const exe = b.addExecutable(.{
