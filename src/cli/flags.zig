@@ -17,6 +17,7 @@ const htmlHandler = @import("./handlers/html.zig").handleHtml;
 const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
 const portHandler = @import("./handlers/port.zig").handlePort;
 const logHandler = @import("./handlers/log.zig").handleLog;
+const openHandler = @import("./handlers/open.zig").handleOpen;
 
 ///  FlagsHandler represents a command-line flag.
 pub const FlagsHandler = struct {
@@ -42,4 +43,5 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--llm-report", .takes_value = false, .handler = &llmReportHandler },
     .{ .name = "--port", .takes_value = true, .handler = &portHandler },
     .{ .name = "--log", .takes_value = false, .handler = &logHandler },
+    .{ .name = "--open", .takes_value = false, .handler = &openHandler },
 };
