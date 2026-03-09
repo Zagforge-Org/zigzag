@@ -1,8 +1,8 @@
 import { M, F, setReport } from "./state";
-import { setContentCache, resetContent, updateContentEntry, removeContentEntry } from "./content";
+import { setContentCache, resetContent, updateContentEntry, removeContentEntry, invalidateContent } from "./content";
 import { renderHeader, renderCards } from "./header";
 import { renderLangChart, renderSizeChart } from "./charts";
-import { renderTable } from "./table";
+import { renderTable, getTotalCount, scrollToFile } from "./table";
 import { openViewer, closeViewer, currentFile } from "./viewer";
 import type { Report, ReportFile } from "./types";
 
@@ -12,20 +12,30 @@ function extractReport(html: string): Report | null {
     try { return JSON.parse(m[1]) as Report; } catch { return null; }
 }
 
+function updateCountBadge(): void {
+    const el = document.getElementById("search-count");
+    if (el) el.textContent = getTotalCount() + " files";
+}
+
 export function softUpdate(newR: Report, newContent: Record<string, string> | null): void {
     setReport(newR);
     if (newContent !== null) {
         setContentCache(newContent);
+    } else {
+        // Full update (no inline content): sidecars on disk are up-to-date.
+        // Invalidate the in-memory cache so the viewer re-fetches fresh content.
+        invalidateContent();
     }
     renderHeader();
     renderCards();
     renderLangChart();
     renderSizeChart();
-    renderTable();
+    renderTable(false);
+    updateCountBadge();
 
     if (currentFile !== null) {
         const updated = newR.files.find((f) => f.path === currentFile!.path) ?? null;
-        if (updated) openViewer(updated);
+        if (updated) openViewer(updated, true);
         else closeViewer();
     }
 }
@@ -37,27 +47,20 @@ function startPolling(): void {
             .then(function (r) { return r.ok ? r.text() : Promise.resolve<string | null>(null); })
             .then(function (ts) {
                 if (!ts || ts.trim() === M.generated_at) return;
-                // Fetch fresh report data and content sidecar in parallel
-                return Promise.all([
-                    fetch(location.href, { cache: "no-store" }).then((r) => r.text()),
-                    fetch(resolveContentUrl(), { cache: "no-store" })
-                        .then((r) => r.ok ? r.json() as Promise<Record<string, string>> : Promise.resolve(null))
-                        .catch(() => null),
-                ]).then(function ([html, content]) {
-                    const newR = extractReport(html);
-                    if (newR) softUpdate(newR, content);
-                });
+                return fetch(location.href, { cache: "no-store" })
+                    .then((r) => r.text())
+                    .then(function (html) {
+                        const newR = extractReport(html);
+                        if (newR) {
+                            invalidateContent();
+                            softUpdate(newR, null);
+                        }
+                    });
             })
             .catch(function () {})
             .then(function () { setTimeout(poll, 2000); });
     }
     setTimeout(poll, 2000);
-}
-
-function resolveContentUrl(): string {
-    const pageUrl = location.href.replace(/[?#].*$/, "");
-    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
-    return dir + "report-content.json";
 }
 
 function setSseDot(state: "live" | "reconnecting"): void {
@@ -110,8 +113,10 @@ export function startWatchMode(): void {
                     const c = (msg as unknown as { content: string }).content;
                     updateContentEntry(msg.path, c);
                 }
+                let isNew = false;
                 if (msg.meta) {
                     const existing = F.findIndex((f) => f.path === msg.path);
+                    isNew = existing < 0;
                     const updated: ReportFile = {
                         path: msg.path,
                         size: msg.meta.size,
@@ -124,10 +129,12 @@ export function startWatchMode(): void {
                         F.push(updated);
                     }
                 }
-                renderTable();
+                renderTable(false);
+                updateCountBadge();
+                if (isNew) scrollToFile(msg.path);
                 if (currentFile?.path === msg.path) {
                     const fileEntry = F.find((f) => f.path === msg.path);
-                    if (fileEntry) openViewer(fileEntry);
+                    if (fileEntry) openViewer(fileEntry, true);
                 }
                 return;
             }
@@ -137,13 +144,21 @@ export function startWatchMode(): void {
                 removeContentEntry(msg.path);
                 const idx = F.findIndex((f) => f.path === msg.path);
                 if (idx >= 0) F.splice(idx, 1);
-                renderTable();
+                renderTable(false);
+                updateCountBadge();
                 if (currentFile?.path === msg.path) closeViewer();
                 return;
             }
 
             // Full update (initial or legacy)
-            if (msg.report) softUpdate(msg.report, msg.content ?? null);
+            if (msg.report) {
+                const prevPaths = new Set(F.map((f) => f.path));
+                softUpdate(msg.report, msg.content ?? null);
+                // Scroll to the first newly-added file (covers the case where the
+                // delta was lost or the file was empty when IN_CREATE fired).
+                const firstNew = msg.report.files.find((f) => !prevPaths.has(f.path));
+                if (firstNew) scrollToFile(firstNew.path);
+            }
         } catch { /* ignore malformed messages */ }
     });
 
