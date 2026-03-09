@@ -9,6 +9,7 @@ const Watcher = watcher_mod.Watcher;
 const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
+const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../logger.zig");
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
@@ -68,17 +69,34 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
 
         {
             // Try the configured port; if already in use, increment up to 9 more times.
+            // Use a TCP connection probe rather than relying on bind() error codes —
+            // SO_REUSEADDR can allow duplicate binds on some OS/kernel configurations.
+            const max_port_attempts = 10;
             var port = cfg.serve_port;
-            for (0..10) |_| {
+            for (0..max_port_attempts) |i| {
+                if (isPortListening(port)) {
+                    if (i == 0) {
+                        lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                    }
+                    if (i == max_port_attempts - 1) {
+                        lg.printError("Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
+                        break;
+                    }
+                    port += 1;
+                    continue;
+                }
                 if (SseServer.init(port, srv_root, default_page, allocator)) |srv| {
                     sse_server = srv;
                     if (port != cfg.serve_port) {
-                        lg.printWarn("Port {d} already in use — using port {d}", .{ cfg.serve_port, port });
                         cfg.serve_port = port; // propagate to HTML/SSE-URL generation
                     }
                     break;
                 } else |err| {
+                    // Bind still failed (race condition or other error); treat as occupied.
                     if (err == error.AddressInUse) {
+                        if (i == 0) {
+                            lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                        }
                         port += 1;
                     } else {
                         lg.printWarn("SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
@@ -239,7 +257,10 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
             // fires and causes connected browsers to reload combined.html.
             var combined_needed = false;
             for (0..states.items.len) |i| {
-                if (dirty_states[i]) { combined_needed = true; break; }
+                if (dirty_states[i]) {
+                    combined_needed = true;
+                    break;
+                }
             }
             // On overflow, changed_paths is incomplete — pass empty slice so all sidecars
             // get written, ensuring the content directory is consistent.
