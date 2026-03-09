@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const lg = @import("logger.zig");
+const isPortListening = @import("./watch/port_listening.zig").isPortListening;
 
 pub const ServeConfig = struct {
     root_dir: []const u8,
@@ -26,16 +27,44 @@ pub fn isPathSafe(req_path: []const u8) bool {
 }
 
 pub fn execServe(cfg: ServeConfig) !void {
-    const addr = try std.net.Address.parseIp("127.0.0.1", cfg.port);
-    var server = try addr.listen(.{ .reuse_address = true });
+    const max_port_attempts = 10;
+    var port = cfg.port;
+    var server: std.net.Server = blk: {
+        for (0..max_port_attempts) |i| {
+            if (isPortListening(port)) {
+                if (i == 0) {
+                    lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                }
+                if (i == max_port_attempts - 1) {
+                    lg.printError("Ports {d}..{d} are all occupied. Cannot start server.", .{ cfg.port, port });
+                    return error.AddressInUse;
+                }
+                port += 1;
+                continue;
+            }
+            const addr = try std.net.Address.parseIp("127.0.0.1", port);
+            if (addr.listen(.{ .reuse_address = true })) |srv| {
+                break :blk srv;
+            } else |err| {
+                // Bind still failed (race condition or other error); treat as occupied.
+                if (err != error.AddressInUse) return err;
+                if (i == 0) {
+                    lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                }
+                port += 1;
+            }
+        }
+        lg.printError("Ports {d}..{d} are all occupied. Cannot start server.", .{ cfg.port, port - 1 });
+        return error.AddressInUse;
+    };
     defer server.deinit();
 
-    lg.printSuccess("Serving ZigZag report at \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.port});
+    lg.printSuccess("Serving ZigZag report at \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{port});
     lg.printStep("Root: {s}", .{cfg.root_dir});
     lg.printStep("Press Ctrl+C to stop.", .{});
 
     if (cfg.open_browser) {
-        openBrowser(cfg.allocator, cfg.port);
+        openBrowser(cfg.allocator, port);
     }
 
     while (true) {
