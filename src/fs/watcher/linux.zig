@@ -8,22 +8,57 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
+/// Directories skipped by the file walker (shouldIgnore in process.zig).
+/// The watcher must skip the same dirs so their writes never enter the inotify queue.
+/// Matching is substring-based (same as matchesPattern path-contains logic).
+const DEFAULT_SKIP_DIRS = [_][]const u8{
+    "node_modules",
+    ".git",
+    ".svn",
+    ".hg",
+    "__pycache__",
+    ".pytest_cache",
+    ".idea",
+    ".vscode",
+    ".DS_Store",
+    ".cache",
+    ".zig-cache",
+};
+
 pub const Watcher = struct {
     ifd: posix.fd_t,
     wd_map: std.AutoHashMap(i32, []const u8),
     allocator: std.mem.Allocator,
     buf: [65536]u8 align(@alignOf(linux.inotify_event)),
+    /// Set when IN_Q_OVERFLOW is received; caller should mark states dirty and rebuild.
+    overflow: bool = false,
+    /// Directories to skip when registering inotify watches (substring match on full path).
+    /// Prevents high-churn directories (node_modules, output dirs, caches) from flooding
+    /// the inotify event queue and triggering spurious overflows.
+    skip_dirs: std.ArrayList([]const u8),
 
     const WATCH_MASK: u32 = linux.IN.CLOSE_WRITE | linux.IN.CREATE | linux.IN.DELETE |
         linux.IN.MOVED_FROM | linux.IN.MOVED_TO | linux.IN.DELETE_SELF;
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
         const fd = try posix.inotify_init1(linux.IN.CLOEXEC);
+        errdefer posix.close(fd);
+
+        var skip_dirs: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (skip_dirs.items) |d| allocator.free(d);
+            skip_dirs.deinit(allocator);
+        }
+        for (DEFAULT_SKIP_DIRS) |dir| {
+            try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
+        }
+
         return .{
             .ifd = fd,
             .wd_map = std.AutoHashMap(i32, []const u8).init(allocator),
             .allocator = allocator,
             .buf = undefined,
+            .skip_dirs = skip_dirs,
         };
     }
 
@@ -32,18 +67,50 @@ pub const Watcher = struct {
         while (it.next()) |v| self.allocator.free(v.*);
         self.wd_map.deinit();
         posix.close(self.ifd);
+        for (self.skip_dirs.items) |d| self.allocator.free(d);
+        self.skip_dirs.deinit(self.allocator);
+    }
+
+    /// Register a directory name to skip when adding inotify watches.
+    /// Only the basename (last path component) is compared, so "zigzag-reports" skips
+    /// any directory with that name at any depth without affecting unrelated paths.
+    /// Call this before watchDir() for output directories, custom ignore paths, etc.
+    pub fn addSkipDir(self: *Watcher, dir: []const u8) !void {
+        const name = std.fs.path.basename(dir);
+        if (name.len == 0) return;
+        const copy = try self.allocator.dupe(u8, name);
+        try self.skip_dirs.append(self.allocator, copy);
     }
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
         try self.addWatchRecursive(path);
     }
 
+    /// Returns true when the LAST component of path matches any registered skip name.
+    /// Matching only on basename means we skip e.g. node_modules at any depth without
+    /// accidentally skipping unrelated paths that happen to contain "node_modules" as
+    /// a substring of a parent directory (e.g. /home/user/.zig-cache/tmp/TestRun).
+    fn shouldSkipPath(self: *const Watcher, path: []const u8) bool {
+        const name = std.fs.path.basename(path);
+        if (name.len == 0) return false;
+        for (self.skip_dirs.items) |skip| {
+            if (std.mem.eql(u8, name, skip)) return true;
+        }
+        return false;
+    }
+
     fn addWatchRecursive(self: *Watcher, path: []const u8) !void {
+        if (self.shouldSkipPath(path)) return;
+
         const path_z = try self.allocator.dupeZ(u8, path);
         defer self.allocator.free(path_z);
 
         const wd = posix.inotify_add_watch(self.ifd, path_z, WATCH_MASK) catch |err| switch (err) {
             error.FileNotFound, error.NotDir => return,
+            error.SystemResources => {
+                std.log.warn("inotify watch limit reached; increase fs.inotify.max_user_watches (e.g. sudo sysctl fs.inotify.max_user_watches=524288)", .{});
+                return;
+            },
             else => return err,
         };
 
@@ -102,9 +169,10 @@ pub const Watcher = struct {
 
             defer offset += ev_size;
 
-            // Queue overflow
+            // Queue overflow — mark flag so caller can rebuild reports from in-memory state.
             if (ev.mask & linux.IN.Q_OVERFLOW != 0) {
                 std.log.warn("inotify event queue overflow - some events lost", .{});
+                self.overflow = true;
                 continue;
             }
 
@@ -117,7 +185,7 @@ pub const Watcher = struct {
             const dir_path = self.wd_map.get(ev.wd) orelse continue;
             const name_start = offset + @sizeOf(linux.inotify_event);
 
-            // New subdirectory created - add watches recursively
+            // New subdirectory created - add watches recursively (skip_dirs apply here too)
             if (ev.mask & linux.IN.CREATE != 0 and ev.mask & linux.IN.ISDIR != 0) {
                 if (ev.len > 0) {
                     const name = std.mem.sliceTo(@as([*:0]const u8, @ptrCast(self.buf[name_start..].ptr)), 0);
