@@ -151,7 +151,7 @@ function updateHeaderSortIndicators(): void {
 
 const search = document.getElementById("search") as HTMLInputElement;
 
-export function renderTable(): number {
+export function renderTable(resetScroll = true): number {
     const query = (search.value || "").toLowerCase();
     tableFiles = (F || []).filter(function (f) {
         return !query || f.path.toLowerCase().indexOf(query) >= 0;
@@ -160,15 +160,24 @@ export function renderTable(): number {
         const av = a[sortCol as keyof ReportFile];
         const bv = b[sortCol as keyof ReportFile];
         if (typeof av === "number") return sortAsc ? (av - (bv as number)) : ((bv as number) - av);
-        return sortAsc
-            ? String(av).localeCompare(String(bv))
-            : String(bv).localeCompare(String(av));
+        const as = String(av);
+        const bs = String(bv);
+        const cmp = as < bs ? -1 : as > bs ? 1 : 0;
+        return sortAsc ? cmp : -cmp;
     });
     updateHeaderSortIndicators();
-    tableViewport!.scrollTop = 0;
+    if (resetScroll) tableViewport!.scrollTop = 0;
     renderVisibleRows();
     return tableFiles.length;
 }
 
 export function getTotalCount(): number { return F.length; }
+
+/** Scroll the table viewport so the file at the given path is visible. */
+export function scrollToFile(path: string): void {
+    const idx = tableFiles.findIndex((f) => f.path === path);
+    if (idx < 0 || !tableViewport) return;
+    tableViewport.scrollTop = Math.max(0, idx - 3) * ROW_H;
+    renderVisibleRows();
+}
 
