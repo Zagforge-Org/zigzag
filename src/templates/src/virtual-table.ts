@@ -94,6 +94,14 @@ export class VirtualTable {
         return this.viewport;
     }
 
+    /** Scroll the viewport so the file with the given path is visible. */
+    scrollToFile(path: string): void {
+        const idx = this.files.findIndex((f) => f.path === path);
+        if (idx < 0) return;
+        this.viewport.scrollTop = Math.max(0, idx - 3) * ROW_H;
+        this.renderVisible();
+    }
+
     private scheduleRender(): void {
         if (this.rafPending) return;
         this.rafPending = true;
