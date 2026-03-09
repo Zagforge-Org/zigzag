@@ -1,131 +1,125 @@
-/** Lazily fetch report-content.json on first file open, with in-memory cache. */
+/** Per-file lazy content loading — fetches individual source files on demand.
+ *  Files are located by FNV-1a 32-bit hash of the path (must match Zig's fnv1a32Hash). */
 
-// null = not yet attempted, false = failed, object = loaded
-let _cache: Record<string, string> | null = null;
+const _fileCache: Record<string, string> = {};
+const _inflight: Record<string, boolean> = {};
+const _callbacks: Record<string, Array<(s: string) => void>> = {};
+let _prefix: string | null = null;
 let _failed = false;
-let _overrideUrl: string | null = null;
 
-// Proactively detect file:// so users see guidance without having to click a file first.
-if (location.protocol === "file:") {
-    _failed = true;
-    // Show banner after DOM is ready (script runs deferred, so DOM is already parsed).
-    document.addEventListener("DOMContentLoaded", function () {
-        const banner = document.getElementById("offline-banner");
-        if (banner) banner.style.display = "block";
-    }, { once: true });
-    // Also try immediately in case DOMContentLoaded already fired.
-    if (document.readyState !== "loading") {
-        const banner = document.getElementById("offline-banner");
-        if (banner) banner.style.display = "block";
+/** FNV-1a 32-bit hash over UTF-8 bytes — must match Zig's fnv1a32Hash. */
+function fnv1a32(s: string): string {
+    const bytes = new TextEncoder().encode(s);
+    let h = 2166136261 >>> 0;
+    for (const b of bytes) {
+        h ^= b;
+        h = Math.imul(h, 16777619) >>> 0;
     }
+    return h.toString(16).padStart(8, "0");
 }
 
-// Pending callbacks waiting for the first fetch to complete
-const _pending: Array<{ path: string; cb: (s: string) => void }> = [];
-let _fetching = false;
+function resolveFileUrl(path: string): string {
+    const hash = fnv1a32(path);
+    if (_prefix !== null) {
+        return _prefix + "/" + hash;
+    }
+    const pageUrl = location.href.replace(/[?#].*$/, "");
+    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
+    return dir + "report-content/" + hash;
+}
 
 function showOfflineBanner(): void {
     const banner = document.getElementById("offline-banner");
     if (banner) banner.style.display = "block";
 }
 
-function drainPending(): void {
-    while (_pending.length > 0) {
-        const req = _pending.shift()!;
-        if (_failed || _cache === null) {
-            req.cb("");
-        } else {
-            req.cb(_cache[req.path] ?? "");
-        }
+// Proactively detect file:// so users see guidance without clicking a file first.
+if (location.protocol === "file:") {
+    _failed = true;
+    document.addEventListener("DOMContentLoaded", function () {
+        const banner = document.getElementById("offline-banner");
+        if (banner) banner.style.display = "block";
+    }, { once: true });
+    if (document.readyState !== "loading") {
+        const banner = document.getElementById("offline-banner");
+        if (banner) banner.style.display = "block";
     }
 }
 
-function resolveContentUrl(): string {
-    if (_overrideUrl !== null) return _overrideUrl;
-    const pageUrl = location.href.replace(/[?#].*$/, "");
-    const dir = pageUrl.substring(0, pageUrl.lastIndexOf("/") + 1);
-    return dir + "report-content.json";
-}
-
-function doFetch(): void {
-    _fetching = true;
-    fetch(resolveContentUrl(), { cache: "no-store" })
-        .then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json() as Promise<Record<string, string>>;
-        })
-        .then(function (data) {
-            _cache = data;
-            _fetching = false;
-            drainPending();
-        })
-        .catch(function (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.warn("ZigZag: failed to load report-content.json:", msg);
-            _failed = true;
-            showOfflineBanner();
-            _fetching = false;
-            drainPending();
-        });
-}
-
-/** Override the URL used to fetch the content sidecar JSON (default: derived from location). */
-export function setContentUrl(url: string): void {
-    _overrideUrl = url;
+/** Set the content directory URL prefix (e.g. "combined-content" for combined dashboard). */
+export function setContentPrefix(prefix: string): void {
+    _prefix = prefix;
 }
 
 export function fetchContent(path: string, cb: (s: string) => void): void {
-    // Already have data
-    if (_cache !== null) {
-        cb(_cache[path] ?? "");
-        return;
-    }
-    // Previously failed
-    if (_failed) {
-        cb("");
-        return;
-    }
-    // file:// — fetch is blocked, show guidance immediately
+    if (path in _fileCache) { cb(_fileCache[path]); return; }
+    if (_failed) { cb(""); return; }
     if (location.protocol === "file:") {
         showOfflineBanner();
         _failed = true;
         cb("");
         return;
     }
-    // Enqueue and kick off fetch if not already in flight
-    _pending.push({ path, cb });
-    if (!_fetching) doFetch();
+    // Coalesce concurrent requests for the same path
+    if (!(path in _callbacks)) _callbacks[path] = [];
+    _callbacks[path].push(cb);
+    if (_inflight[path]) return;
+    _inflight[path] = true;
+
+    fetch(resolveFileUrl(path), { cache: "default" })
+        .then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.text();
+        })
+        .then(function (text) {
+            _fileCache[path] = text;
+            delete _inflight[path];
+            const cbs = _callbacks[path] ?? [];
+            delete _callbacks[path];
+            cbs.forEach(function (f) { f(text); });
+        })
+        .catch(function (e: unknown) {
+            console.warn("ZigZag: content fetch failed for", path, ":", e instanceof Error ? e.message : e);
+            _fileCache[path] = "";
+            delete _inflight[path];
+            const cbs = _callbacks[path] ?? [];
+            delete _callbacks[path];
+            cbs.forEach(function (f) { f(""); });
+            showOfflineBanner();
+        });
 }
 
-/** Returns true if content for the given path is already in the cache. */
 export function isContentCached(path: string): boolean {
-    return _cache !== null && Object.prototype.hasOwnProperty.call(_cache, path);
+    return path in _fileCache;
 }
 
-/** Replace cached content map (used by watch-mode updates). */
+/** Merge content into cache (used by watch mode delta events). */
 export function setContentCache(data: Record<string, string>): void {
-    _cache = data;
+    Object.assign(_fileCache, data);
     _failed = false;
-    // Drain any callbacks that were waiting before the watch update arrived
-    drainPending();
 }
 
-/** Update or insert a single entry in the content cache (used by delta SSE events). */
 export function updateContentEntry(path: string, content: string): void {
-    if (_cache === null) _cache = {};
-    _cache[path] = content;
-    _failed = false;
+    _fileCache[path] = content;
 }
 
-/** Remove a single entry from the content cache (used by file_delete delta events). */
 export function removeContentEntry(path: string): void {
-    if (_cache !== null) delete _cache[path];
+    delete _fileCache[path];
 }
 
-/** Reset all content state (used when watch mode receives a full reload). */
+/** Clear all content state (called on watch-mode reload). */
 export function resetContent(): void {
-    _cache = null;
+    for (const k in _fileCache) delete _fileCache[k];
+    for (const k in _inflight) delete _inflight[k];
+    for (const k in _callbacks) {
+        (_callbacks[k] ?? []).forEach(function (f) { f(""); });
+        delete _callbacks[k];
+    }
     _failed = false;
-    _fetching = false;
-    _pending.length = 0;
+}
+
+/** Evict cached content so files are re-fetched on next click (watch mode change). */
+export function invalidateContent(): void {
+    for (const k in _fileCache) delete _fileCache[k];
+    _failed = false;
 }
