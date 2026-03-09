@@ -195,8 +195,9 @@ pub const Watcher = struct {
     }
 
     /// Register a directory name to skip when filtering poll() events.
-    /// Only the basename is compared against each path component, so "zigzag-reports"
-    /// filters any event whose path contains that directory at any depth.
+    /// The basename is compared against path components relative to the watched root,
+    /// so "zigzag-reports" filters events from that subdirectory at any depth without
+    /// accidentally matching ancestor directories in the root path.
     /// Call before watchDir().
     pub fn addSkipDir(self: *Watcher, dir: []const u8) !void {
         const name = std.fs.path.basename(dir);
@@ -205,15 +206,26 @@ pub const Watcher = struct {
         try self.skip_dirs.append(self.allocator, copy);
     }
 
-    /// Returns true if any path component (split on the platform separator) matches
-    /// a registered skip directory name.
+    /// Returns true if any component of `path` RELATIVE to a registered watch root
+    /// matches a skip directory name.  Checking only the relative portion means the
+    /// root directory's own ancestor components (e.g. ".zig-cache" in a temp-dir path)
+    /// are never matched, which mirrors the Linux/macOS behaviour where only
+    /// subdirectories *inside* the watched tree are skipped.
     fn shouldSkipPath(self: *const Watcher, path: []const u8) bool {
-        var it = std.mem.splitScalar(u8, path, std.fs.path.sep);
-        while (it.next()) |component| {
-            if (component.len == 0) continue;
-            for (self.skip_dirs.items) |skip| {
-                if (std.mem.eql(u8, component, skip)) return true;
+        // Find which registered root this event belongs to and strip it,
+        // so we only inspect components relative to the watched root.
+        for (self.ctxs.items) |ctx| {
+            if (!std.mem.startsWith(u8, path, ctx.path)) continue;
+            var rel = path[ctx.path.len..];
+            if (rel.len > 0 and rel[0] == std.fs.path.sep) rel = rel[1..];
+            var it = std.mem.splitScalar(u8, rel, std.fs.path.sep);
+            while (it.next()) |component| {
+                if (component.len == 0) continue;
+                for (self.skip_dirs.items) |skip| {
+                    if (std.mem.eql(u8, component, skip)) return true;
+                }
             }
+            return false;
         }
         return false;
     }
