@@ -38,7 +38,7 @@ test "writeAllReports creates markdown file" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    writeAllReports(&state, &cfg, null, alloc);
+    writeAllReports(&state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access("report.md", .{}) catch |err| {
         std.debug.print("Expected report.md to exist, got: {s}\n", .{@errorName(err)});
@@ -65,7 +65,7 @@ test "writeAllReports creates JSON file when json_output is true" {
     defer cfg.deinit();
     cfg.json_output = true;
 
-    writeAllReports(&state, &cfg, null, alloc);
+    writeAllReports(&state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access("report.json", .{}) catch |err| {
         std.debug.print("Expected report.json to exist, got: {s}\n", .{@errorName(err)});
@@ -92,7 +92,7 @@ test "writeAllReports creates HTML file when html_output is true" {
     defer cfg.deinit();
     cfg.html_output = true;
 
-    writeAllReports(&state, &cfg, null, alloc);
+    writeAllReports(&state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access("report.html", .{}) catch |err| {
         std.debug.print("Expected report.html to exist, got: {s}\n", .{@errorName(err)});
@@ -127,7 +127,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    writeAllReports(&state, &cfg, null, alloc);
+    writeAllReports(&state, &cfg, null, &.{}, alloc);
 
     const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
     defer alloc.free(content);
