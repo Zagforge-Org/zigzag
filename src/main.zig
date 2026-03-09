@@ -2,13 +2,16 @@ const std = @import("std");
 const config = @import("./cli/commands/config/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
+const serve = @import("./cli/commands/serve.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init.zig").handleInit;
 const lg = @import("./cli/commands/logger.zig");
 
 pub fn main() !void {
-    const allocator = std.heap.page_allocator;
+    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
     // Create list to hold command-line arguments
     var list: std.ArrayList([]const u8) = .empty;
@@ -21,6 +24,7 @@ pub fn main() !void {
 
     var param_count: usize = 0;
     var is_run_command = false;
+    var is_serve_command = false;
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "init")) {
@@ -33,6 +37,11 @@ pub fn main() !void {
             continue; // "run" itself is not forwarded to the option parser
         }
 
+        if (std.mem.eql(u8, arg, "serve")) {
+            is_serve_command = true;
+            continue; // "serve" itself is not forwarded to the option parser
+        }
+
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
         } else {
@@ -43,8 +52,8 @@ pub fn main() !void {
         try list.append(allocator, arg);
     }
 
-    // With no flags and no "run" subcommand, just print usage
-    if (param_count == 0 and !is_run_command) {
+    // With no flags and no subcommand, just print usage
+    if (param_count == 0 and !is_run_command and !is_serve_command) {
         try printAsciiLogo();
         return;
     }
@@ -55,6 +64,20 @@ pub fn main() !void {
         config.ConfigParseResult.Success => |cfg| {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
+
+            // serve subcommand: start static file server from output dir
+            if (is_serve_command) {
+                const root_dir: []const u8 = if (typedCfg.output_dir) |d| d else "zigzag-reports";
+                serve.execServe(.{
+                    .root_dir = root_dir,
+                    .port = typedCfg.serve_port,
+                    .open_browser = typedCfg.open_browser,
+                    .allocator = allocator,
+                }) catch |err| {
+                    lg.printError("serve error: {s}", .{@errorName(err)});
+                };
+                return;
+            }
 
             // Only initialize cache and run if paths are configured and is_run_command is true
             if (typedCfg.paths.items.len > 0 and is_run_command) {
@@ -73,11 +96,11 @@ pub fn main() !void {
                 }
 
                 if (typedCfg.watch) {
-                    watch.execWatch(&typedCfg, &cache) catch |err| {
+                    watch.execWatch(&typedCfg, &cache, allocator) catch |err| {
                         lg.printError("watch error: {s}", .{@errorName(err)});
                     };
                 } else {
-                    _ = runner.exec(&typedCfg, &cache) catch |err| {
+                    _ = runner.exec(&typedCfg, &cache, allocator) catch |err| {
                         switch (err) {
                             error.ErrorNotFound => {
                                 return;
