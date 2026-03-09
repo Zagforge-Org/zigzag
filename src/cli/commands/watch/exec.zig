@@ -13,7 +13,7 @@ const lg = @import("../logger.zig");
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
-pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
+pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
 
     var pool = Pool{};
@@ -37,7 +37,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
         };
         try states.append(allocator, state);
         // Write initial reports (no SSE server yet — will be started after all paths init)
-        reporter.writeAllReports(state, cfg, null, allocator);
+        reporter.writeAllReports(state, cfg, null, &.{}, allocator);
     }
 
     if (states.items.len == 0) return;
@@ -47,7 +47,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
     if (cache) |c| c.saveToDisk() catch {};
 
     // Write combined HTML report (initial, before SSE server starts).
-    reporter.writeCombinedReport(states.items, cfg, allocator);
+    reporter.writeCombinedReport(states.items, cfg, null, &.{}, allocator);
 
     // Start SSE dev server when both --watch and --html are active
     var sse_server: ?*SseServer = null;
@@ -67,10 +67,25 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
         const default_page: []const u8 = if (multi) "combined.html" else "report.html";
 
         {
-            sse_server = SseServer.init(cfg.serve_port, srv_root, default_page, allocator) catch |err| blk: {
-                lg.printWarn("SSE server failed to start on port {d}: {s}", .{ cfg.serve_port, @errorName(err) });
-                break :blk null;
-            };
+            // Try the configured port; if already in use, increment up to 9 more times.
+            var port = cfg.serve_port;
+            for (0..10) |_| {
+                if (SseServer.init(port, srv_root, default_page, allocator)) |srv| {
+                    sse_server = srv;
+                    if (port != cfg.serve_port) {
+                        lg.printWarn("Port {d} already in use — using port {d}", .{ cfg.serve_port, port });
+                        cfg.serve_port = port; // propagate to HTML/SSE-URL generation
+                    }
+                    break;
+                } else |err| {
+                    if (err == error.AddressInUse) {
+                        port += 1;
+                    } else {
+                        lg.printWarn("SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
+                        break;
+                    }
+                }
+            }
             if (sse_server) |srv| {
                 srv.start() catch |err| {
                     lg.printWarn("SSE server thread failed: {s}", .{@errorName(err)});
@@ -79,6 +94,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
                 };
                 if (sse_server != null) {
                     lg.printSuccess("Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
+                    if (cfg.open_browser) sse_server.?.openBrowser();
                     // Broadcast initial payload so connecting clients get data immediately.
                     const first = states.items[0];
                     var init_data = report.ReportData.init(allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
@@ -100,6 +116,15 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
     var watcher = try Watcher.init(allocator);
     defer watcher.deinit();
 
+    // Register the report output directory as a skip path before adding watches.
+    // Without this, every flush that writes content-sidecar JSON files (one per source
+    // file) generates thousands of CLOSE_WRITE events into the inotify queue, easily
+    // exceeding max_queued_events (default 16384) and causing a continuous overflow loop.
+    {
+        const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+        watcher.addSkipDir(base_out_dir) catch {};
+    }
+
     for (states.items) |state| {
         watcher.watchDir(state.root_path) catch |err| {
             lg.printError("Failed to watch '{s}': {s}", .{ state.root_path, @errorName(err) });
@@ -113,17 +138,50 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
     var events: std.ArrayList(WatchEvent) = .empty;
     defer events.deinit(allocator);
 
-    var dirty = false;
+    // Per-state dirty flags so only changed paths get their reports rebuilt.
+    const dirty_states = try allocator.alloc(bool, states.items.len);
+    defer allocator.free(dirty_states);
+    @memset(dirty_states, false);
+    var any_dirty = false;
+
+    // Track which file paths changed in the current debounce window so the report
+    // writer only re-writes those content sidecar files instead of all of them.
+    // On overflow (events lost) we fall back to writing all sidecars.
+    var changed_paths: std.ArrayList([]const u8) = .empty;
+    defer {
+        for (changed_paths.items) |p| allocator.free(p);
+        changed_paths.deinit(allocator);
+    }
+    var any_overflow = false;
+
     const DEBOUNCE_MS: i32 = 50;
 
     while (true) {
         events.clearRetainingCapacity();
 
-        const timeout: i32 = if (dirty) DEBOUNCE_MS else -1;
+        const timeout: i32 = if (any_dirty) DEBOUNCE_MS else -1;
         const n = watcher.poll(&events, timeout) catch |err| {
             lg.printError("Watcher poll error: {s}", .{@errorName(err)});
             continue;
         };
+
+        // Handle inotify queue overflow: mark all states dirty and let the debounce
+        // flush rebuild reports from current in-memory state.
+        //
+        // Do NOT rescan or re-watch here. Both block the event loop for seconds (full
+        // directory walk + thread-pool cache writes), which generates more inotify events
+        // while the kernel queue is still full — causing the queue to overflow again
+        // immediately, creating an infinite overflow → heavy-work → overflow loop.
+        //
+        // The kernel does not remove existing watches on overflow, so all directory
+        // watches remain valid. Any new directories created during the overflow window
+        // will be picked up automatically when the next CREATE+ISDIR event arrives.
+        if (watcher.overflow) {
+            watcher.overflow = false;
+            any_overflow = true;
+            for (0..states.items.len) |i| dirty_states[i] = true;
+            any_dirty = true;
+        }
 
         if (n > 0) {
             for (events.items) |event| {
@@ -134,7 +192,7 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
                 const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
                 if (std.mem.indexOf(u8, event.path, base_out_dir) != null) continue;
 
-                for (states.items) |state| {
+                for (states.items, 0..) |state, i| {
                     if (!std.mem.startsWith(u8, event.path, state.root_path)) continue;
 
                     switch (event.kind) {
@@ -142,6 +200,9 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
                             state.updateFile(event.path, cache, &pool) catch |err| {
                                 lg.printError("Failed to process {s}: {s}", .{ event.path, @errorName(err) });
                             };
+                            // Track the changed path for selective sidecar writes on debounce.
+                            const path_copy = allocator.dupe(u8, event.path) catch null;
+                            if (path_copy) |p| changed_paths.append(allocator, p) catch allocator.free(p);
                             // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
                             if (sse_server) |srv| {
                                 state.entries_mutex.lock();
@@ -167,18 +228,37 @@ pub fn execWatch(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allo
                             }
                         },
                     }
-                    dirty = true;
+                    dirty_states[i] = true;
+                    any_dirty = true;
                     break;
                 }
             }
-        } else if (dirty) {
-            // Quiet period elapsed — write all reports to disk.
-            // SSE delta was already broadcast immediately on each file event above.
-            for (states.items) |state| {
-                reporter.writeAllReports(state, cfg, null, allocator);
+        } else if (any_dirty) {
+            // Quiet period elapsed — write reports only for paths that actually changed.
+            // Write combined report FIRST so it is on disk before the SSE "report" event
+            // fires and causes connected browsers to reload combined.html.
+            var combined_needed = false;
+            for (0..states.items.len) |i| {
+                if (dirty_states[i]) { combined_needed = true; break; }
             }
-            reporter.writeCombinedReport(states.items, cfg, allocator);
-            dirty = false;
+            // On overflow, changed_paths is incomplete — pass empty slice so all sidecars
+            // get written, ensuring the content directory is consistent.
+            const paths_for_write: []const []const u8 = if (any_overflow) &.{} else changed_paths.items;
+            if (combined_needed and states.items.len > 1) {
+                // Only write and signal the combined dashboard in multi-path mode.
+                // Single-path watch uses SSE deltas and the per-state report event instead.
+                // writeCombinedReport handles the broadcastCombined SSE push internally.
+                reporter.writeCombinedReport(states.items, cfg, sse_server, paths_for_write, allocator);
+            }
+            for (states.items, 0..) |state, i| {
+                if (!dirty_states[i]) continue;
+                reporter.writeAllReports(state, cfg, sse_server, paths_for_write, allocator);
+                dirty_states[i] = false;
+            }
+            any_dirty = false;
+            any_overflow = false;
+            for (changed_paths.items) |p| allocator.free(p);
+            changed_paths.clearRetainingCapacity();
         }
     }
 }
