@@ -8,6 +8,22 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
+/// Directories skipped by the file walker (shouldIgnore in process.zig).
+/// The watcher must skip the same dirs so their writes never enter the kqueue.
+const DEFAULT_SKIP_DIRS = [_][]const u8{
+    "node_modules",
+    ".git",
+    ".svn",
+    ".hg",
+    "__pycache__",
+    ".pytest_cache",
+    ".idea",
+    ".vscode",
+    ".DS_Store",
+    ".cache",
+    ".zig-cache",
+};
+
 /// Per-directory state: open fd + current file snapshot (name -> mtime)
 const DirState = struct {
     path: []const u8,
@@ -25,12 +41,25 @@ pub const Watcher = struct {
     kq: posix.fd_t,
     dir_states: std.AutoHashMap(posix.fd_t, *DirState),
     allocator: std.mem.Allocator,
+    /// Set when events may have been lost; always false on macOS (API parity with linux.zig).
+    overflow: bool = false,
+    /// Directory basenames to skip when recursively registering kqueue watches.
+    skip_dirs: std.ArrayList([]const u8),
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
+        var skip_dirs: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (skip_dirs.items) |d| allocator.free(d);
+            skip_dirs.deinit(allocator);
+        }
+        for (DEFAULT_SKIP_DIRS) |dir| {
+            try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
+        }
         return .{
             .kq = try posix.kqueue(),
             .dir_states = std.AutoHashMap(posix.fd_t, *DirState).init(allocator),
             .allocator = allocator,
+            .skip_dirs = skip_dirs,
         };
     }
 
@@ -43,6 +72,27 @@ pub const Watcher = struct {
         }
         self.dir_states.deinit();
         posix.close(self.kq);
+        for (self.skip_dirs.items) |d| self.allocator.free(d);
+        self.skip_dirs.deinit(self.allocator);
+    }
+
+    /// Register a directory name to skip when adding kqueue watches.
+    /// Only the basename is compared, so "zigzag-reports" skips any directory
+    /// with that name at any depth. Call before watchDir().
+    pub fn addSkipDir(self: *Watcher, dir: []const u8) !void {
+        const name = std.fs.path.basename(dir);
+        if (name.len == 0) return;
+        const copy = try self.allocator.dupe(u8, name);
+        try self.skip_dirs.append(self.allocator, copy);
+    }
+
+    fn shouldSkipPath(self: *const Watcher, path: []const u8) bool {
+        const name = std.fs.path.basename(path);
+        if (name.len == 0) return false;
+        for (self.skip_dirs.items) |skip| {
+            if (std.mem.eql(u8, name, skip)) return true;
+        }
+        return false;
     }
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
@@ -50,6 +100,7 @@ pub const Watcher = struct {
     }
 
     fn watchDirRecursive(self: *Watcher, path: []const u8) !void {
+        if (self.shouldSkipPath(path)) return;
         const dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
         const fd = dir.fd;
         // Don't close dir here — we keep fd open for kqueue
