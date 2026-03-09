@@ -82,6 +82,27 @@ pub fn resolveCombinedContentPath(
     return std.fs.path.join(allocator, &.{ base_dir, "combined-content.json" });
 }
 
+/// Derive the content directory path from an HTML report path.
+/// "report.html"  → "report-content"
+/// "report"       → "report-content"
+pub fn deriveContentDir(allocator: std.mem.Allocator, html_path: []const u8) ![]u8 {
+    if (std.mem.endsWith(u8, html_path, ".html")) {
+        const base = html_path[0 .. html_path.len - ".html".len];
+        return std.fmt.allocPrint(allocator, "{s}-content", .{base});
+    }
+    return std.fmt.allocPrint(allocator, "{s}-content", .{html_path});
+}
+
+/// Resolve the output directory for the combined multi-path content files.
+pub fn resolveCombinedContentDir(
+    allocator: std.mem.Allocator,
+    cfg: *const Config,
+) ![]u8 {
+    const base_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+    try std.fs.cwd().makePath(base_dir);
+    return std.fs.path.join(allocator, &.{ base_dir, "combined-content" });
+}
+
 /// Derives the LLM report path by replacing the .md extension with .llm.md.
 pub fn deriveLlmPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
     if (std.mem.endsWith(u8, md_path, ".md")) {
