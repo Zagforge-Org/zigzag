@@ -35,6 +35,8 @@ test {
     _ = @import("./cli/commands/watch/exec_test.zig");
     _ = @import("./cli/version/version_test.zig");
     _ = @import("./cli/commands/stats/stats_test.zig");
+    _ = @import("./cli/commands/watch/port_listening_test.zig");
+    _ = @import("./cli/commands/watch/server_test.zig");
 
     // report sub-module tests
     _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
