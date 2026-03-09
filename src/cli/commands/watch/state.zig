@@ -120,6 +120,40 @@ pub const State = struct {
         alloc.destroy(self);
     }
 
+    /// Re-scan the entire root path and rebuild in-memory entries from scratch.
+    /// Called after an inotify queue overflow to recover from lost events.
+    pub fn rescan(self: *State, cache: ?*CacheImpl, pool: *Pool) !void {
+        {
+            self.entries_mutex.lock();
+            defer self.entries_mutex.unlock();
+            var it = self.file_entries.iterator();
+            while (it.next()) |entry| freeJobEntry(entry.value_ptr.*, self.allocator);
+            self.file_entries.clearRetainingCapacity();
+            var bit = self.binary_entries.iterator();
+            while (bit.next()) |entry| freeBinaryEntry(entry.value_ptr.*, self.allocator);
+            self.binary_entries.clearRetainingCapacity();
+        }
+
+        var wg = WaitGroup.init();
+        var stats = ProcessStats.init();
+        var walker_ctx = WalkerCtx{
+            .pool = pool,
+            .wg = &wg,
+            .file_ctx = &self.file_ctx,
+            .cache = cache,
+            .stats = &stats,
+            .file_entries = &self.file_entries,
+            .binary_entries = &self.binary_entries,
+            .entries_mutex = &self.entries_mutex,
+            .allocator = self.allocator,
+        };
+
+        const walker = try walk.init(self.allocator);
+        const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
+        try walker.walkDir(self.root_path, walkerCallback, walk_ctx);
+        wg.wait();
+    }
+
     /// Re-process a single changed file and update the in-memory map.
     pub fn updateFile(self: *State, file_path: []const u8, cache: ?*CacheImpl, pool: *Pool) !void {
         self.removeFile(file_path);
