@@ -49,6 +49,7 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
+    exe.root_module.link_libc = true;
 
     // Ensure the binary is built after the bundle is ready
     exe.step.dependOn(&bundle.step);
@@ -78,7 +79,7 @@ pub fn build(b: *std.Build) void {
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
-
+    exe_tests.root_module.link_libc = true;
     exe_tests.root_module.addImport("options", opts_mod);
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
