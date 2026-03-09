@@ -36,7 +36,7 @@ function isMinifiedFile(lines: string[], rawLen: number): boolean {
     return false;
 }
 
-function openMinifiedViewer(rawContent: string): void {
+function openMinifiedViewer(rawContent: string, scrollTo = 0): void {
     const body = document.getElementById("viewer-body")!;
     const preview = esc(rawContent.slice(0, MINIFIED_DISPLAY_CHARS));
     const remaining = rawContent.length - MINIFIED_DISPLAY_CHARS;
@@ -49,7 +49,7 @@ function openMinifiedViewer(rawContent: string): void {
         (remaining > 0
             ? '<div class="minified-more">\u2026 ' + remaining.toLocaleString() + " more characters not shown</div>"
             : "");
-    body.scrollTop = 0;
+    body.scrollTop = scrollTo;
 }
 
 // ── Truncation helper ─────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ function truncateBadge(line: string): string {
 
 // ── Simple viewer ─────────────────────────────────────────────────────────────
 
-function openSimpleViewer(lines: string[], langKey: string | null, myToken: number): void {
+function openSimpleViewer(lines: string[], langKey: string | null, myToken: number, scrollTo = 0): void {
     const body = document.getElementById("viewer-body")!;
     const numWidth = "calc(" + String(lines.length).length + "ch + 2rem)";
     const rows: string[] = [];
@@ -84,7 +84,7 @@ function openSimpleViewer(lines: string[], langKey: string | null, myToken: numb
     }
     body.innerHTML =
         '<table class="ln-table"><tbody>' + rows.join("") + "</tbody></table>";
-    body.scrollTop = 0;
+    body.scrollTop = scrollTo;
 
     if (!langKey) return;
 
@@ -208,7 +208,7 @@ function requestVisibleChunks(start: number, end: number, token: number): void {
     }
 }
 
-function openVirtualViewer(lines: string[], langKey: string | null, myToken: number): void {
+function openVirtualViewer(lines: string[], langKey: string | null, myToken: number, scrollTo = 0): void {
     virtLines = lines;
     virtLangKey = langKey;
     virtLastScrollTop = -1;
@@ -225,7 +225,6 @@ function openVirtualViewer(lines: string[], langKey: string | null, myToken: num
 
     const body = document.getElementById("viewer-body")!;
     body.innerHTML = "";
-    body.scrollTop = 0;
     virtBodyEl = body;
 
     const spacerTop = document.createElement("div");
@@ -242,13 +241,24 @@ function openVirtualViewer(lines: string[], langKey: string | null, myToken: num
     virtWindowEl = win;
     virtSpacerBotEl = spacerBot;
 
+    // Pre-size spacerTop so the browser honours the requested scrollTop,
+    // then let renderVirtualWindow() recompute the correct spacer heights.
+    if (scrollTo > 0) {
+        spacerTop.style.height = scrollTo + "px";
+        body.scrollTop = scrollTo;
+    }
+
     body.addEventListener("scroll", scheduleVirtualViewerRender);
     renderVirtualWindow();
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function openViewer(f: ReportFile): void {
+export function openViewer(f: ReportFile, preserveScroll = false): void {
+    const body = document.getElementById("viewer-body")!;
+    const sameFile = preserveScroll && currentFile !== null && currentFile.path === f.path;
+    const savedScrollTop = sameFile ? body.scrollTop : 0;
+
     currentFile = f;
     viewerToken++;
     const myToken = viewerToken;
@@ -270,10 +280,14 @@ export function openViewer(f: ReportFile): void {
     vpathEl.textContent = f.path;
     viewer.classList.add("open");
 
-    const body = document.getElementById("viewer-body")!;
-    body.innerHTML =
-        '<div style="padding:0.75rem 1rem;color:#adb5bd;font-size:0.8rem">Loading\u2026</div>';
-    body.scrollTop = 0;
+    // Only show the loading placeholder when opening a different file.
+    // When the same file is refreshed (watch update), keep the existing
+    // content visible until the new content is ready.
+    if (!sameFile) {
+        body.innerHTML =
+            '<div style="padding:0.75rem 1rem;color:#adb5bd;font-size:0.8rem">Loading\u2026</div>';
+        body.scrollTop = 0;
+    }
 
     fetchContent(f.path, function (raw) {
         if (viewerToken !== myToken) return;
@@ -282,11 +296,11 @@ export function openViewer(f: ReportFile): void {
         const langKey = PRISM_MAP[f.language || ""] || null;
 
         if (isMinifiedFile(lines, rawContent.length)) {
-            openMinifiedViewer(rawContent);
+            openMinifiedViewer(rawContent, savedScrollTop);
         } else if (lines.length > VIRT_LINE_THRESHOLD || rawContent.length > VIRT_BYTE_THRESHOLD) {
-            openVirtualViewer(lines, langKey, myToken);
+            openVirtualViewer(lines, langKey, myToken, savedScrollTop);
         } else {
-            openSimpleViewer(lines, langKey, myToken);
+            openSimpleViewer(lines, langKey, myToken, savedScrollTop);
         }
     });
 }
