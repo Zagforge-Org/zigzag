@@ -92,6 +92,58 @@ test "deriveContentPath handles no .html extension" {
     try std.testing.expectEqualStrings("zigzag-reports/report-content.json", result);
 }
 
+test "resolveCombinedHtmlPath returns combined.html in base output dir" {
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_abs);
+
+    var cfg = @import("../../config/config.zig").Config.default(allocator);
+    defer cfg.deinit();
+    cfg.output_dir = try allocator.dupe(u8, tmp_abs);
+    cfg._output_dir_allocated = true;
+
+    const result = try @import("paths.zig").resolveCombinedHtmlPath(allocator, &cfg);
+    defer allocator.free(result);
+
+    try std.testing.expect(std.mem.endsWith(u8, result, "combined.html"));
+}
+
+test "resolveCombinedContentPath returns combined-content.json in base output dir" {
+    const allocator = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    defer allocator.free(tmp_abs);
+
+    var cfg = @import("../../config/config.zig").Config.default(allocator);
+    defer cfg.deinit();
+    cfg.output_dir = try allocator.dupe(u8, tmp_abs);
+    cfg._output_dir_allocated = true;
+
+    const result = try @import("paths.zig").resolveCombinedContentPath(allocator, &cfg);
+    defer allocator.free(result);
+
+    try std.testing.expect(std.mem.endsWith(u8, result, "combined-content.json"));
+}
+
+test "deriveContentDir replaces .html with -content" {
+    const alloc = std.testing.allocator;
+    const result = try @import("paths.zig").deriveContentDir(alloc, "zigzag-reports/report.html");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/report-content", result);
+}
+
+test "deriveContentDir handles no .html extension" {
+    const alloc = std.testing.allocator;
+    const result = try @import("paths.zig").deriveContentDir(alloc, "zigzag-reports/report");
+    defer alloc.free(result);
+    try std.testing.expectEqualStrings("zigzag-reports/report-content", result);
+}
+
 test "resolveOutputPath returns path under configured output_dir" {
     const allocator = std.testing.allocator;
 
