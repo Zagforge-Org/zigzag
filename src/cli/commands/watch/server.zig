@@ -23,6 +23,7 @@ pub const SseServer = struct {
     // All fields below are protected by mutex.
     mu: std.Thread.Mutex = .{},
     pending_payload: ?[]u8 = null, // next "report" broadcast queued by broadcast()
+    pending_combined: ?[]u8 = null, // next "combined_update" broadcast queued by broadcastCombined()
     pending_reload: bool = false, // next "reload" event queued by broadcastReload()
     stopped: bool = false,
 
@@ -30,6 +31,10 @@ pub const SseServer = struct {
     // Sent immediately to new SSE clients so they see data on first connect.
     // Only accessed from the event loop thread — no lock needed.
     current_payload: ?[]u8 = null,
+    // current_combined: last successfully broadcast combined_update payload.
+    // Sent immediately to new SSE clients so they see combined data on first connect.
+    // Only accessed from the event loop thread — no lock needed.
+    current_combined: ?[]u8 = null,
 
     pub fn init(port: u16, root_dir: []const u8, default_page: []const u8, allocator: std.mem.Allocator) !*SseServer {
         const self = try allocator.create(SseServer);
@@ -65,6 +70,15 @@ pub const SseServer = struct {
         self.pending_payload = copy;
     }
 
+    /// Queue a "combined_update" SSE event. Returns immediately; the event loop delivers it.
+    pub fn broadcastCombined(self: *SseServer, payload: []const u8) void {
+        const copy = self.allocator.dupe(u8, payload) catch return;
+        self.mu.lock();
+        defer self.mu.unlock();
+        if (self.pending_combined) |old| self.allocator.free(old);
+        self.pending_combined = copy;
+    }
+
     /// Queue a "reload" SSE event (triggers location.reload() in the browser).
     pub fn broadcastReload(self: *SseServer) void {
         self.mu.lock();
@@ -98,8 +112,10 @@ pub const SseServer = struct {
         self.allocator.free(self.default_page);
         self.mu.lock();
         if (self.pending_payload) |p| self.allocator.free(p);
+        if (self.pending_combined) |p| self.allocator.free(p);
         self.mu.unlock();
         if (self.current_payload) |p| self.allocator.free(p);
+        if (self.current_combined) |p| self.allocator.free(p);
         self.allocator.destroy(self);
     }
 
@@ -143,6 +159,8 @@ pub const SseServer = struct {
             self.mu.lock();
             const payload = self.pending_payload;
             self.pending_payload = null;
+            const combined = self.pending_combined;
+            self.pending_combined = null;
             const reload = self.pending_reload;
             self.pending_reload = false;
             self.mu.unlock();
@@ -154,6 +172,15 @@ pub const SseServer = struct {
                 self.current_payload = self.allocator.dupe(u8, p) catch null;
                 // Push named "report" event to all connected clients.
                 writePartsToAll(&clients, &.{ "event: report\ndata: ", p, "\n\n" });
+            }
+
+            if (combined) |p| {
+                defer self.allocator.free(p);
+                // Cache for late-joining clients.
+                if (self.current_combined) |old| self.allocator.free(old);
+                self.current_combined = self.allocator.dupe(u8, p) catch null;
+                // Push named "combined_update" event to all connected clients.
+                writePartsToAll(&clients, &.{ "event: combined_update\ndata: ", p, "\n\n" });
             }
 
             if (reload) {
@@ -231,6 +258,21 @@ pub const SseServer = struct {
             stream.close();
             return;
         };
+
+        // Immediately push the last known combined_update so new clients get combined
+        // data without waiting for the next file-change event.
+        if (self.current_combined) |p| {
+            const ok = blk: {
+                stream.writeAll("event: combined_update\ndata: ") catch break :blk false;
+                stream.writeAll(p) catch break :blk false;
+                stream.writeAll("\n\n") catch break :blk false;
+                break :blk true;
+            };
+            if (!ok) {
+                stream.close();
+                return;
+            }
+        }
 
         // Immediately push the last known report so new clients don't wait for
         // the next file-change event.
