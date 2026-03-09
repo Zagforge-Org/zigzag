@@ -8,21 +8,7 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-/// Directories skipped by the file walker (shouldIgnore in process.zig).
-/// Events from these directories are filtered out of poll() results.
-const DEFAULT_SKIP_DIRS = [_][]const u8{
-    "node_modules",
-    ".git",
-    ".svn",
-    ".hg",
-    "__pycache__",
-    ".pytest_cache",
-    ".idea",
-    ".vscode",
-    ".DS_Store",
-    ".cache",
-    ".zig-cache",
-};
+const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
 
 /// Thread-safe event queue shared between background watch threads and poll().
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can

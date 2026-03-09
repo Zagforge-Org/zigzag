@@ -8,21 +8,7 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-/// Directories skipped by the file walker (shouldIgnore in process.zig).
-/// The watcher must skip the same dirs so their writes never enter the kqueue.
-const DEFAULT_SKIP_DIRS = [_][]const u8{
-    "node_modules",
-    ".git",
-    ".svn",
-    ".hg",
-    "__pycache__",
-    ".pytest_cache",
-    ".idea",
-    ".vscode",
-    ".DS_Store",
-    ".cache",
-    ".zig-cache",
-};
+const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
 
 /// Per-directory state: open fd + current file snapshot (name -> mtime)
 const DirState = struct {
@@ -40,6 +26,10 @@ const DirState = struct {
 pub const Watcher = struct {
     kq: posix.fd_t,
     dir_states: std.AutoHashMap(posix.fd_t, *DirState),
+    /// Inode numbers of directories already registered, used to deduplicate when
+    /// multiple watchDir() paths resolve to the same physical directory (e.g. "apps"
+    /// and "./apps" when "." is also a watched path).
+    seen_inodes: std.AutoHashMap(u64, void),
     allocator: std.mem.Allocator,
     /// Set when events may have been lost; always false on macOS (API parity with linux.zig).
     overflow: bool = false,
@@ -58,6 +48,7 @@ pub const Watcher = struct {
         return .{
             .kq = try posix.kqueue(),
             .dir_states = std.AutoHashMap(posix.fd_t, *DirState).init(allocator),
+            .seen_inodes = std.AutoHashMap(u64, void).init(allocator),
             .allocator = allocator,
             .skip_dirs = skip_dirs,
         };
@@ -71,6 +62,7 @@ pub const Watcher = struct {
             posix.close(entry.key_ptr.*);
         }
         self.dir_states.deinit();
+        self.seen_inodes.deinit();
         posix.close(self.kq);
         for (self.skip_dirs.items) |d| self.allocator.free(d);
         self.skip_dirs.deinit(self.allocator);
@@ -103,6 +95,19 @@ pub const Watcher = struct {
         if (self.shouldSkipPath(path)) return;
         const dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
         const fd = dir.fd;
+
+        // Deduplicate by inode: "apps" and "./apps" are the same physical directory.
+        // Without this, multiple watchDir() calls for overlapping paths (e.g. "apps" + ".")
+        // create redundant kqueue watches producing duplicate events.
+        const stat = posix.fstat(fd) catch {
+            posix.close(fd);
+            return;
+        };
+        if ((try self.seen_inodes.getOrPut(@intCast(stat.ino))).found_existing) {
+            posix.close(fd);
+            return;
+        }
+
         // Don't close dir here — we keep fd open for kqueue
 
         const kev = posix.Kevent{

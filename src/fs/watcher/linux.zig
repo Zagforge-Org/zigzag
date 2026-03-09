@@ -2,28 +2,30 @@ const std = @import("std");
 const linux = std.os.linux;
 const posix = std.posix;
 
+const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
+
 pub const WatchEventKind = enum { modified, created, deleted };
 pub const WatchEvent = struct {
     path: []const u8,
     kind: WatchEventKind,
 };
 
-/// Directories skipped by the file walker (shouldIgnore in process.zig).
-/// The watcher must skip the same dirs so their writes never enter the inotify queue.
-/// Matching is substring-based (same as matchesPattern path-contains logic).
-const DEFAULT_SKIP_DIRS = [_][]const u8{
-    "node_modules",
-    ".git",
-    ".svn",
-    ".hg",
-    "__pycache__",
-    ".pytest_cache",
-    ".idea",
-    ".vscode",
-    ".DS_Store",
-    ".cache",
-    ".zig-cache",
-};
+// /// Directories skipped by the file walker (shouldIgnore in process.zig).
+// /// The watcher must skip the same dirs so their writes never enter the inotify queue.
+// /// Matching is substring-based (same as matchesPattern path-contains logic).
+// const DEFAULT_SKIP_DIRS = [_][]const u8{
+//     "node_modules",
+//     ".git",
+//     ".svn",
+//     ".hg",
+//     "__pycache__",
+//     ".pytest_cache",
+//     ".idea",
+//     ".vscode",
+//     ".DS_Store",
+//     ".cache",
+//     ".zig-cache",
+// };
 
 pub const Watcher = struct {
     ifd: posix.fd_t,
@@ -116,7 +118,12 @@ pub const Watcher = struct {
 
         const gop = try self.wd_map.getOrPut(wd);
         if (gop.found_existing) {
-            self.allocator.free(gop.value_ptr.*);
+            // Directory already registered by a prior watchDir() call.
+            // Keep the existing path (first-registration wins) so that event paths
+            // produced by that watch continue to match the originally registered prefix
+            // (e.g. "apps" must not be overwritten with "./apps" when "." is also watched).
+            // Subtree was already fully walked — no need to recurse again.
+            return;
         }
         gop.value_ptr.* = try self.allocator.dupe(u8, path);
 
