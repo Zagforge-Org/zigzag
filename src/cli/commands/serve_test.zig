@@ -1,6 +1,6 @@
 const std = @import("std");
 const serve = @import("serve.zig");
-const isPortListening = @import("serve.zig").isPortListening;
+const isPortListening = @import("./watch/port_listening.zig").isPortListening;
 
 test "deriveMimeType returns correct types" {
     try std.testing.expectEqualStrings("text/html; charset=utf-8", serve.deriveMimeType("report.html"));
