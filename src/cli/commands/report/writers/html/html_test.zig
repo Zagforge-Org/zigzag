@@ -7,6 +7,8 @@ const ReportData = @import("../aggregator.zig").ReportData;
 const writeHtmlReport = @import("./html.zig").writeHtmlReport;
 const writeContentJson = @import("./html.zig").writeContentJson;
 const writeCombinedContentJson = @import("./html.zig").writeCombinedContentJson;
+const writeContentFiles = @import("./html.zig").writeContentFiles;
+const writeCombinedContentFiles = @import("./html.zig").writeCombinedContentFiles;
 const CombinedContentPath = @import("./html.zig").CombinedContentPath;
 const writeCombinedHtmlReport = @import("./html.zig").writeCombinedHtmlReport;
 const CombinedPathData = @import("./html.zig").CombinedPathData;
@@ -479,4 +481,124 @@ test "writeCombinedHtmlReport with zero paths produces valid HTML" {
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "\"path_count\":0") != null);
+}
+
+test "writeContentFiles creates one file per entry with correct content" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+    const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "content" });
+    defer alloc.free(content_dir);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    const body: []u8 = try alloc.dupe(u8, "hello world");
+    defer alloc.free(body);
+    try file_entries.put("src/main.zig", .{
+        .path = "src/main.zig", .content = body,
+        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+    });
+
+    try writeContentFiles(&file_entries, content_dir, alloc);
+
+    // Compute expected hash for "src/main.zig"
+    var h: u32 = 2166136261;
+    for ("src/main.zig") |b| {
+        h ^= b;
+        h = h *% 16777619;
+    }
+    var hex_buf: [8]u8 = undefined;
+    const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{h});
+    const fname = try std.fs.path.join(alloc, &.{ content_dir, hex });
+    defer alloc.free(fname);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, fname, 1024);
+    defer alloc.free(written);
+    try std.testing.expectEqualStrings("hello world", written);
+}
+
+test "writeContentFiles creates directory and correct number of files" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+    const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "content2" });
+    defer alloc.free(content_dir);
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+
+    const c1: []u8 = try alloc.dupe(u8, "aaa");
+    const c2: []u8 = try alloc.dupe(u8, "bbb");
+    defer alloc.free(c1);
+    defer alloc.free(c2);
+    try file_entries.put("a.zig", .{ .path = "a.zig", .content = c1, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
+    try file_entries.put("b.zig", .{ .path = "b.zig", .content = c2, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    try writeContentFiles(&file_entries, content_dir, alloc);
+
+    // Verify directory exists and has 2 files
+    var dir = try std.fs.cwd().openDir(content_dir, .{ .iterate = true });
+    defer dir.close();
+    var count: usize = 0;
+    var it = dir.iterate();
+    while (try it.next()) |_| count += 1;
+    try std.testing.expectEqual(@as(usize, 2), count);
+}
+
+test "writeCombinedContentFiles uses combined key for hashing" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+    const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "combined-content" });
+    defer alloc.free(content_dir);
+
+    var entries_a = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_a.deinit();
+    const ca: []u8 = try alloc.dupe(u8, "backend content");
+    defer alloc.free(ca);
+    try entries_a.put("src/main.zig", .{ .path = "src/main.zig", .content = ca, .size = 15, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    var entries_b = std.StringHashMap(JobEntry).init(alloc);
+    defer entries_b.deinit();
+    const cb: []u8 = try alloc.dupe(u8, "frontend content");
+    defer alloc.free(cb);
+    try entries_b.put("src/main.zig", .{ .path = "src/main.zig", .content = cb, .size = 16, .mtime = 0, .extension = ".zig", .line_count = 1 });
+
+    const paths = [_]CombinedContentPath{
+        .{ .root_path = "./backend", .file_entries = &entries_a },
+        .{ .root_path = "./frontend", .file_entries = &entries_b },
+    };
+    try writeCombinedContentFiles(&paths, content_dir, alloc);
+
+    // Two different combined keys should produce two different files
+    var dir = try std.fs.cwd().openDir(content_dir, .{ .iterate = true });
+    defer dir.close();
+    var count: usize = 0;
+    var it = dir.iterate();
+    while (try it.next()) |_| count += 1;
+    try std.testing.expectEqual(@as(usize, 2), count);
+
+    // Verify the content for "./backend:src/main.zig"
+    var h: u32 = 2166136261;
+    for ("./backend:src/main.zig") |b| {
+        h ^= b;
+        h = h *% 16777619;
+    }
+    var hex_buf: [8]u8 = undefined;
+    const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{h});
+    const fname = try std.fs.path.join(alloc, &.{ content_dir, hex });
+    defer alloc.free(fname);
+    const written = try std.fs.cwd().readFileAlloc(alloc, fname, 1024);
+    defer alloc.free(written);
+    try std.testing.expectEqualStrings("backend content", written);
 }
