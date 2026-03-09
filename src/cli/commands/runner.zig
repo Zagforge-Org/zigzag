@@ -183,11 +183,11 @@ fn writePathReports(
     if (cfg.html_output) {
         const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path_for_content);
-        const content_path = try report.deriveContentPath(allocator, html_path_for_content);
-        defer allocator.free(content_path);
-        try report.writeContentJson(&result.file_entries, content_path, allocator);
-        lg.printSuccess("Content JSON:  {s}", .{content_path});
-        if (logger) |l| l.log("Content JSON written: {s}", .{content_path});
+        const content_dir = try report.deriveContentDir(allocator, html_path_for_content);
+        defer allocator.free(content_dir);
+        try report.writeContentFiles(&result.file_entries, content_dir, allocator);
+        lg.printSuccess("Content dir:   {s}/", .{content_dir});
+        if (logger) |l| l.log("Content files written: {s}/", .{content_dir});
     }
 
     var report_data = try report.ReportData.init(allocator, &result.file_entries, &result.binary_entries, cfg.timezone_offset);
@@ -242,8 +242,8 @@ fn writeCombinedReports(
     const combined_html_path = try report.resolveCombinedHtmlPath(allocator, cfg);
     defer allocator.free(combined_html_path);
 
-    const combined_content_path = try report.resolveCombinedContentPath(allocator, cfg);
-    defer allocator.free(combined_content_path);
+    const combined_content_dir = try report.resolveCombinedContentDir(allocator, cfg);
+    defer allocator.free(combined_content_dir);
 
     // Build per-path ReportData (cheap: aggregates in-memory entries).
     const all_report_data = try allocator.alloc(report.ReportData, results.len);
@@ -271,15 +271,15 @@ fn writeCombinedReports(
         content_paths[i] = .{ .root_path = result.root_path, .file_entries = &result.file_entries };
     }
 
-    try report.writeCombinedContentJson(content_paths, combined_content_path, allocator);
-    lg.printSuccess("Combined content: {s}", .{combined_content_path});
+    try report.writeCombinedContentFiles(content_paths, combined_content_dir, allocator);
+    lg.printSuccess("Combined content: {s}/", .{combined_content_dir});
 
     try report.writeCombinedHtmlReport(path_data, combined_html_path, failed_paths, cfg, allocator);
     lg.printSuccess("Combined HTML:    {s}", .{combined_html_path});
 
     if (logger) |l| {
         l.log("Combined HTML written: {s}", .{combined_html_path});
-        l.log("Combined content written: {s}", .{combined_content_path});
+        l.log("Combined content written: {s}/", .{combined_content_dir});
     }
 }
 
