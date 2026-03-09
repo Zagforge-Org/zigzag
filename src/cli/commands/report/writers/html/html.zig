@@ -128,16 +128,17 @@ pub fn writeHtmlReport(
     defer html_file.close();
     try html_file.writeAll(aw.written());
 
-    // In watch mode, write a tiny sidecar .stamp file containing only the
-    // generated_at timestamp. The browser polls this cheap file instead of
-    // the full HTML, and only fetches the full HTML on a change.
-    if (cfg.watch) {
-        const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
-        defer allocator.free(stamp_path);
-        var stamp_file = try std.fs.cwd().createFile(stamp_path, .{ .truncate = true });
-        defer stamp_file.close();
-        try stamp_file.writeAll(data.generated_at_str);
-    }
+}
+
+/// Write the watch-mode stamp sidecar: a tiny file containing only the generated_at
+/// timestamp. Call this AFTER writeContentFiles so the browser never sees a new stamp
+/// while content sidecar files are still being written (race condition).
+pub fn writeStampFile(html_path: []const u8, generated_at: []const u8, allocator: std.mem.Allocator) !void {
+    const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
+    defer allocator.free(stamp_path);
+    var stamp_file = try std.fs.cwd().createFile(stamp_path, .{ .truncate = true });
+    defer stamp_file.close();
+    try stamp_file.writeAll(generated_at);
 }
 
 /// Stream source content to a sidecar JSON file: {"path":"content",...}.
@@ -223,6 +224,123 @@ pub fn writeCombinedContentJson(
         }
     }
     try file.writeAll("}");
+}
+
+/// FNV-1a 32-bit hash — identical algorithm to fnv1a32() in content.ts.
+fn fnv1a32Hash(s: []const u8) u32 {
+    var h: u32 = 2166136261;
+    for (s) |b| {
+        h ^= b;
+        h = h *% 16777619;
+    }
+    return h;
+}
+
+/// Write source content as individual files in a flat content directory.
+/// Each file is named by the 8-char lowercase hex FNV-1a hash of its path.
+pub fn writeContentFiles(
+    file_entries: *const std.StringHashMap(JobEntry),
+    content_dir: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    try std.fs.cwd().makePath(content_dir);
+    var it = file_entries.iterator();
+    while (it.next()) |kv| {
+        const hash = fnv1a32Hash(kv.key_ptr.*);
+        var hex_buf: [8]u8 = undefined;
+        const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
+        const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
+        defer allocator.free(fname);
+        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        defer f.close();
+        try f.writeAll(kv.value_ptr.content);
+    }
+}
+
+/// Write content sidecar files only for the specified paths (watch-mode incremental update).
+/// For each path in changed_paths, looks up the entry in file_entries and writes its sidecar.
+/// Paths not found in file_entries (deleted or belonging to another state) are silently skipped.
+pub fn writeChangedContentFiles(
+    file_entries: *const std.StringHashMap(JobEntry),
+    changed_paths: []const []const u8,
+    content_dir: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    try std.fs.cwd().makePath(content_dir);
+    for (changed_paths) |path| {
+        const entry = file_entries.get(path) orelse continue;
+        const hash = fnv1a32Hash(path);
+        var hex_buf: [8]u8 = undefined;
+        const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
+        const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
+        defer allocator.free(fname);
+        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        defer f.close();
+        try f.writeAll(entry.content);
+    }
+}
+
+/// Write combined multi-path content as individual files.
+/// Keys are "{root_path}:{path}" — matching combined.ts fetchContent key format.
+pub fn writeCombinedContentFiles(
+    paths: []const CombinedContentPath,
+    content_dir: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    try std.fs.cwd().makePath(content_dir);
+    for (paths) |p| {
+        var it = p.file_entries.iterator();
+        while (it.next()) |kv| {
+            const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
+            defer allocator.free(combined_key);
+            const hash = fnv1a32Hash(combined_key);
+            var hex_buf: [8]u8 = undefined;
+            const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
+            const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
+            defer allocator.free(fname);
+            var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+            defer f.close();
+            try f.writeAll(kv.value_ptr.content);
+        }
+    }
+}
+
+/// Write combined multi-path content sidecar files only for the specified changed paths.
+/// For each changed_file_path, finds the owning CombinedContentPath by root_path prefix,
+/// looks up the entry in that path's file_entries, and writes the content sidecar file.
+/// Paths not found in any path's file_entries are silently skipped.
+pub fn writeCombinedChangedContentFiles(
+    paths: []const CombinedContentPath,
+    changed_file_paths: []const []const u8,
+    content_dir: []const u8,
+    allocator: std.mem.Allocator,
+) !void {
+    try std.fs.cwd().makePath(content_dir);
+    for (changed_file_paths) |changed_path| {
+        // Find which CombinedContentPath owns this file by root_path prefix match
+        var owning_path: ?CombinedContentPath = null;
+        for (paths) |p| {
+            if (std.mem.startsWith(u8, changed_path, p.root_path)) {
+                owning_path = p;
+                break;
+            }
+        }
+        const p = owning_path orelse continue;
+        const entry = p.file_entries.get(changed_path) orelse continue;
+
+        // Combined key: "{root_path}:{path}" — same format as writeCombinedContentFiles
+        const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, changed_path });
+        defer allocator.free(combined_key);
+
+        const hash = fnv1a32Hash(combined_key);
+        var hex_buf: [8]u8 = undefined;
+        const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
+        const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
+        defer allocator.free(fname);
+        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        defer f.close();
+        try f.writeAll(entry.content);
+    }
 }
 
 /// Per-path entry for the combined HTML report writer.
