@@ -18,4 +18,5 @@ pub const WalkerCtx = struct {
     binary_entries: *std.StringHashMap(BinaryEntry),
     entries_mutex: *std.Thread.Mutex,
     allocator: std.mem.Allocator,
+    dir_semaphore: std.Thread.Semaphore = .{ .permits = 64 }, // cap open dirs to avoid fd exhaustion
 };
