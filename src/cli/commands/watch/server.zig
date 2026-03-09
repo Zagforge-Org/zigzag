@@ -15,7 +15,7 @@ const builtin = @import("builtin");
 pub const SseServer = struct {
     allocator: std.mem.Allocator,
     listener: std.net.Server,
-    root_dir: []const u8,    // directory to serve static files from
+    root_dir: []const u8, // directory to serve static files from
     default_page: []const u8, // filename returned for GET /
     bound_port: u16,
 
