@@ -154,11 +154,15 @@ jobs:
                   git clone https://x-access-token:${TAP_TOKEN}@github.com/LegationPro/homebrew-zigzag.git tap
                   cd tap
 
-                  sed -i "s/ZIGZAG_VERSION/${VERSION}/g" Formula/zigzag.rb
-                  sed -i "s/AARCH64_SHA256/${AARCH64_MAC_SHA}/" Formula/zigzag.rb
-                  sed -i "s/X86_64_SHA256/${X86_64_MAC_SHA}/" Formula/zigzag.rb
-                  sed -i "s/AARCH64_LINUX_SHA256/${AARCH64_LINUX_SHA}/" Formula/zigzag.rb
-                  sed -i "s/X86_64_LINUX_SHA256/${X86_64_LINUX_SHA}/" Formula/zigzag.rb
+                  # Update version field and all download URLs
+                  sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" Formula/zigzag.rb
+                  sed -i "s|/download/v[^/]*/|/download/v${VERSION}/|g" Formula/zigzag.rb
+
+                  # Update each platform's sha256 by matching the line after its URL
+                  sed -i "/aarch64-macos/{n;s/sha256 \"[a-f0-9]*\"/sha256 \"${AARCH64_MAC_SHA}\"/}" Formula/zigzag.rb
+                  sed -i "/x86_64-macos/{n;s/sha256 \"[a-f0-9]*\"/sha256 \"${X86_64_MAC_SHA}\"/}" Formula/zigzag.rb
+                  sed -i "/aarch64-linux/{n;s/sha256 \"[a-f0-9]*\"/sha256 \"${AARCH64_LINUX_SHA}\"/}" Formula/zigzag.rb
+                  sed -i "/x86_64-linux/{n;s/sha256 \"[a-f0-9]*\"/sha256 \"${X86_64_LINUX_SHA}\"/}" Formula/zigzag.rb
 
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
