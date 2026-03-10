@@ -3,6 +3,7 @@ const config = @import("./cli/commands/config/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const serve = @import("./cli/commands/serve.zig");
+const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init.zig").handleInit;
@@ -65,13 +66,56 @@ pub fn main() !void {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
 
-            // serve subcommand: start static file server from output dir
+            // serve subcommand: generate reports (if paths configured) then start static file server
             if (is_serve_command) {
-                const root_dir: []const u8 = if (typedCfg.output_dir) |d| d else "zigzag-reports";
+                // Serve always targets the HTML dashboard — force html_output on.
+                typedCfg.html_output = true;
+
+                const base_out_dir: []const u8 = if (typedCfg.output_dir) |d| d else "zigzag-reports";
+
+                // Generate reports when paths are configured (mirrors `zigzag run` behavior).
+                if (typedCfg.paths.items.len > 0) {
+                    const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
+                    defer allocator.free(cache_path);
+
+                    var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
+                    defer cache.deinit();
+
+                    if (typedCfg.skip_cache) {
+                        lg.printStep("Clearing cache: {s}", .{cache_path});
+                        try cache.cleanup();
+                        lg.printSuccess("Cache cleared", .{});
+                    }
+
+                    _ = runner.exec(&typedCfg, &cache, allocator) catch |err| {
+                        switch (err) {
+                            error.ErrorNotFound => {},
+                            else => lg.printError("error generating reports: {s}", .{@errorName(err)}),
+                        }
+                    };
+                }
+
+                // Mirror the watch-mode logic: multi-path → serve from base dir + combined.html;
+                // single-path → serve from per-path subdir + report.html.
+                const multi = typedCfg.paths.items.len > 1;
+                const default_page: []const u8 = if (multi) "combined.html" else "report.html";
+                var srv_root_buf: ?[]u8 = null;
+                defer if (srv_root_buf) |b| allocator.free(b);
+                const srv_root: []const u8 = if (!multi and typedCfg.paths.items.len == 1) blk: {
+                    const md_path = try report.resolveOutputPath(allocator, &typedCfg, typedCfg.paths.items[0], "report.md");
+                    defer allocator.free(md_path);
+                    const html_path = try report.deriveHtmlPath(allocator, md_path);
+                    defer allocator.free(html_path);
+                    const dir = std.fs.path.dirname(html_path) orelse base_out_dir;
+                    srv_root_buf = try allocator.dupe(u8, dir);
+                    break :blk srv_root_buf.?;
+                } else base_out_dir;
+
                 serve.execServe(.{
-                    .root_dir = root_dir,
+                    .root_dir = srv_root,
                     .port = typedCfg.serve_port,
                     .open_browser = typedCfg.open_browser,
+                    .default_page = default_page,
                     .allocator = allocator,
                 }) catch |err| {
                     lg.printError("serve error: {s}", .{@errorName(err)});

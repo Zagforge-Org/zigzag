@@ -7,6 +7,7 @@ pub const ServeConfig = struct {
     root_dir: []const u8,
     port: u16 = 8787,
     open_browser: bool = false,
+    default_page: []const u8 = "report.html",
     allocator: std.mem.Allocator,
 };
 
@@ -99,7 +100,7 @@ fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
     if (std.mem.indexOf(u8, req_path, "?")) |q| req_path = req_path[0..q];
 
     // Default to index
-    if (req_path.len == 0) req_path = "report.html";
+    if (req_path.len == 0) req_path = cfg.default_page;
 
     // Security: reject path traversal
     if (!isPathSafe(req_path)) {
