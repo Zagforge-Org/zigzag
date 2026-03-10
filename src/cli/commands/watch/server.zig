@@ -1,6 +1,59 @@
 const std = @import("std");
-const posix = std.posix;
 const builtin = @import("builtin");
+
+// ---------------------------------------------------------------------------
+// Windows socket I/O helpers
+//
+// This section provides helper utilities for performing socket input/output
+// operations on Windows systems. It defines and exposes the necessary Winsock2
+// external functions so they can be used directly where needed.
+//
+// The inner structures and functions are conditionally compiled only when
+// targeting Windows, keeping the code portable while allowing platform-specific
+// implementations.
+//
+// These externs are used by both socketRecv and gracefulClose, providing a
+// consistent interface to interact with Windows sockets.
+// ---------------------------------------------------------------------------
+
+/// Winsock2 externs used in both socketRecv and gracefulClose on Windows.
+//
+/// The inner struct is only compiled when targeting Windows.
+const win_ws2 = struct {
+    extern "ws2_32" fn recv(s: std.posix.socket_t, buf: [*]u8, len: c_int, flags: c_int) callconv(.winapi) c_int;
+    extern "ws2_32" fn shutdown(s: std.posix.socket_t, how: c_int) callconv(.winapi) c_int;
+};
+
+/// Read from a socket, bypassing ReadFile() on Windows.
+/// Drop-in for Stream.read(): returns bytes read, 0 on EOF, or an error.
+fn socketRecv(handle: std.posix.socket_t, buf: []u8) std.net.Stream.ReadError!usize {
+    if (comptime builtin.os.tag == .windows) {
+        if (buf.len == 0) return 0;
+        const n = win_ws2.recv(handle, buf.ptr, @intCast(buf.len), 0);
+        if (n < 0) return error.ConnectionResetByPeer;
+        return @intCast(n);
+    }
+    return std.posix.read(handle, buf);
+}
+
+/// Gracefully close a TCP connection to avoid RST on Windows.
+/// Without shutdown(SD_SEND) + drain, closesocket() sends RST if there is
+/// any unread data in the receive buffer — the browser sees ERR_CONNECTION_RESET.
+fn gracefulClose(stream: std.net.Stream) void {
+    if (comptime builtin.os.tag == .windows) {
+        _ = win_ws2.shutdown(stream.handle, 1); // SD_SEND = 1 → sends FIN
+        // Drain remaining receive-buffer data so closesocket() does not RST.
+        var drain: [1024]u8 = undefined;
+        const drain_ptr: [*]u8 = @ptrCast(&drain);
+        var drained: usize = 0;
+        while (drained < 64 * 1024) {
+            const n = win_ws2.recv(stream.handle, drain_ptr, @intCast(drain.len), 0);
+            if (n <= 0) break; // 0 = peer closed, negative = error (e.g. WSAECONNRESET)
+            drained += @intCast(n);
+        }
+    }
+    stream.close();
+}
 
 /// SSE dev server for watch mode.
 ///
@@ -36,22 +89,32 @@ pub const SseServer = struct {
     // Only accessed from the event loop thread — no lock needed.
     current_combined: ?[]u8 = null,
 
+    accept_thread: ?std.Thread = null,
+    accept_queue: std.ArrayList(std.net.Server.Connection),
+    accept_mu: std.Thread.Mutex = .{},
+
     pub fn init(port: u16, root_dir: []const u8, default_page: []const u8, allocator: std.mem.Allocator) !*SseServer {
         const self = try allocator.create(SseServer);
         errdefer allocator.destroy(self);
+
         const addr = try std.net.Address.parseIp("127.0.0.1", port);
         const listener = try addr.listen(.{ .reuse_address = true });
+
         const owned_dir = try allocator.dupe(u8, root_dir);
         errdefer allocator.free(owned_dir);
+
         const owned_page = try allocator.dupe(u8, default_page);
         errdefer allocator.free(owned_page);
+
         self.* = .{
             .allocator = allocator,
             .listener = listener,
             .root_dir = owned_dir,
             .default_page = owned_page,
             .bound_port = port,
+            .accept_queue = .empty,
         };
+
         return self;
     }
 
@@ -64,8 +127,10 @@ pub const SseServer = struct {
     /// Queue a "report" SSE event. Returns immediately; the event loop delivers it.
     pub fn broadcast(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
+
         self.mu.lock();
         defer self.mu.unlock();
+
         if (self.pending_payload) |old| self.allocator.free(old);
         self.pending_payload = copy;
     }
@@ -73,8 +138,10 @@ pub const SseServer = struct {
     /// Queue a "combined_update" SSE event. Returns immediately; the event loop delivers it.
     pub fn broadcastCombined(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
+
         self.mu.lock();
         defer self.mu.unlock();
+
         if (self.pending_combined) |old| self.allocator.free(old);
         self.pending_combined = copy;
     }
@@ -82,8 +149,8 @@ pub const SseServer = struct {
     /// Queue a "reload" SSE event (triggers location.reload() in the browser).
     pub fn broadcastReload(self: *SseServer) void {
         self.mu.lock();
-        defer self.mu.unlock();
         self.pending_reload = true;
+        self.mu.unlock();
     }
 
     /// Open the dashboard URL in the system browser (fire-and-forget).
@@ -93,30 +160,79 @@ pub const SseServer = struct {
             "http://127.0.0.1:{d}",
             .{self.bound_port},
         ) catch return;
+
         const t = std.Thread.spawn(.{}, openBrowserThread, .{ self.allocator, url }) catch {
             self.allocator.free(url);
             return;
         };
+
         t.detach();
     }
 
     pub fn stop(self: *SseServer) void {
         self.mu.lock();
-        defer self.mu.unlock();
         self.stopped = true;
+        self.mu.unlock();
     }
 
     pub fn deinit(self: *SseServer) void {
+        {
+            self.mu.lock();
+            defer self.mu.unlock();
+            self.stopped = true;
+        }
+
         self.listener.deinit();
+
+        if (self.accept_thread) |t| t.join();
+
+        {
+            self.accept_mu.lock();
+            defer self.accept_mu.unlock();
+
+            for (self.accept_queue.items) |conn|
+                conn.stream.close();
+
+            self.accept_queue.deinit(self.allocator);
+        }
+
         self.allocator.free(self.root_dir);
         self.allocator.free(self.default_page);
-        self.mu.lock();
-        if (self.pending_payload) |p| self.allocator.free(p);
-        if (self.pending_combined) |p| self.allocator.free(p);
-        self.mu.unlock();
+
+        {
+            self.mu.lock();
+            defer self.mu.unlock();
+
+            if (self.pending_payload) |p| self.allocator.free(p);
+            if (self.pending_combined) |p| self.allocator.free(p);
+        }
+
         if (self.current_payload) |p| self.allocator.free(p);
         if (self.current_combined) |p| self.allocator.free(p);
+
         self.allocator.destroy(self);
+    }
+
+    fn acceptLoop(self: *SseServer) void {
+        while (true) {
+            {
+                self.mu.lock();
+                const stopped = self.stopped;
+                self.mu.unlock();
+                if (stopped) break;
+            }
+
+            const conn = self.listener.accept() catch {
+                std.Thread.sleep(10 * std.time.ns_per_ms);
+                continue;
+            };
+
+            self.accept_mu.lock();
+            self.accept_queue.append(self.allocator, conn) catch {
+                conn.stream.close();
+            };
+            self.accept_mu.unlock();
+        }
     }
 
     // Event loop
@@ -127,6 +243,13 @@ pub const SseServer = struct {
         defer {
             for (clients.items) |c| c.close();
             clients.deinit(self.allocator);
+        }
+
+        const t = std.Thread.spawn(.{}, acceptLoop, .{self}) catch null;
+        if (t) |thread| {
+            self.mu.lock();
+            self.accept_thread = thread;
+            self.mu.unlock();
         }
 
         var last_keepalive_ms = std.time.milliTimestamp();
@@ -141,21 +264,27 @@ pub const SseServer = struct {
                 if (stopped) break;
             }
 
-            // poll() the listener socket for incoming connections (100 ms timeout).
-            var pfd = [1]posix.pollfd{.{
-                .fd = self.listener.stream.handle,
-                .events = posix.POLL.IN,
-                .revents = 0,
-            }};
-            _ = posix.poll(&pfd, 100) catch {};
+            std.Thread.sleep(100 * std.time.ns_per_ms);
 
-            if (pfd[0].revents & posix.POLL.IN != 0) {
-                if (self.listener.accept()) |conn| {
-                    self.handleNewConn(conn, &clients);
-                } else |_| {}
+            // Drain the accept queue into a local list before releasing the lock.
+            // handleNewConn does a blocking read, so we must not hold accept_mu
+            // while calling it — otherwise acceptLoop stalls waiting for the lock.
+            var local_queue: std.ArrayList(std.net.Server.Connection) = .empty;
+            defer local_queue.deinit(self.allocator);
+
+            self.accept_mu.lock();
+            for (self.accept_queue.items) |conn| {
+                local_queue.append(self.allocator, conn) catch {
+                    conn.stream.close();
+                };
+            }
+            self.accept_queue.clearRetainingCapacity();
+            self.accept_mu.unlock();
+
+            for (local_queue.items) |conn| {
+                self.handleNewConn(conn, &clients);
             }
 
-            // Consume pending broadcasts (set by the caller thread).
             self.mu.lock();
             const payload = self.pending_payload;
             self.pending_payload = null;
@@ -167,19 +296,19 @@ pub const SseServer = struct {
 
             if (payload) |p| {
                 defer self.allocator.free(p);
-                // Cache for late-joining clients.
+
                 if (self.current_payload) |old| self.allocator.free(old);
                 self.current_payload = self.allocator.dupe(u8, p) catch null;
-                // Push named "report" event to all connected clients.
+
                 writePartsToAll(&clients, &.{ "event: report\ndata: ", p, "\n\n" });
             }
 
             if (combined) |p| {
                 defer self.allocator.free(p);
-                // Cache for late-joining clients.
+
                 if (self.current_combined) |old| self.allocator.free(old);
                 self.current_combined = self.allocator.dupe(u8, p) catch null;
-                // Push named "combined_update" event to all connected clients.
+
                 writePartsToAll(&clients, &.{ "event: combined_update\ndata: ", p, "\n\n" });
             }
 
@@ -187,7 +316,6 @@ pub const SseServer = struct {
                 writePartsToAll(&clients, &.{"event: reload\ndata: {}\n\n"});
             }
 
-            // Keepalive comments keep the connection alive through proxies/browsers.
             const now_ms = std.time.milliTimestamp();
             if (now_ms - last_keepalive_ms >= KEEPALIVE_MS) {
                 writePartsToAll(&clients, &.{": keep-alive\n\n"});
@@ -207,12 +335,12 @@ pub const SseServer = struct {
         var buf: [4096]u8 = undefined;
         var total: usize = 0;
         while (total < buf.len - 1) {
-            const n = conn.stream.read(buf[total..]) catch {
-                conn.stream.close();
+            const n = socketRecv(conn.stream.handle, buf[total..]) catch {
+                gracefulClose(conn.stream);
                 return;
             };
             if (n == 0) {
-                conn.stream.close();
+                gracefulClose(conn.stream);
                 return;
             }
             total += n;
@@ -222,12 +350,12 @@ pub const SseServer = struct {
 
         const line_end = std.mem.indexOf(u8, buf[0..total], "\r\n") orelse
             std.mem.indexOf(u8, buf[0..total], "\n") orelse {
-            conn.stream.close();
+            gracefulClose(conn.stream);
             return;
         };
         const first_line = buf[0..line_end];
         if (!std.mem.startsWith(u8, first_line, "GET ")) {
-            conn.stream.close();
+            gracefulClose(conn.stream);
             return;
         }
         const path_end = std.mem.indexOfPos(u8, first_line, 4, " ") orelse first_line.len;
@@ -255,7 +383,7 @@ pub const SseServer = struct {
             // Instruct the browser to reconnect every 3 s on disconnect.
             "retry: 3000\n\n";
         stream.writeAll(headers) catch {
-            stream.close();
+            gracefulClose(stream);
             return;
         };
 
@@ -269,7 +397,7 @@ pub const SseServer = struct {
                 break :blk true;
             };
             if (!ok) {
-                stream.close();
+                gracefulClose(stream);
                 return;
             }
         }
@@ -284,13 +412,13 @@ pub const SseServer = struct {
                 break :blk true;
             };
             if (!ok) {
-                stream.close();
+                gracefulClose(stream);
                 return;
             }
         }
 
         clients.append(self.allocator, stream) catch {
-            stream.close();
+            gracefulClose(stream);
             return;
         };
     }
@@ -310,7 +438,7 @@ fn writePartsToAll(clients: *std.ArrayList(std.net.Stream), parts: []const []con
             break :blk true;
         };
         if (!alive) {
-            clients.items[i].close();
+            gracefulClose(clients.items[i]);
             _ = clients.swapRemove(i);
         } else {
             i += 1;
@@ -328,7 +456,7 @@ fn deriveMimeType(path: []const u8) []const u8 {
 }
 
 fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page: []const u8, req_path_raw: []const u8, stream: std.net.Stream) void {
-    defer stream.close();
+    defer gracefulClose(stream);
 
     // Strip leading slash and query string.
     var req_path = req_path_raw;
@@ -362,7 +490,7 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
     var hdr_buf: [256]u8 = undefined;
     const hdr = std.fmt.bufPrint(
         &hdr_buf,
-        "HTTP/1.1 200 OK\r\nContent-Type: {s}\r\nContent-Length: {d}\r\nCache-Control: no-cache\r\n\r\n",
+        "HTTP/1.1 200 OK\r\nContent-Type: {s}\r\nContent-Length: {d}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
         .{ mime, file_size },
     ) catch return;
     stream.writeAll(hdr) catch return;
