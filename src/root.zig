@@ -24,6 +24,7 @@ test {
     _ = @import("./cli/handlers/llm_report.zig");
     _ = @import("./cli/handlers/port.zig");
     _ = @import("./cli/handlers/log.zig");
+    _ = @import("./cli/handlers/open.zig");
     _ = @import("./cli/commands/config/config.zig");
     _ = @import("./cli/commands/runner.zig");
 
@@ -34,6 +35,8 @@ test {
     _ = @import("./cli/commands/watch/exec_test.zig");
     _ = @import("./cli/version/version_test.zig");
     _ = @import("./cli/commands/stats/stats_test.zig");
+    _ = @import("./cli/commands/watch/port_listening_test.zig");
+    _ = @import("./cli/commands/watch/server_test.zig");
 
     // report sub-module tests
     _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
@@ -53,6 +56,7 @@ test {
     _ = @import("./jobs/entry.zig");
     _ = @import("./jobs/process.zig");
 
+    _ = @import("./cli/commands/serve_test.zig");
     _ = @import("./cli/commands/logger/logger_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");

@@ -20,6 +20,7 @@ src/templates/src/prism-*.min.js
 src/templates/node_modules/
 src/templates/dist/
 src/templates/dashboard.html
+src/templates/combined-dashboard.html
 .idea/
 .vscode/
 zigzag-reports

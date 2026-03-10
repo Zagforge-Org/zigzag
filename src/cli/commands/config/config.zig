@@ -37,6 +37,7 @@ pub const Config = struct {
     llm_max_lines: u64, // Max lines per file before truncation (default: 150)
     llm_description: ?[]u8, // Optional project description for LLM report preamble
     serve_port: u16, // Port for SSE/HTML dev server in watch+html mode (default: 5455)
+    open_browser: bool, // Open browser automatically on serve/watch (default: false)
 
     // Internal tracking for memory management and CLI override behavior.
     // These are not user-facing; they track whether list fields were set by CLI
@@ -78,6 +79,7 @@ pub const Config = struct {
             .llm_description = null,
             ._llm_description_allocated = false,
             .serve_port = 5455,
+            .open_browser = false,
         };
     }
 

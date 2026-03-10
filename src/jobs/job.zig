@@ -15,6 +15,7 @@ pub const Job = struct {
     binary_entries: *std.StringHashMap(BinaryEntry),
     entries_mutex: *std.Thread.Mutex,
     allocator: std.mem.Allocator,
+    thread_allocator: std.mem.Allocator, // per-thread arena; reset after each job
 
     pub fn deinit(self: *Job) void {
         self.allocator.free(self.path);

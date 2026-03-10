@@ -5,7 +5,7 @@ const WaitGroup = @import("wait_group.zig").WaitGroup;
 pub const Pool = struct {
     mutex: std.Thread.Mutex = .{},
     cond: std.Thread.Condition = .{},
-    run_queue: std.SinglyLinkedList = .{},
+    run_queue: std.DoublyLinkedList = .{},
     is_running: bool = true,
     allocator: std.mem.Allocator = undefined,
     threads: []std.Thread = &[_]std.Thread{},
@@ -25,7 +25,7 @@ pub const Pool = struct {
             .allocator = options.allocator,
             .mutex = .{},
             .cond = .{},
-            .run_queue = .{},
+            .run_queue = .{ .first = null, .last = null },
             .is_running = true,
         };
 
@@ -96,11 +96,23 @@ pub const Pool = struct {
         const Closure = struct {
             arguments: Args,
             pool: *Self,
-            runnable: Runnable = .{ .runFn = runFn },
+            runnable: Runnable = .{ .runFn = runFn, .node = .{ .prev = null, .next = null } },
             wait_group: *WaitGroup,
 
             fn runFn(runnable: *Runnable) void {
                 const closure: *@This() = @fieldParentPtr("runnable", runnable);
+
+                // Inject per-thread arena allocator into the first argument if it has a
+                // thread_allocator field (e.g. Job struct). Checked at comptime — zero cost.
+                const should_inject = comptime should_inject: {
+                    const fields = @typeInfo(Args).@"struct".fields;
+                    if (fields.len == 0) break :should_inject false;
+                    break :should_inject @hasField(fields[0].type, "thread_allocator");
+                };
+                if (should_inject) {
+                    const field_name = comptime @typeInfo(Args).@"struct".fields[0].name;
+                    @field(closure.arguments, field_name).thread_allocator = runnable.thread_allocator;
+                }
 
                 if (@typeInfo(@TypeOf(@call(.auto, func, closure.arguments))) == .error_union) {
                     @call(.auto, func, closure.arguments) catch |err| {
@@ -142,19 +154,24 @@ pub const Pool = struct {
             .runnable = .{ .runFn = Closure.runFn },
         };
 
-        self.run_queue.prepend(&closure.runnable.node);
+        self.run_queue.append(&closure.runnable.node);
         self.cond.signal();
     }
 };
 
 const Runnable = struct {
     runFn: RunFnProto,
-    node: std.SinglyLinkedList.Node = .{},
+    node: std.DoublyLinkedList.Node = .{ .prev = null, .next = null },
+    thread_allocator: std.mem.Allocator = undefined, // set by worker before each job
 };
 
 const RunFnProto = *const fn (*Runnable) void;
 
 fn worker(pool: *Pool) void {
+    // Per-thread arena: bump-pointer allocation, reset between jobs — O(1), no syscall.
+    var arena = std.heap.ArenaAllocator.init(pool.allocator);
+    defer arena.deinit();
+
     pool.mutex.lock();
     defer pool.mutex.unlock();
 
@@ -169,7 +186,9 @@ fn worker(pool: *Pool) void {
             defer pool.mutex.lock();
 
             const runnable: *Runnable = @fieldParentPtr("node", run_node);
+            runnable.thread_allocator = arena.allocator();
             runnable.runFn(runnable);
+            _ = arena.reset(.retain_capacity);
         }
 
         if (!pool.is_running) break;

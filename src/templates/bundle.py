@@ -6,7 +6,9 @@ Build pipeline (run automatically when invoked as __main__):
   1. npm install  (skipped if node_modules already exists)
   2. esbuild src/main.ts          → dist/bundle.js
   3. esbuild src/highlight.worker.ts → dist/highlight.worker.js
-  4. Python injection pass        → dashboard.html
+  4. esbuild src/combined.ts      → dist/combined.js
+  5. Python injection pass        → dashboard.html
+  6. Python injection pass        → combined-dashboard.html
 
 Injection markers in template.html:
   <!-- @inject: file.css -->            → <style>content</style>
@@ -144,7 +146,25 @@ def run_esbuild() -> None:
         check=True,
     )
 
+    print("bundle.py: building dist/combined.js...")
+    subprocess.run(
+        [
+            _esbuild_bin(),
+            str(TEMPLATES_DIR / "src" / "combined.ts"),
+            *esbuild_common,
+            f"--outfile={dist_dir / 'combined.js'}",
+        ],
+        cwd=TEMPLATES_DIR,
+        check=True,
+    )
+
 
 if __name__ == "__main__":
     run_esbuild()
     bundle()
+    bundle(
+        template_path=TEMPLATES_DIR / "src" / "combined.html",
+        src_dir=TEMPLATES_DIR / "src",
+        output_path=TEMPLATES_DIR / "combined-dashboard.html",
+        templates_dir=TEMPLATES_DIR,
+    )

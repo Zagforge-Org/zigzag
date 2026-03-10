@@ -8,6 +8,8 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
+const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
+
 /// Thread-safe event queue shared between background watch threads and poll().
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can
 /// hold a reference; the queue is only freed when the last holder releases it.
@@ -146,11 +148,24 @@ pub const Watcher = struct {
     queue: *SharedQueue,
     ctxs: std.ArrayList(*WatchCtx) = .empty,
     allocator: std.mem.Allocator,
+    /// Set when events may have been lost; always false on Windows (API parity with linux.zig).
+    overflow: bool = false,
+    /// Directory names to filter out of poll() results (basename component match).
+    skip_dirs: std.ArrayList([]const u8),
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
+        var skip_dirs: std.ArrayList([]const u8) = .empty;
+        errdefer {
+            for (skip_dirs.items) |d| allocator.free(d);
+            skip_dirs.deinit(allocator);
+        }
+        for (DEFAULT_SKIP_DIRS) |dir| {
+            try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
+        }
         return .{
             .queue = try SharedQueue.create(allocator),
             .allocator = allocator,
+            .skip_dirs = skip_dirs,
         };
     }
 
@@ -161,6 +176,44 @@ pub const Watcher = struct {
         }
         self.ctxs.deinit(self.allocator);
         self.queue.release(); // release watcher's queue ref
+        for (self.skip_dirs.items) |d| self.allocator.free(d);
+        self.skip_dirs.deinit(self.allocator);
+    }
+
+    /// Register a directory name to skip when filtering poll() events.
+    /// The basename is compared against path components relative to the watched root,
+    /// so "zigzag-reports" filters events from that subdirectory at any depth without
+    /// accidentally matching ancestor directories in the root path.
+    /// Call before watchDir().
+    pub fn addSkipDir(self: *Watcher, dir: []const u8) !void {
+        const name = std.fs.path.basename(dir);
+        if (name.len == 0) return;
+        const copy = try self.allocator.dupe(u8, name);
+        try self.skip_dirs.append(self.allocator, copy);
+    }
+
+    /// Returns true if any component of `path` RELATIVE to a registered watch root
+    /// matches a skip directory name.  Checking only the relative portion means the
+    /// root directory's own ancestor components (e.g. ".zig-cache" in a temp-dir path)
+    /// are never matched, which mirrors the Linux/macOS behaviour where only
+    /// subdirectories *inside* the watched tree are skipped.
+    fn shouldSkipPath(self: *const Watcher, path: []const u8) bool {
+        // Find which registered root this event belongs to and strip it,
+        // so we only inspect components relative to the watched root.
+        for (self.ctxs.items) |ctx| {
+            if (!std.mem.startsWith(u8, path, ctx.path)) continue;
+            var rel = path[ctx.path.len..];
+            if (rel.len > 0 and rel[0] == std.fs.path.sep) rel = rel[1..];
+            var it = std.mem.splitScalar(u8, rel, std.fs.path.sep);
+            while (it.next()) |component| {
+                if (component.len == 0) continue;
+                for (self.skip_dirs.items) |skip| {
+                    if (std.mem.eql(u8, component, skip)) return true;
+                }
+            }
+            return false;
+        }
+        return false;
     }
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
@@ -180,7 +233,7 @@ pub const Watcher = struct {
 
     pub fn poll(self: *Watcher, out: *std.ArrayList(WatchEvent), timeout_ms: i32) !usize {
         const before = out.items.len;
-        try self.queue.drain(out);
+        try self.drainFiltered(out);
         if (out.items.len > before) return out.items.len - before;
         if (timeout_ms == 0) return 0;
 
@@ -189,10 +242,25 @@ pub const Watcher = struct {
         const start = std.time.milliTimestamp();
         while (true) {
             std.Thread.sleep(5 * std.time.ns_per_ms);
-            try self.queue.drain(out);
+            try self.drainFiltered(out);
             if (out.items.len > before) break;
             if (@as(u64, @intCast(std.time.milliTimestamp() - start)) >= wait_ms) break;
         }
         return out.items.len - before;
+    }
+
+    /// Drain the shared queue into `out`, discarding events whose paths contain a
+    /// registered skip directory component.
+    fn drainFiltered(self: *Watcher, out: *std.ArrayList(WatchEvent)) !void {
+        var raw: std.ArrayList(WatchEvent) = .empty;
+        defer raw.deinit(self.allocator);
+        try self.queue.drain(&raw);
+        for (raw.items) |ev| {
+            if (self.shouldSkipPath(ev.path)) {
+                self.allocator.free(ev.path);
+            } else {
+                try out.append(self.allocator, ev);
+            }
+        }
     }
 };

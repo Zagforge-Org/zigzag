@@ -89,7 +89,12 @@ pub const State = struct {
         try self.file_ctx.ignore_list.append(alloc, try alloc.dupe(u8, base_output_dir));
         try self.file_ctx.ignore_list.append(alloc, try alloc.dupe(u8, self.md_path));
         if (cfg.json_output) try self.file_ctx.ignore_list.append(alloc, try report.deriveJsonPath(alloc, self.md_path));
-        if (cfg.html_output) try self.file_ctx.ignore_list.append(alloc, try report.deriveHtmlPath(alloc, self.md_path));
+        if (cfg.html_output) {
+            const html_ign = try report.deriveHtmlPath(alloc, self.md_path);
+            try self.file_ctx.ignore_list.append(alloc, html_ign);
+            const content_ign = try report.deriveContentPath(alloc, html_ign);
+            try self.file_ctx.ignore_list.append(alloc, content_ign);
+        }
         if (cfg.llm_report) try self.file_ctx.ignore_list.append(alloc, try report.deriveLlmPath(alloc, self.md_path));
         for (cfg.ignore_patterns.items) |pattern| {
             try self.file_ctx.ignore_list.append(alloc, try alloc.dupe(u8, pattern));
@@ -102,17 +107,51 @@ pub const State = struct {
         alloc.free(self.md_path);
 
         var it = self.file_entries.iterator();
-        while (it.next()) |entry| freeJobEntry(entry.value_ptr.*);
+        while (it.next()) |entry| freeJobEntry(entry.value_ptr.*, alloc);
         self.file_entries.deinit();
 
         var bit = self.binary_entries.iterator();
-        while (bit.next()) |entry| freeBinaryEntry(entry.value_ptr.*);
+        while (bit.next()) |entry| freeBinaryEntry(entry.value_ptr.*, alloc);
         self.binary_entries.deinit();
 
         for (self.file_ctx.ignore_list.items) |item| alloc.free(item);
         self.file_ctx.ignore_list.deinit(alloc);
 
         alloc.destroy(self);
+    }
+
+    /// Re-scan the entire root path and rebuild in-memory entries from scratch.
+    /// Called after an inotify queue overflow to recover from lost events.
+    pub fn rescan(self: *State, cache: ?*CacheImpl, pool: *Pool) !void {
+        {
+            self.entries_mutex.lock();
+            defer self.entries_mutex.unlock();
+            var it = self.file_entries.iterator();
+            while (it.next()) |entry| freeJobEntry(entry.value_ptr.*, self.allocator);
+            self.file_entries.clearRetainingCapacity();
+            var bit = self.binary_entries.iterator();
+            while (bit.next()) |entry| freeBinaryEntry(entry.value_ptr.*, self.allocator);
+            self.binary_entries.clearRetainingCapacity();
+        }
+
+        var wg = WaitGroup.init();
+        var stats = ProcessStats.init();
+        var walker_ctx = WalkerCtx{
+            .pool = pool,
+            .wg = &wg,
+            .file_ctx = &self.file_ctx,
+            .cache = cache,
+            .stats = &stats,
+            .file_entries = &self.file_entries,
+            .binary_entries = &self.binary_entries,
+            .entries_mutex = &self.entries_mutex,
+            .allocator = self.allocator,
+        };
+
+        const walker = try walk.init(self.allocator);
+        const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
+        try walker.walkDir(self.root_path, walkerCallback, walk_ctx);
+        wg.wait();
     }
 
     /// Re-process a single changed file and update the in-memory map.
@@ -130,6 +169,7 @@ pub const State = struct {
             .binary_entries = &self.binary_entries,
             .entries_mutex = &self.entries_mutex,
             .allocator = self.allocator,
+            .thread_allocator = self.allocator, // placeholder; Task 2.3 wires real arena
         };
 
         var wg = WaitGroup.init();
@@ -141,20 +181,18 @@ pub const State = struct {
     pub fn removeFile(self: *State, file_path: []const u8) void {
         self.entries_mutex.lock();
         defer self.entries_mutex.unlock();
-        if (self.file_entries.fetchRemove(file_path)) |kv| freeJobEntry(kv.value);
-        if (self.binary_entries.fetchRemove(file_path)) |kv| freeBinaryEntry(kv.value);
+        if (self.file_entries.fetchRemove(file_path)) |kv| freeJobEntry(kv.value, self.allocator);
+        if (self.binary_entries.fetchRemove(file_path)) |kv| freeBinaryEntry(kv.value, self.allocator);
     }
 };
 
-fn freeJobEntry(entry: JobEntry) void {
-    const pa = std.heap.page_allocator;
-    pa.free(entry.path);
-    pa.free(entry.content);
-    pa.free(entry.extension);
+fn freeJobEntry(entry: JobEntry, allocator: std.mem.Allocator) void {
+    allocator.free(entry.path);
+    allocator.free(entry.content);
+    allocator.free(entry.extension);
 }
 
-fn freeBinaryEntry(entry: BinaryEntry) void {
-    const pa = std.heap.page_allocator;
-    pa.free(entry.path);
-    pa.free(entry.extension);
+fn freeBinaryEntry(entry: BinaryEntry, allocator: std.mem.Allocator) void {
+    allocator.free(entry.path);
+    allocator.free(entry.extension);
 }

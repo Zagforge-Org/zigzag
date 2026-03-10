@@ -4,8 +4,6 @@ const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 
 test "State.removeFile removes file entry and frees memory" {
-    const page_alloc = std.heap.page_allocator;
-
     var state: State = undefined;
     state.entries_mutex = .{};
     state.allocator = std.testing.allocator;
@@ -14,9 +12,9 @@ test "State.removeFile removes file entry and frees memory" {
     state.binary_entries = std.StringHashMap(BinaryEntry).init(std.testing.allocator);
     defer state.binary_entries.deinit();
 
-    const path = try page_alloc.dupe(u8, "src/target.zig");
-    const content = try page_alloc.dupe(u8, "pub fn run() void {}");
-    const ext = try page_alloc.dupe(u8, ".zig");
+    const path = try std.testing.allocator.dupe(u8, "src/target.zig");
+    const content = try std.testing.allocator.dupe(u8, "pub fn run() void {}");
+    const ext = try std.testing.allocator.dupe(u8, ".zig");
 
     try state.file_entries.put(path, JobEntry{
         .path = path,
@@ -46,8 +44,6 @@ test "State.removeFile is a no-op for unknown paths" {
 }
 
 test "State.removeFile removes binary entry and frees memory" {
-    const page_alloc = std.heap.page_allocator;
-
     var state: State = undefined;
     state.entries_mutex = .{};
     state.allocator = std.testing.allocator;
@@ -56,8 +52,8 @@ test "State.removeFile removes binary entry and frees memory" {
     state.binary_entries = std.StringHashMap(BinaryEntry).init(std.testing.allocator);
     defer state.binary_entries.deinit();
 
-    const path = try page_alloc.dupe(u8, "assets/logo.png");
-    const ext = try page_alloc.dupe(u8, ".png");
+    const path = try std.testing.allocator.dupe(u8, "assets/logo.png");
+    const ext = try std.testing.allocator.dupe(u8, ".png");
 
     try state.binary_entries.put(path, BinaryEntry{
         .path = path,
@@ -72,8 +68,6 @@ test "State.removeFile removes binary entry and frees memory" {
 }
 
 test "State.removeFile handles both file and binary entries for the same path" {
-    const page_alloc = std.heap.page_allocator;
-
     var state: State = undefined;
     state.entries_mutex = .{};
     state.allocator = std.testing.allocator;
@@ -82,9 +76,9 @@ test "State.removeFile handles both file and binary entries for the same path" {
     state.binary_entries = std.StringHashMap(BinaryEntry).init(std.testing.allocator);
     defer state.binary_entries.deinit();
 
-    const path1 = try page_alloc.dupe(u8, "ambiguous");
-    const content = try page_alloc.dupe(u8, "data");
-    const ext1 = try page_alloc.dupe(u8, "");
+    const path1 = try std.testing.allocator.dupe(u8, "ambiguous");
+    const content = try std.testing.allocator.dupe(u8, "data");
+    const ext1 = try std.testing.allocator.dupe(u8, "");
     try state.file_entries.put(path1, JobEntry{
         .path = path1,
         .content = content,
@@ -94,8 +88,8 @@ test "State.removeFile handles both file and binary entries for the same path" {
         .line_count = 1,
     });
 
-    const path2 = try page_alloc.dupe(u8, "ambiguous");
-    const ext2 = try page_alloc.dupe(u8, "");
+    const path2 = try std.testing.allocator.dupe(u8, "ambiguous");
+    const ext2 = try std.testing.allocator.dupe(u8, "");
     try state.binary_entries.put(path2, BinaryEntry{
         .path = path2,
         .size = 4,

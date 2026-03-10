@@ -170,7 +170,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         }
     }
 
-    const allocator = std.heap.page_allocator;
+    const allocator = job.allocator;
 
     // Check if file still exists
     const stat = std.fs.cwd().statFile(path) catch |err| {
