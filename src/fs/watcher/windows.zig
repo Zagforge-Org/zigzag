@@ -52,26 +52,20 @@ const SharedQueue = struct {
 };
 
 /// Context passed to each background watch thread.
-/// Ref-counted (init=2: one for watcher, one for thread) so deinit() can signal
-/// stop and release its ref without freeing memory the thread is still using.
+/// Watcher owns the ctx; the thread borrows it. Watcher calls thread.join()
+/// before freeing ctx, so no ref-counting is needed here.
 const WatchCtx = struct {
     path: []const u8,
     queue: *SharedQueue,
     allocator: std.mem.Allocator,
     stop: std.atomic.Value(bool),
-    ref: std.atomic.Value(u32),
-
-    fn release(self: *WatchCtx) void {
-        if (self.ref.fetchSub(1, .acq_rel) == 1) {
-            self.queue.release(); // release queue ref when ctx is freed
-            self.allocator.free(self.path);
-            self.allocator.destroy(self);
-        }
-    }
+    /// Directory handle stored as usize; 0 = not yet opened or already closed.
+    /// Allows deinit() to close it from outside, unblocking ReadDirectoryChangesW.
+    dir_handle: std.atomic.Value(usize),
+    thread: std.Thread,
 };
 
 fn watchThread(ctx: *WatchCtx) void {
-    defer ctx.release();
     // Convert path to null-terminated UTF-16
     var path_w_buf: [std.fs.max_path_bytes]u16 = undefined;
     const path_w_len = std.unicode.utf8ToUtf16Le(&path_w_buf, ctx.path) catch return;
@@ -87,7 +81,15 @@ fn watchThread(ctx: *WatchCtx) void {
         null,
     );
     if (dir_handle == windows.INVALID_HANDLE_VALUE) return;
-    defer _ = windows.CloseHandle(dir_handle);
+
+    // If stop was already signalled before we opened the handle, close and exit.
+    if (ctx.stop.load(.acquire)) {
+        _ = windows.CloseHandle(dir_handle);
+        return;
+    }
+
+    // Publish handle so deinit() can close it to interrupt a blocked ReadDirectoryChangesW.
+    ctx.dir_handle.store(@intFromPtr(dir_handle), .release);
 
     var buf: [65536]u8 align(4) = undefined;
 
@@ -142,6 +144,10 @@ fn watchThread(ctx: *WatchCtx) void {
             offset += info.NextEntryOffset;
         }
     }
+
+    // Close the handle ourselves only if deinit() hasn't already done so.
+    const h = ctx.dir_handle.swap(0, .acq_rel);
+    if (h != 0) _ = windows.CloseHandle(@ptrFromInt(h));
 }
 
 pub const Watcher = struct {
@@ -171,11 +177,19 @@ pub const Watcher = struct {
 
     pub fn deinit(self: *Watcher) void {
         for (self.ctxs.items) |ctx| {
+            // Signal the thread to stop.
             ctx.stop.store(true, .release);
-            ctx.release(); // release watcher's ref; thread frees ctx+queue-ref when it exits
+            // Close the directory handle to unblock a pending ReadDirectoryChangesW.
+            const h = ctx.dir_handle.swap(0, .acq_rel);
+            if (h != 0) _ = windows.CloseHandle(@ptrFromInt(h));
+            // Wait for the thread to fully exit before freeing shared resources.
+            ctx.thread.join();
+            ctx.queue.release();
+            self.allocator.free(ctx.path);
+            self.allocator.destroy(ctx);
         }
         self.ctxs.deinit(self.allocator);
-        self.queue.release(); // release watcher's queue ref
+        self.queue.release();
         for (self.skip_dirs.items) |d| self.allocator.free(d);
         self.skip_dirs.deinit(self.allocator);
     }
@@ -218,17 +232,25 @@ pub const Watcher = struct {
 
     pub fn watchDir(self: *Watcher, path: []const u8) !void {
         const ctx = try self.allocator.create(WatchCtx);
-        self.queue.retain(); // ctx will hold one extra queue ref
+        errdefer self.allocator.destroy(ctx);
+
+        const path_copy = try self.allocator.dupe(u8, path);
+        errdefer self.allocator.free(path_copy);
+
+        self.queue.retain(); // ctx holds one queue ref; released in deinit() after join
+        errdefer self.queue.release();
+
         ctx.* = .{
-            .path = try self.allocator.dupe(u8, path),
+            .path = path_copy,
             .queue = self.queue,
             .allocator = self.allocator,
             .stop = std.atomic.Value(bool).init(false),
-            .ref = std.atomic.Value(u32).init(2),
+            .dir_handle = std.atomic.Value(usize).init(0),
+            .thread = undefined,
         };
+
+        ctx.thread = try std.Thread.spawn(.{}, watchThread, .{ctx});
         try self.ctxs.append(self.allocator, ctx);
-        const t = try std.Thread.spawn(.{}, watchThread, .{ctx});
-        t.detach();
     }
 
     pub fn poll(self: *Watcher, out: *std.ArrayList(WatchEvent), timeout_ms: i32) !usize {
