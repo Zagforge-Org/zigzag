@@ -52,16 +52,16 @@ const SharedQueue = struct {
 };
 
 /// Context passed to each background watch thread.
-/// Watcher owns the ctx; the thread borrows it. Watcher calls thread.join()
-/// before freeing ctx, so no ref-counting is needed here.
+/// Watcher owns the ctx; the thread borrows it. Watcher signals stop_event and
+/// joins the thread before freeing ctx, so no ref-counting is needed on WatchCtx.
 const WatchCtx = struct {
     path: []const u8,
     queue: *SharedQueue,
     allocator: std.mem.Allocator,
-    stop: std.atomic.Value(bool),
-    /// Directory handle stored as usize; 0 = not yet opened or already closed.
-    /// Allows deinit() to close it from outside, unblocking ReadDirectoryChangesW.
-    dir_handle: std.atomic.Value(usize),
+    /// Manual-reset Windows event. Signaled by deinit() to wake the thread out of
+    /// WaitForMultipleObjects so it can exit cleanly without closing the dir handle
+    /// from outside (which is not safe with overlapped I/O).
+    stop_event: windows.HANDLE,
     thread: std.Thread,
 };
 
@@ -71,83 +71,106 @@ fn watchThread(ctx: *WatchCtx) void {
     const path_w_len = std.unicode.utf8ToUtf16Le(&path_w_buf, ctx.path) catch return;
     path_w_buf[path_w_len] = 0;
 
+    // Must open with FILE_FLAG_OVERLAPPED for async ReadDirectoryChangesW.
     const dir_handle = watch_api.CreateFileW(
         @ptrCast(&path_w_buf),
         watch_api.FILE_LIST_DIRECTORY,
         windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE,
         null,
         windows.OPEN_EXISTING,
-        watch_api.FILE_FLAG_BACKUP_SEMANTICS,
+        watch_api.FILE_FLAG_BACKUP_SEMANTICS | watch_api.FILE_FLAG_OVERLAPPED,
         null,
     );
     if (dir_handle == windows.INVALID_HANDLE_VALUE) return;
+    defer _ = windows.CloseHandle(dir_handle);
 
-    // If stop was already signalled before we opened the handle, close and exit.
-    if (ctx.stop.load(.acquire)) {
-        _ = windows.CloseHandle(dir_handle);
-        return;
-    }
+    // Manual-reset event for overlapped I/O completion; starts unsignaled.
+    const io_event = watch_api.CreateEventW(null, windows.TRUE, windows.FALSE, null) orelse return;
+    defer _ = windows.CloseHandle(io_event);
 
-    // Publish handle so deinit() can close it to interrupt a blocked ReadDirectoryChangesW.
-    ctx.dir_handle.store(@intFromPtr(dir_handle), .release);
-
+    var overlapped: watch_api.OVERLAPPED = .{ .hEvent = io_event };
     var buf: [65536]u8 align(4) = undefined;
 
-    while (!ctx.stop.load(.acquire)) {
-        var bytes_returned: u32 = 0;
-        const ok = watch_api.ReadDirectoryChangesW(
+    // Wait on both the I/O completion event and the stop event.
+    const handles = [2]windows.HANDLE{ io_event, ctx.stop_event };
+
+    const NOTIFY_FILTER =
+        watch_api.FILE_NOTIFY_CHANGE_LAST_WRITE |
+        watch_api.FILE_NOTIFY_CHANGE_FILE_NAME |
+        watch_api.FILE_NOTIFY_CHANGE_DIR_NAME;
+
+    while (true) {
+        // Reset the I/O event and re-arm overlapped before each call.
+        _ = watch_api.ResetEvent(io_event);
+        overlapped = .{ .hEvent = io_event };
+
+        const queued = watch_api.ReadDirectoryChangesW(
             dir_handle,
             &buf,
             buf.len,
             windows.TRUE,
-            watch_api.FILE_NOTIFY_CHANGE_LAST_WRITE |
-                watch_api.FILE_NOTIFY_CHANGE_FILE_NAME |
-                watch_api.FILE_NOTIFY_CHANGE_DIR_NAME,
-            &bytes_returned,
-            null,
+            NOTIFY_FILTER,
+            null, // lpBytesReturned must be null for overlapped
+            &overlapped,
             null,
         );
-        if (ok == windows.FALSE or bytes_returned == 0) continue;
 
-        var offset: usize = 0;
-        while (offset + @sizeOf(watch_api.FileNotifyInformation) <= bytes_returned) {
-            const info: *align(1) const watch_api.FileNotifyInformation = @ptrCast(&buf[offset]);
+        // With FILE_FLAG_OVERLAPPED the call returns FALSE + ERROR_IO_PENDING
+        // when submitted successfully.  Any other error is fatal.
+        if (queued == windows.FALSE and watch_api.GetLastError() != watch_api.ERROR_IO_PENDING) break;
 
-            const name_offset = offset + @sizeOf(watch_api.FileNotifyInformation);
-            const name_u16: []const u16 = @as(
-                [*]const u16,
-                @ptrCast(@alignCast(&buf[name_offset])),
-            )[0 .. info.FileNameLength / @sizeOf(u16)];
+        const wait = watch_api.WaitForMultipleObjects(2, &handles, windows.FALSE, watch_api.INFINITE);
 
-            var name_buf: [std.fs.max_path_bytes]u8 = undefined;
-            const name_len = std.unicode.utf16LeToUtf8(&name_buf, name_u16) catch {
+        if (wait == watch_api.WAIT_OBJECT_0) {
+            // I/O completed — retrieve the byte count.
+            var bytes_returned: u32 = 0;
+            if (watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_returned, windows.FALSE) == windows.FALSE) continue;
+            if (bytes_returned == 0) continue;
+
+            // Process FILE_NOTIFY_INFORMATION records.
+            var offset: usize = 0;
+            while (offset + @sizeOf(watch_api.FileNotifyInformation) <= bytes_returned) {
+                const info: *align(1) const watch_api.FileNotifyInformation = @ptrCast(&buf[offset]);
+
+                const name_offset = offset + @sizeOf(watch_api.FileNotifyInformation);
+                const name_u16: []const u16 = @as(
+                    [*]const u16,
+                    @ptrCast(@alignCast(&buf[name_offset])),
+                )[0 .. info.FileNameLength / @sizeOf(u16)];
+
+                var name_buf: [std.fs.max_path_bytes]u8 = undefined;
+                const name_len = std.unicode.utf16LeToUtf8(&name_buf, name_u16) catch {
+                    if (info.NextEntryOffset == 0) break;
+                    offset += info.NextEntryOffset;
+                    continue;
+                };
+                const name_utf8 = name_buf[0..name_len];
+
+                if (std.fs.path.join(ctx.allocator, &.{ ctx.path, name_utf8 })) |full_path| {
+                    const kind: WatchEventKind = switch (info.Action) {
+                        watch_api.FILE_ACTION_ADDED,
+                        watch_api.FILE_ACTION_RENAMED_NEW_NAME,
+                        => .created,
+                        watch_api.FILE_ACTION_REMOVED,
+                        watch_api.FILE_ACTION_RENAMED_OLD_NAME,
+                        => .deleted,
+                        else => .modified,
+                    };
+                    ctx.queue.push(.{ .path = full_path, .kind = kind });
+                } else |_| {}
+
                 if (info.NextEntryOffset == 0) break;
                 offset += info.NextEntryOffset;
-                continue;
-            };
-            const name_utf8 = name_buf[0..name_len];
-
-            if (std.fs.path.join(ctx.allocator, &.{ ctx.path, name_utf8 })) |full_path| {
-                const kind: WatchEventKind = switch (info.Action) {
-                    watch_api.FILE_ACTION_ADDED,
-                    watch_api.FILE_ACTION_RENAMED_NEW_NAME,
-                    => .created,
-                    watch_api.FILE_ACTION_REMOVED,
-                    watch_api.FILE_ACTION_RENAMED_OLD_NAME,
-                    => .deleted,
-                    else => .modified,
-                };
-                ctx.queue.push(.{ .path = full_path, .kind = kind });
-            } else |_| {}
-
-            if (info.NextEntryOffset == 0) break;
-            offset += info.NextEntryOffset;
+            }
+        } else {
+            // stop_event signaled (or WAIT_FAILED) — cancel pending I/O and exit.
+            _ = watch_api.CancelIo(dir_handle);
+            var bytes_dummy: u32 = 0;
+            // Wait for cancellation to complete before closing handles in defer.
+            _ = watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_dummy, windows.TRUE);
+            break;
         }
     }
-
-    // Close the handle ourselves only if deinit() hasn't already done so.
-    const h = ctx.dir_handle.swap(0, .acq_rel);
-    if (h != 0) _ = windows.CloseHandle(@ptrFromInt(h));
 }
 
 pub const Watcher = struct {
@@ -177,13 +200,11 @@ pub const Watcher = struct {
 
     pub fn deinit(self: *Watcher) void {
         for (self.ctxs.items) |ctx| {
-            // Signal the thread to stop.
-            ctx.stop.store(true, .release);
-            // Close the directory handle to unblock a pending ReadDirectoryChangesW.
-            const h = ctx.dir_handle.swap(0, .acq_rel);
-            if (h != 0) _ = windows.CloseHandle(@ptrFromInt(h));
+            // Signal the stop event to wake the thread from WaitForMultipleObjects.
+            _ = watch_api.SetEvent(ctx.stop_event);
             // Wait for the thread to fully exit before freeing shared resources.
             ctx.thread.join();
+            _ = windows.CloseHandle(ctx.stop_event);
             ctx.queue.release();
             self.allocator.free(ctx.path);
             self.allocator.destroy(ctx);
@@ -212,8 +233,6 @@ pub const Watcher = struct {
     /// are never matched, which mirrors the Linux/macOS behaviour where only
     /// subdirectories *inside* the watched tree are skipped.
     fn shouldSkipPath(self: *const Watcher, path: []const u8) bool {
-        // Find which registered root this event belongs to and strip it,
-        // so we only inspect components relative to the watched root.
         for (self.ctxs.items) |ctx| {
             if (!std.mem.startsWith(u8, path, ctx.path)) continue;
             var rel = path[ctx.path.len..];
@@ -237,6 +256,11 @@ pub const Watcher = struct {
         const path_copy = try self.allocator.dupe(u8, path);
         errdefer self.allocator.free(path_copy);
 
+        // Manual-reset event, initially not signaled; closed by deinit() after join().
+        const stop_event = watch_api.CreateEventW(null, windows.TRUE, windows.FALSE, null) orelse
+            return error.OutOfResources;
+        errdefer _ = windows.CloseHandle(stop_event);
+
         self.queue.retain(); // ctx holds one queue ref; released in deinit() after join
         errdefer self.queue.release();
 
@@ -244,8 +268,7 @@ pub const Watcher = struct {
             .path = path_copy,
             .queue = self.queue,
             .allocator = self.allocator,
-            .stop = std.atomic.Value(bool).init(false),
-            .dir_handle = std.atomic.Value(usize).init(0),
+            .stop_event = stop_event,
             .thread = undefined,
         };
 
