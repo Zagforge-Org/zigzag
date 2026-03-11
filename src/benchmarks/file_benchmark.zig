@@ -1,12 +1,11 @@
 const std = @import("std");
 const fs = @import("../fs/file.zig");
+const FileContext = @import("../cli/context.zig").FileContext;
 
 const DEFAULT_FILE = "test.txt";
 const DEFAULT_ITERATIONS = 5;
 
-fn processChunk(_: []const u8) !void {
-    // Do nothing
-}
+fn processChunk(_: *FileContext, _: []const u8) anyerror!void {}
 
 fn sumBytes(data: []const u8) u64 {
     var sum: u64 = 0;
@@ -62,9 +61,18 @@ pub const FileBenchmark = struct {
 
             std.debug.print("readFileAlloc:   {d:.3}ms\n", .{@as(f64, @floatFromInt(alloc_time)) / std.time.ns_per_ms});
 
-            //     // --- readFileChunked ---
+            // --- readFileChunked ---
+            var dev_null = try std.fs.openFileAbsolute("/dev/null", .{ .mode = .write_only });
+            defer dev_null.close();
+            var mutex = std.Thread.Mutex{};
+            var ctx = FileContext{
+                .ignore_list = .empty,
+                .md = &dev_null,
+                .md_mutex = &mutex,
+            };
+            defer ctx.ignore_list.deinit(self.allocator);
             timer.reset();
-            try fs.readFileChunked(self.file_path, processChunk);
+            try fs.readFileChunked(self.file_path, processChunk, &ctx);
             const chunked_time = timer.read();
             self.total_chunked_time += chunked_time;
 
