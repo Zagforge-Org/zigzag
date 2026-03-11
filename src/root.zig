@@ -57,7 +57,7 @@ test {
     _ = @import("./jobs/process.zig");
 
     _ = @import("./cli/commands/serve_test.zig");
-    _ = @import("./cli/commands/logger/logger_test.zig");
+    _ = @import("./utils/logger/logger_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
 

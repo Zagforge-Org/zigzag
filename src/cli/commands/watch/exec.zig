@@ -10,7 +10,7 @@ const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
 const isPortListening = @import("port_listening.zig").isPortListening;
-const lg = @import("../logger.zig");
+const lg = @import("../../../utils/logger.zig");
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.

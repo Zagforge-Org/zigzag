@@ -7,7 +7,7 @@ const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init.zig").handleInit;
-const lg = @import("./cli/commands/logger.zig");
+const lg = @import("./utils/logger.zig");
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
