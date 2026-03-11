@@ -1,11 +1,11 @@
-import { L, F, B } from "./state";
+import { _ReportLanguage, _ReportFile, _ReportBinary } from "./state";
 import { el, esc } from "./utils";
 
 export function renderLangChart(): void {
     const langEl = document.getElementById("chart-lang")!;
     langEl.innerHTML = "";
-    if (L && L.length) {
-        const sorted = [...L].sort((a, b) => b.files - a.files);
+    if (_ReportLanguage && _ReportLanguage.length) {
+        const sorted = [..._ReportLanguage].sort((a, b) => b.files - a.files);
         const max = sorted[0].files || 1;
         sorted.forEach(function (lg) {
             const row = el("div", "bar-row");
@@ -36,9 +36,12 @@ export function renderSizeChart(): void {
         { lbl: "100 KB\u20131 MB", max: 1048576, count: 0 },
         { lbl: ">1 MB", max: Infinity, count: 0 },
     ];
-    [...(F || []), ...(B || [])].forEach(function (f) {
+    [...(_ReportFile || []), ...(_ReportBinary || [])].forEach(function (f) {
         for (let i = 0; i < buckets.length; i++) {
-            if (f.size < buckets[i].max) { buckets[i].count++; break; }
+            if (f.size < buckets[i].max) {
+                buckets[i].count++;
+                break;
+            }
         }
     });
     const sizeEl = document.getElementById("chart-size")!;

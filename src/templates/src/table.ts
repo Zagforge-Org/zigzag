@@ -1,4 +1,4 @@
-import { F } from "./state";
+import { _ReportFile } from "./state";
 import { el, esc, fmt, fmtNum } from "./utils";
 import { isContentCached, fetchContent } from "./content";
 import { openViewer } from "./viewer";
@@ -30,11 +30,16 @@ export function buildTableDOM(): HTMLElement {
     const hdrRow = el("tr");
     COLS.forEach(function (c) {
         const th = el("th");
-        const arrow = c === sortCol ? (sortAsc ? "&#x2191;" : "&#x2193;") : "&#x2195;";
+        const arrow =
+            c === sortCol ? (sortAsc ? "&#x2191;" : "&#x2193;") : "&#x2195;";
         if (c === sortCol) th.className = "sorted";
         th.dataset.col = c;
         th.innerHTML =
-            c.charAt(0).toUpperCase() + c.slice(1) + '<span class="sort-icon">' + arrow + "</span>";
+            c.charAt(0).toUpperCase() +
+            c.slice(1) +
+            '<span class="sort-icon">' +
+            arrow +
+            "</span>";
         hdrRow.appendChild(th);
     });
     hdr.appendChild(hdrRow);
@@ -61,11 +66,16 @@ export function buildTableDOM(): HTMLElement {
 
     // Delegated header sort
     hdr.addEventListener("click", function (e) {
-        const th = (e.target as HTMLElement).closest?.("th[data-col]") as HTMLElement | null;
+        const th = (e.target as HTMLElement).closest?.(
+            "th[data-col]",
+        ) as HTMLElement | null;
         if (!th) return;
         const c = th.dataset.col!;
         if (sortCol === c) sortAsc = !sortAsc;
-        else { sortCol = c; sortAsc = true; }
+        else {
+            sortCol = c;
+            sortAsc = true;
+        }
         renderTable();
     });
 
@@ -112,7 +122,10 @@ function renderVisibleRows(): void {
     const viewH = tableViewport!.clientHeight;
 
     const start = Math.max(0, Math.floor(scrollTop / ROW_H) - OVERSCAN);
-    const end = Math.min(total, Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN);
+    const end = Math.min(
+        total,
+        Math.ceil((scrollTop + viewH) / ROW_H) + OVERSCAN,
+    );
 
     tableTopSpacer!.style.height = start * ROW_H + "px";
     tableBottomSpacer!.style.height = (total - end) * ROW_H + "px";
@@ -127,10 +140,20 @@ function renderVisibleRows(): void {
         const tr = document.createElement("tr");
         tr.style.height = ROW_H + "px";
         tr.innerHTML =
-            '<td><span class="file-link" data-idx="' + i + '">' + esc(f.path) + "</span></td>" +
-            "<td><span>" + fmtNum(f.lines) + "</span></td>" +
-            "<td><span>" + fmt(f.size) + "</span></td>" +
-            '<td><span class="tag">' + esc(f.language || "\u2014") + "</span></td>";
+            '<td><span class="file-link" data-idx="' +
+            i +
+            '">' +
+            esc(f.path) +
+            "</span></td>" +
+            "<td><span>" +
+            fmtNum(f.lines) +
+            "</span></td>" +
+            "<td><span>" +
+            fmt(f.size) +
+            "</span></td>" +
+            '<td><span class="tag">' +
+            esc(f.language || "\u2014") +
+            "</span></td>";
         frag.appendChild(tr);
     }
     tableTbody!.insertBefore(frag, tableBottomSpacer);
@@ -138,13 +161,24 @@ function renderVisibleRows(): void {
 
 function updateHeaderSortIndicators(): void {
     if (!tableViewport) return;
-    tableViewport.querySelectorAll<HTMLElement>("th[data-col]").forEach(function (th) {
-        const c = th.dataset.col!;
-        th.className = c === sortCol ? "sorted" : "";
-        const arrow = c === sortCol ? (sortAsc ? "&#x2191;" : "&#x2193;") : "&#x2195;";
-        th.innerHTML =
-            c.charAt(0).toUpperCase() + c.slice(1) + '<span class="sort-icon">' + arrow + "</span>";
-    });
+    tableViewport
+        .querySelectorAll<HTMLElement>("th[data-col]")
+        .forEach(function (th) {
+            const c = th.dataset.col!;
+            th.className = c === sortCol ? "sorted" : "";
+            const arrow =
+                c === sortCol
+                    ? sortAsc
+                        ? "&#x2191;"
+                        : "&#x2193;"
+                    : "&#x2195;";
+            th.innerHTML =
+                c.charAt(0).toUpperCase() +
+                c.slice(1) +
+                '<span class="sort-icon">' +
+                arrow +
+                "</span>";
+        });
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -153,13 +187,14 @@ const search = document.getElementById("search") as HTMLInputElement;
 
 export function renderTable(resetScroll = true): number {
     const query = (search.value || "").toLowerCase();
-    tableFiles = (F || []).filter(function (f) {
+    tableFiles = (_ReportFile || []).filter(function (f) {
         return !query || f.path.toLowerCase().indexOf(query) >= 0;
     });
     tableFiles.sort(function (a, b) {
         const av = a[sortCol as keyof ReportFile];
         const bv = b[sortCol as keyof ReportFile];
-        if (typeof av === "number") return sortAsc ? (av - (bv as number)) : ((bv as number) - av);
+        if (typeof av === "number")
+            return sortAsc ? av - (bv as number) : (bv as number) - av;
         const as = String(av);
         const bs = String(bv);
         const cmp = as < bs ? -1 : as > bs ? 1 : 0;
@@ -171,7 +206,9 @@ export function renderTable(resetScroll = true): number {
     return tableFiles.length;
 }
 
-export function getTotalCount(): number { return F.length; }
+export function getTotalCount(): number {
+    return _ReportFile.length;
+}
 
 /** Scroll the table viewport so the file at the given path is visible. */
 export function scrollToFile(path: string): void {
@@ -180,4 +217,3 @@ export function scrollToFile(path: string): void {
     tableViewport.scrollTop = Math.max(0, idx - 3) * ROW_H;
     renderVisibleRows();
 }
-

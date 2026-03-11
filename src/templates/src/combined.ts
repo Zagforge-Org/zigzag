@@ -1,14 +1,23 @@
-import { fetchContent, updateContentEntry, setContentPrefix, removeContentEntry } from "./content";
+import {
+    fetchContent,
+    updateContentEntry,
+    setContentPrefix,
+    removeContentEntry,
+} from "./content";
 setContentPrefix("combined-content");
 import { openViewer, closeViewer, currentFile } from "./viewer";
 import { esc, fmt } from "./utils";
-import type { CombinedFile, CombinedPathReport, CombinedReport } from "./combined-types";
+import type {
+    CombinedFile,
+    CombinedPathReport,
+    CombinedReport,
+} from "./combined-types";
 import { initTheme, toggleTheme } from "./theme";
 import { VirtualTable } from "./virtual-table";
 
-const R = window.COMBINED_REPORT;
-const M = R.meta;
-const S = R.summary;
+const Report = window.COMBINED_REPORT;
+const ReportMeta = Report.meta;
+const ReportSummary = Report.summary;
 
 const sectionTables = new Map<string, VirtualTable>();
 
@@ -22,14 +31,20 @@ if (themeBtn) themeBtn.addEventListener("click", toggleTheme);
 function renderGlobalSummary(): void {
     const cards = document.getElementById("cards")!;
     const items = [
-        { label: "Paths",        value: String(M.path_count) },
-        { label: "Source Files", value: String(S.source_files) },
-        { label: "Binary Files", value: String(S.binary_files) },
-        { label: "Total Lines",  value: S.total_lines.toLocaleString() },
-        { label: "Total Size",   value: fmt(S.total_size_bytes) },
+        { label: "Paths", value: String(ReportMeta.path_count) },
+        { label: "Source Files", value: String(ReportSummary.source_files) },
+        { label: "Binary Files", value: String(ReportSummary.binary_files) },
+        {
+            label: "Total Lines",
+            value: ReportSummary.total_lines.toLocaleString(),
+        },
+        { label: "Total Size", value: fmt(ReportSummary.total_size_bytes) },
     ];
     cards.innerHTML = items
-        .map((c) => `<div class="card"><div class="val">${esc(c.value)}</div><div class="lbl">${esc(c.label)}</div></div>`)
+        .map(
+            (c) =>
+                `<div class="card"><div class="val">${esc(c.value)}</div><div class="lbl">${esc(c.label)}</div></div>`,
+        )
         .join("");
 }
 
@@ -47,19 +62,27 @@ function matchesSearch(f: CombinedFile, q: string): boolean {
 
 function currentFilteredFiles(pathData: CombinedPathReport): CombinedFile[] {
     const q = searchEl ? searchEl.value.trim().toLowerCase() : "";
-    return q ? pathData.files.filter((f) => matchesSearch(f, q)) : pathData.files;
+    return q
+        ? pathData.files.filter((f) => matchesSearch(f, q))
+        : pathData.files;
 }
 
 function filterAllSections(q: string): void {
-    document.querySelectorAll<HTMLElement>(".path-section").forEach((section) => {
-        const rootPath = section.dataset.rootPath!;
-        const pathData = R.paths.find((p) => p.root_path === rootPath)!;
-        const count = section.querySelector<HTMLElement>(".path-file-count")!;
-        const visible = pathData.files.filter((f) => matchesSearch(f, q));
-        count.textContent = visible.length + " / " + pathData.files.length + " files";
-        const vtable = sectionTables.get(rootPath);
-        if (vtable) vtable.setFiles(visible);
-    });
+    document
+        .querySelectorAll<HTMLElement>(".path-section")
+        .forEach((section) => {
+            const rootPath = section.dataset.rootPath!;
+            const pathData = Report.paths.find(
+                (p) => p.root_path === rootPath,
+            )!;
+            const count =
+                section.querySelector<HTMLElement>(".path-file-count")!;
+            const visible = pathData.files.filter((f) => matchesSearch(f, q));
+            count.textContent =
+                visible.length + " / " + pathData.files.length + " files";
+            const vtable = sectionTables.get(rootPath);
+            if (vtable) vtable.setFiles(visible);
+        });
 }
 
 // ── Source viewer bridge ──────────────────────────────────────────────────────
@@ -70,7 +93,12 @@ function openCombinedViewer(file: CombinedFile): void {
     const contentKey = file.root_path + ":" + file.path;
     fetchContent(contentKey, (src: string) => {
         updateContentEntry(file.path, src);
-        openViewer({ path: file.path, size: file.size, lines: file.lines, language: file.language });
+        openViewer({
+            path: file.path,
+            size: file.size,
+            lines: file.lines,
+            language: file.language,
+        });
     });
 }
 
@@ -80,7 +108,10 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
     const expanded = index === 0;
     const langRows = p.summary.languages
         .slice(0, 5)
-        .map((l) => `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmt(l.size_bytes)}</td></tr>`)
+        .map(
+            (l) =>
+                `<tr><td>${esc(l.name)}</td><td>${l.files}</td><td>${l.lines.toLocaleString()}</td><td>${fmt(l.size_bytes)}</td></tr>`,
+        )
         .join("");
 
     return `
@@ -98,11 +129,15 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
                 <div class="card"><div class="val">${esc(p.summary.total_lines.toLocaleString())}</div><div class="lbl">Total Lines</div></div>
                 <div class="card"><div class="val">${esc(fmt(p.summary.total_size_bytes))}</div><div class="lbl">Total Size</div></div>
             </div>
-            ${langRows ? `
+            ${
+                langRows
+                    ? `
             <table class="lang-table">
                 <thead><tr><th>Language</th><th>Files</th><th>Lines</th><th>Size</th></tr></thead>
                 <tbody>${langRows}</tbody>
-            </table>` : ""}
+            </table>`
+                    : ""
+            }
             <input class="section-search" type="text" placeholder="Filter files\u2026" data-root="${esc(p.root_path)}">
             <p class="path-file-count" data-root="${esc(p.root_path)}">${p.files.length} files</p>
             <div class="vtable-mount"></div>
@@ -111,7 +146,10 @@ function renderPathSection(p: CombinedPathReport, index: number): string {
 </div>`;
 }
 
-function attachSectionToggle(section: HTMLElement, pathData: CombinedPathReport): void {
+function attachSectionToggle(
+    section: HTMLElement,
+    pathData: CombinedPathReport,
+): void {
     const header = section.querySelector<HTMLElement>(".path-header")!;
     const mount = section.querySelector<HTMLElement>(".vtable-mount")!;
     const rootPath = pathData.root_path;
@@ -130,7 +168,10 @@ function attachSectionToggle(section: HTMLElement, pathData: CombinedPathReport)
         maybeMount();
     });
     header.addEventListener("keydown", (e: KeyboardEvent) => {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); header.click(); }
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            header.click();
+        }
     });
 
     // First section starts expanded — mount immediately
@@ -139,20 +180,29 @@ function attachSectionToggle(section: HTMLElement, pathData: CombinedPathReport)
     }
 }
 
-function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport): void {
+function attachSectionSearch(
+    section: HTMLElement,
+    pathData: CombinedPathReport,
+): void {
     const input = section.querySelector<HTMLInputElement>(".section-search");
     if (!input) return;
     const countEl = section.querySelector<HTMLElement>(".path-file-count")!;
     const rootPath = pathData.root_path;
     input.addEventListener("input", function () {
         const q = input.value.trim().toLowerCase();
-        const currentPathData = R.paths.find((p) => p.root_path === rootPath) ?? pathData;
+        const currentPathData =
+            Report.paths.find((p) => p.root_path === rootPath) ?? pathData;
         const visible = q
-            ? currentPathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q))
+            ? currentPathData.files.filter(
+                  (f) =>
+                      f.path.toLowerCase().includes(q) ||
+                      f.language.toLowerCase().includes(q),
+              )
             : currentPathData.files;
         const vtable = sectionTables.get(rootPath);
         if (vtable) vtable.setFiles(visible);
-        countEl.textContent = visible.length + " / " + currentPathData.files.length + " files";
+        countEl.textContent =
+            visible.length + " / " + currentPathData.files.length + " files";
     });
 }
 
@@ -160,26 +210,37 @@ function attachSectionSearch(section: HTMLElement, pathData: CombinedPathReport)
 
 function renderPathSections(): void {
     const container = document.getElementById("path-sections")!;
-    container.innerHTML = R.paths.map((p, i) => renderPathSection(p, i)).join("");
-    container.querySelectorAll<HTMLElement>(".path-section").forEach((section, i) => {
-        attachSectionToggle(section, R.paths[i]);
-        attachSectionSearch(section, R.paths[i]);
-    });
+    container.innerHTML = Report.paths
+        .map((p, i) => renderPathSection(p, i))
+        .join("");
+    container
+        .querySelectorAll<HTMLElement>(".path-section")
+        .forEach((section, i) => {
+            attachSectionToggle(section, Report.paths[i]);
+            attachSectionSearch(section, Report.paths[i]);
+        });
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
 document.getElementById("report-title")!.textContent =
-    "Code Report: " + M.path_count + " paths";
+    "Code Report: " + ReportMeta.path_count + " paths";
 document.getElementById("report-meta")!.textContent =
-    "Generated on " + M.generated_at + " · ZigZag v" + M.version +
-    (M.failed_paths > 0 ? ` · \u26a0 ${M.failed_paths} path(s) failed` : "");
+    "Generated on " +
+    ReportMeta.generated_at +
+    " · ZigZag v" +
+    ReportMeta.version +
+    (ReportMeta.failed_paths > 0
+        ? ` · \u26a0 ${ReportMeta.failed_paths} path(s) failed`
+        : "");
 
 // ── Search bar ────────────────────────────────────────────────────────────────
 
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
-const clearBtn = document.getElementById("search-clear") as HTMLButtonElement | null;
-const countEl  = document.getElementById("search-count") as HTMLElement | null;
+const clearBtn = document.getElementById(
+    "search-clear",
+) as HTMLButtonElement | null;
+const countEl = document.getElementById("search-count") as HTMLElement | null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -188,12 +249,12 @@ renderPathSections();
 
 function updateSearchCount(q: string): void {
     if (!countEl) return;
-    const total = R.paths.reduce((s, p) => s + p.files.length, 0);
+    const total = Report.paths.reduce((s, p) => s + p.files.length, 0);
     if (!q) {
         countEl.textContent = `${total} files`;
     } else {
         let matched = 0;
-        R.paths.forEach((p) => {
+        Report.paths.forEach((p) => {
             matched += p.files.filter((f) => matchesSearch(f, q)).length;
         });
         countEl.textContent = `${matched} / ${total} files`;
@@ -210,7 +271,11 @@ if (searchEl) {
 }
 if (clearBtn) {
     clearBtn.addEventListener("click", () => {
-        if (searchEl) { searchEl.value = ""; filterAllSections(""); updateSearchCount(""); }
+        if (searchEl) {
+            searchEl.value = "";
+            filterAllSections("");
+            updateSearchCount("");
+        }
         clearBtn.classList.remove("visible");
     });
 }
@@ -221,32 +286,92 @@ updateSearchCount("");
 
 function softUpdateCombined(newReport: CombinedReport): void {
     // Update M/S/R in place
-    Object.assign(M, newReport.meta);
-    Object.assign(S, newReport.summary);
-    R.paths = newReport.paths;
+    Object.assign(ReportMeta, newReport.meta);
+    Object.assign(ReportSummary, newReport.summary);
+    Report.paths = newReport.paths;
+
+    console.log("Soft updated triggered: ", newReport);
 
     // Re-render global summary cards
     renderGlobalSummary();
 
     // Update header meta line
-    document.getElementById("report-title")!.textContent = "Code Report: " + M.path_count + " paths";
+    document.getElementById("report-title")!.textContent =
+        "Code Report: " + ReportMeta.path_count + " paths";
     document.getElementById("report-meta")!.textContent =
-        "Generated on " + M.generated_at + " · ZigZag v" + M.version +
-        (M.failed_paths > 0 ? ` · \u26a0 ${M.failed_paths} path(s) failed` : "");
+        "Generated on " +
+        ReportMeta.generated_at +
+        " · ZigZag v" +
+        ReportMeta.version +
+        (ReportMeta.failed_paths > 0
+            ? ` · \u26a0 ${ReportMeta.failed_paths} path(s) failed`
+            : "");
+
+    // Build a lookup map from root_path → section element (avoids CSS.escape issues with paths)
+    const sectionByPath = new Map<string, HTMLElement>();
+    document.querySelectorAll<HTMLElement>(".path-section").forEach((el) => {
+        if (el.dataset.rootPath !== undefined)
+            sectionByPath.set(el.dataset.rootPath, el);
+    });
+    console.log("[softUpdate] sectionByPath keys:", [...sectionByPath.keys()]);
+    console.log(
+        "[softUpdate] R.paths root_paths:",
+        Report.paths.map((p) => p.root_path),
+    );
 
     // Update each path section's VirtualTable and file count
-    for (const pathData of R.paths) {
-        const section = document.querySelector<HTMLElement>(
-            `.path-section[data-root-path="${CSS.escape(pathData.root_path)}"]`
+    for (const pathData of Report.paths) {
+        const section = sectionByPath.get(pathData.root_path);
+        console.log(
+            "[softUpdate] path:",
+            pathData.root_path,
+            "section found:",
+            !!section,
+            "summary:",
+            pathData.summary,
         );
         if (!section) continue;
         const countEl = section.querySelector<HTMLElement>(".path-file-count");
-        const searchInput = section.querySelector<HTMLInputElement>(".section-search");
+        const searchInput =
+            section.querySelector<HTMLInputElement>(".section-search");
         const q = searchInput ? searchInput.value.trim().toLowerCase() : "";
         const visible = q
-            ? pathData.files.filter((f) => f.path.toLowerCase().includes(q) || f.language.toLowerCase().includes(q))
+            ? pathData.files.filter(
+                  (f) =>
+                      f.path.toLowerCase().includes(q) ||
+                      f.language.toLowerCase().includes(q),
+              )
             : pathData.files;
-        if (countEl) countEl.textContent = visible.length + " / " + pathData.files.length + " files";
+        if (countEl)
+            countEl.textContent =
+                visible.length + " / " + pathData.files.length + " files";
+        // Update section header stats span
+        const statsEl = section.querySelector<HTMLElement>(".path-stats");
+        if (statsEl) {
+            statsEl.textContent =
+                pathData.summary.source_files +
+                " files \xB7 " +
+                pathData.summary.total_lines.toLocaleString() +
+                " lines \xB7 " +
+                fmt(pathData.summary.total_size_bytes);
+        }
+        // Update per-path summary cards
+        const cardVals = section.querySelectorAll<HTMLElement>(
+            ".path-summary-row .card .val",
+        );
+        console.log(
+            "[softUpdate] cardVals.length:",
+            cardVals.length,
+            "for path:",
+            pathData.root_path,
+        );
+        if (cardVals.length >= 4) {
+            cardVals[0].textContent = String(pathData.summary.source_files);
+            cardVals[1].textContent = String(pathData.summary.binary_files);
+            cardVals[2].textContent =
+                pathData.summary.total_lines.toLocaleString();
+            cardVals[3].textContent = fmt(pathData.summary.total_size_bytes);
+        }
         const vtable = sectionTables.get(pathData.root_path);
         if (vtable) vtable.setFiles(visible);
     }
@@ -261,9 +386,12 @@ function softUpdateCombined(newReport: CombinedReport): void {
     if (currentFile !== null) {
         const openPath = currentFile.path;
         let found: CombinedFile | null = null;
-        for (const p of R.paths) {
+        for (const p of Report.paths) {
             const f = p.files.find((fl) => fl.path === openPath);
-            if (f) { found = f; break; }
+            if (f) {
+                found = f;
+                break;
+            }
         }
         if (found) {
             const contentKey = found.root_path + ":" + found.path;
@@ -271,7 +399,15 @@ function softUpdateCombined(newReport: CombinedReport): void {
             removeContentEntry(contentKey);
             fetchContent(contentKey, (src: string) => {
                 updateContentEntry(found!.path, src);
-                openViewer({ path: found!.path, size: found!.size, lines: found!.lines, language: found!.language }, true);
+                openViewer(
+                    {
+                        path: found!.path,
+                        size: found!.size,
+                        lines: found!.lines,
+                        language: found!.language,
+                    },
+                    true,
+                );
             });
         } else {
             closeViewer();
@@ -279,7 +415,13 @@ function softUpdateCombined(newReport: CombinedReport): void {
     }
 }
 
-if (M.watch_mode && M.sse_url) {
+console.log(
+    "[SSE] M.watch_mode:",
+    ReportMeta.watch_mode,
+    "M.sse_url:",
+    ReportMeta.sse_url,
+);
+if (ReportMeta.watch_mode && ReportMeta.sse_url) {
     const dot = document.getElementById("sse-dot") as HTMLElement | null;
     function setDot(state: "live" | "reconnecting"): void {
         if (!dot) return;
@@ -288,20 +430,39 @@ if (M.watch_mode && M.sse_url) {
         dot.title = state === "live" ? "Watch: live" : "Watch: reconnecting…";
     }
     try {
-        const es = new EventSource(M.sse_url);
-        es.onopen = () => setDot("live");
-        es.onerror = () => setDot("reconnecting");
+        const es = new EventSource(ReportMeta.sse_url);
+        es.onopen = () => {
+            console.log("[SSE] connected");
+            setDot("live");
+        };
+        es.onerror = () => {
+            console.log("[SSE] error/reconnecting");
+            setDot("reconnecting");
+        };
 
         // Full combined report update — soft update (no page reload)
-        es.addEventListener("combined_update", function (e: MessageEvent<string>) {
-            try {
-                const newReport = JSON.parse(e.data) as CombinedReport;
-                softUpdateCombined(newReport);
-            } catch { /* ignore malformed */ }
-        });
+        es.addEventListener(
+            "combined_update",
+            function (e: MessageEvent<string>) {
+                console.log(
+                    "[SSE] combined_update received, data length:",
+                    e.data.length,
+                );
+                try {
+                    const newReport = JSON.parse(e.data) as CombinedReport;
+                    softUpdateCombined(newReport);
+                } catch (err) {
+                    console.error("[SSE] combined_update parse error:", err);
+                }
+            },
+        );
 
         // File delta events — optimistic update before combined_update arrives
         es.addEventListener("report", function (e: MessageEvent<string>) {
+            console.log(
+                "[SSE] report event received, data:",
+                e.data.slice(0, 100),
+            );
             try {
                 const msg = JSON.parse(e.data) as {
                     type?: string;
@@ -311,15 +472,22 @@ if (M.watch_mode && M.sse_url) {
                 };
                 if (msg.type === "file_update" && msg.path && msg.meta) {
                     // Find which path owns this file
-                    const pathData = R.paths.find((p) => msg.path!.startsWith(p.root_path));
+                    const pathData = Report.paths.find((p) =>
+                        msg.path!.startsWith(p.root_path),
+                    );
                     if (pathData) {
                         // Update content cache with both keys so viewer refresh works
                         if (typeof msg.content === "string") {
-                            updateContentEntry(pathData.root_path + ":" + msg.path, msg.content);
+                            updateContentEntry(
+                                pathData.root_path + ":" + msg.path,
+                                msg.content,
+                            );
                             updateContentEntry(msg.path!, msg.content);
                         }
                         // Update file metadata
-                        const idx = pathData.files.findIndex((f) => f.path === msg.path);
+                        const idx = pathData.files.findIndex(
+                            (f) => f.path === msg.path,
+                        );
                         const updated: CombinedFile = {
                             path: msg.path!,
                             root_path: pathData.root_path,
@@ -338,23 +506,42 @@ if (M.watch_mode && M.sse_url) {
                         }
                         // Refresh viewer if the changed file is currently open
                         if (currentFile?.path === msg.path) {
-                            openViewer({ path: msg.path!, size: msg.meta!.size, lines: msg.meta!.lines, language: msg.meta!.language }, true);
+                            openViewer(
+                                {
+                                    path: msg.path!,
+                                    size: msg.meta!.size,
+                                    lines: msg.meta!.lines,
+                                    language: msg.meta!.language,
+                                },
+                                true,
+                            );
                         }
                     }
                 } else if (msg.type === "file_delete" && msg.path) {
-                    const pathData = R.paths.find((p) => msg.path!.startsWith(p.root_path));
+                    const pathData = Report.paths.find((p) =>
+                        msg.path!.startsWith(p.root_path),
+                    );
                     if (pathData) {
-                        const idx = pathData.files.findIndex((f) => f.path === msg.path);
+                        const idx = pathData.files.findIndex(
+                            (f) => f.path === msg.path,
+                        );
                         if (idx >= 0) pathData.files.splice(idx, 1);
                         const vtable = sectionTables.get(pathData.root_path);
-                        if (vtable) vtable.setFiles(currentFilteredFiles(pathData));
+                        if (vtable)
+                            vtable.setFiles(currentFilteredFiles(pathData));
                     }
                     if (currentFile?.path === msg.path) closeViewer();
                 }
-            } catch { /* ignore malformed */ }
+            } catch {
+                /* ignore malformed */
+            }
         });
 
         // Only use location.reload() for actual template changes (future use)
-        es.addEventListener("reload", () => { location.reload(); });
-    } catch { /* SSE unavailable */ }
+        es.addEventListener("reload", () => {
+            location.reload();
+        });
+    } catch {
+        /* SSE unavailable */
+    }
 }

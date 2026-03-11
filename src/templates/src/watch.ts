@@ -1,5 +1,19 @@
-import { M, F, setReport } from "./state";
-import { setContentCache, resetContent, updateContentEntry, removeContentEntry, invalidateContent } from "./content";
+import {
+    _ReportMeta,
+    _ReportSummary,
+    _ReportLanguage,
+    setReport,
+    recomputeSummary,
+    _ReportFile,
+    _ReportBinary,
+} from "./state";
+import {
+    setContentCache,
+    resetContent,
+    updateContentEntry,
+    removeContentEntry,
+    invalidateContent,
+} from "./content";
 import { renderHeader, renderCards } from "./header";
 import { renderLangChart, renderSizeChart } from "./charts";
 import { renderTable, getTotalCount, scrollToFile } from "./table";
@@ -9,7 +23,11 @@ import type { Report, ReportFile } from "./types";
 function extractReport(html: string): Report | null {
     const m = /id="rpt"[^>]*>([\s\S]*?)<\/script>/i.exec(html);
     if (!m) return null;
-    try { return JSON.parse(m[1]) as Report; } catch { return null; }
+    try {
+        return JSON.parse(m[1]) as Report;
+    } catch {
+        return null;
+    }
 }
 
 function updateCountBadge(): void {
@@ -17,7 +35,10 @@ function updateCountBadge(): void {
     if (el) el.textContent = getTotalCount() + " files";
 }
 
-export function softUpdate(newR: Report, newContent: Record<string, string> | null): void {
+export function softUpdate(
+    newR: Report,
+    newContent: Record<string, string> | null,
+): void {
     setReport(newR);
     if (newContent !== null) {
         setContentCache(newContent);
@@ -34,7 +55,8 @@ export function softUpdate(newR: Report, newContent: Record<string, string> | nu
     updateCountBadge();
 
     if (currentFile !== null) {
-        const updated = newR.files.find((f) => f.path === currentFile!.path) ?? null;
+        const updated =
+            newR.files.find((f) => f.path === currentFile!.path) ?? null;
         if (updated) openViewer(updated, true);
         else closeViewer();
     }
@@ -44,9 +66,11 @@ function startPolling(): void {
     function poll(): void {
         const stampUrl = location.href + ".stamp";
         fetch(stampUrl, { cache: "no-store" })
-            .then(function (r) { return r.ok ? r.text() : Promise.resolve<string | null>(null); })
+            .then(function (r) {
+                return r.ok ? r.text() : Promise.resolve<string | null>(null);
+            })
             .then(function (ts) {
-                if (!ts || ts.trim() === M.generated_at) return;
+                if (!ts || ts.trim() === _ReportMeta.generated_at) return;
                 return fetch(location.href, { cache: "no-store" })
                     .then((r) => r.text())
                     .then(function (html) {
@@ -58,7 +82,9 @@ function startPolling(): void {
                     });
             })
             .catch(function () {})
-            .then(function () { setTimeout(poll, 2000); });
+            .then(function () {
+                setTimeout(poll, 2000);
+            });
     }
     setTimeout(poll, 2000);
 }
@@ -80,7 +106,7 @@ export function startWatchMode(): void {
     // Prefer the absolute SSE URL embedded at generation time (works when the
     // HTML is opened from disk). Fall back to the relative path when served
     // directly by the SSE server on the same origin.
-    const sseUrl = M.sse_url ?? "/__events";
+    const sseUrl = _ReportMeta.sse_url ?? "/__events";
 
     let es: EventSource;
     try {
@@ -109,13 +135,18 @@ export function startWatchMode(): void {
 
             // Delta: single file was updated or created
             if (msg.type === "file_update" && msg.path !== undefined) {
-                if ("content" in msg && typeof (msg as Record<string, unknown>).content === "string") {
+                if (
+                    "content" in msg &&
+                    typeof (msg as Record<string, unknown>).content === "string"
+                ) {
                     const c = (msg as unknown as { content: string }).content;
                     updateContentEntry(msg.path, c);
                 }
                 let isNew = false;
                 if (msg.meta) {
-                    const existing = F.findIndex((f) => f.path === msg.path);
+                    const existing = _ReportFile.findIndex(
+                        (f) => f.path === msg.path,
+                    );
                     isNew = existing < 0;
                     const updated: ReportFile = {
                         path: msg.path,
@@ -124,16 +155,22 @@ export function startWatchMode(): void {
                         language: msg.meta.language,
                     };
                     if (existing >= 0) {
-                        F[existing] = updated;
+                        _ReportFile[existing] = updated;
                     } else {
-                        F.push(updated);
+                        _ReportFile.push(updated);
                     }
+                    recomputeSummary();
+                    renderCards();
+                    renderLangChart();
+                    renderSizeChart();
                 }
                 renderTable(false);
                 updateCountBadge();
                 if (isNew) scrollToFile(msg.path);
                 if (currentFile?.path === msg.path) {
-                    const fileEntry = F.find((f) => f.path === msg.path);
+                    const fileEntry = _ReportFile.find(
+                        (f) => f.path === msg.path,
+                    );
                     if (fileEntry) openViewer(fileEntry, true);
                 }
                 return;
@@ -142,8 +179,16 @@ export function startWatchMode(): void {
             // Delta: single file was deleted
             if (msg.type === "file_delete" && msg.path !== undefined) {
                 removeContentEntry(msg.path);
-                const idx = F.findIndex((f) => f.path === msg.path);
-                if (idx >= 0) F.splice(idx, 1);
+                const fidx = _ReportFile.findIndex((f) => f.path === msg.path);
+                if (fidx >= 0) _ReportFile.splice(fidx, 1);
+                const bidx = _ReportBinary.findIndex(
+                    (b) => b.path === msg.path,
+                );
+                if (bidx >= 0) _ReportBinary.splice(bidx, 1);
+                recomputeSummary();
+                renderCards();
+                renderLangChart();
+                renderSizeChart();
                 renderTable(false);
                 updateCountBadge();
                 if (currentFile?.path === msg.path) closeViewer();
@@ -152,14 +197,18 @@ export function startWatchMode(): void {
 
             // Full update (initial or legacy)
             if (msg.report) {
-                const prevPaths = new Set(F.map((f) => f.path));
+                const prevPaths = new Set(_ReportFile.map((f) => f.path));
                 softUpdate(msg.report, msg.content ?? null);
                 // Scroll to the first newly-added file (covers the case where the
                 // delta was lost or the file was empty when IN_CREATE fired).
-                const firstNew = msg.report.files.find((f) => !prevPaths.has(f.path));
+                const firstNew = msg.report.files.find(
+                    (f) => !prevPaths.has(f.path),
+                );
                 if (firstNew) scrollToFile(firstNew.path);
             }
-        } catch { /* ignore malformed messages */ }
+        } catch {
+            /* ignore malformed messages */
+        }
     });
 
     // Named event: server requests a full page reload (e.g. template changed).
