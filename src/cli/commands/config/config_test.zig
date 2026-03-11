@@ -10,7 +10,6 @@ test "Config.default has expected defaults" {
     try std.testing.expectEqual(@as(usize, 1 << 20), cfg.small_threshold);
     try std.testing.expectEqual(@as(usize, 16 << 20), cfg.mmap_threshold);
     try std.testing.expect(!cfg.skip_cache);
-    try std.testing.expect(!cfg.skip_git);
     try std.testing.expect(!cfg.watch);
     try std.testing.expect(!cfg.json_output);
     try std.testing.expect(!cfg.html_output);
@@ -95,7 +94,6 @@ test "Config.applyFileConf sets boolean scalar fields" {
 
     const fc = FileConf{
         .skip_cache = true,
-        .skip_git = true,
         .watch = true,
         .json_output = true,
         .html_output = true,
@@ -104,7 +102,6 @@ test "Config.applyFileConf sets boolean scalar fields" {
     try cfg.applyFileConf(&fc);
 
     try std.testing.expect(cfg.skip_cache);
-    try std.testing.expect(cfg.skip_git);
     try std.testing.expect(cfg.watch);
     try std.testing.expect(cfg.json_output);
     try std.testing.expect(cfg.html_output);

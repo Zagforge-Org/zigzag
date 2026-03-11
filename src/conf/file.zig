@@ -10,7 +10,6 @@ pub const FileConf = struct {
     paths: ?[]const []const u8 = null,
     ignore_patterns: ?[]const []const u8 = null,
     skip_cache: ?bool = null,
-    skip_git: ?bool = null,
     small_threshold: ?usize = null,
     mmap_threshold: ?usize = null,
     timezone: ?[]const u8 = null,
@@ -26,12 +25,11 @@ pub const FileConf = struct {
 
     /// Returns the default zig.conf.json content as a static string.
     pub fn default() []const u8 {
-        return 
+        return
         \\{
         \\  "paths": [],
         \\  "ignore_patterns": [],
         \\  "skip_cache": false,
-        \\  "skip_git": false,
         \\  "small_threshold": 1048576,
         \\  "mmap_threshold": 16777216,
         \\  "timezone": null,
