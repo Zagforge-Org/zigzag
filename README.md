@@ -2,28 +2,29 @@
 
 <img src="src/assets/logo.png" alt="zig-zag logo" width="64" height="64">
 
-### A high-performance Zig-based tool for generating comprehensive markdown reports of source code directories with intelligent caching, parallel processing, and smart binary file detection.
+
+### A blazing-fast code analytics tool that converts source code into comprehensive Markdown reports, optimized for modern developer workflows and LLM-powered tooling.
+
 
 ## Overview
 
-**ZigZag** recursively scans directories and generates detailed markdown reports containing all source code with metadata. Each report includes a table of contents, syntax-highlighted code blocks with language detection, and file metadata including size, modification time (with timezone support), and language identification. Binary files are automatically detected and excluded to maintain clean, readable reports.
+
+**ZigZag** recursively scans directories provided through CLI `--flags` or a `zig.conf.json` configuration file and produces **Markdown**, **HTML**, and **JSON** reports containing your full source code, designed for modern workflows and tooling. Each **Markdown** report includes syntax-aware code blocks. The `--llm-report` flag can be enabled for LLM optimized code reports. The most recommended workflow is running `zigzag init` to initialize a `zig.conf.json` file with predefined defaults. ZigZag automatically ignores binary files to ensure outputs remain text-based and human-readable.
 
 ## Features
 
-- **Smart file reading strategies** optimized for different file sizes
-- **Intelligent binary file detection** prevents corrupted markdown output
-- **Flexible ignore patterns** supporting wildcards, extensions, and exact matches
-- **Persistent caching system** with automatic validation and atomic updates
-- **Parallel processing** with configurable thread pooling
-- **Cross-platform compatibility** including Windows and Unix/Linux systems
-- **Timezone-aware timestamps** with configurable offsets
+- **Optimized file reading** designed for high-performance processing
+- **Intelligent binary file detection** prevents corrupted markdown output and preserves human readable format   
+- **Flexible ignore patterns** supports wildcards, extensions, and exact matches
+- **Persistent caching system** Smart caching system with validation and atomic updates
+- **Parallel processing** distributes tasks across worker pools for concurrent execution.
+- **Cross platform compatibity** includes large OS support: `Windows`, `Linux`, and `MacOS`.
+- **Timezone aware timestamps** with configurable offsets
 - **Multi-path support** for processing multiple directories simultaneously
-- **Auto-ignore common directories** (node_modules, .git, build artifacts)
-- **JSON config file** (`zig.conf.json`) for project-level defaults
-- **Watch mode** for continuous report regeneration on file changes
-- **Configurable output filename** for the generated report
-- **JSON report output** (`--json`) for machine-readable analytics alongside the markdown report
-- **HTML dashboard** (`--html`) — interactive single-file report with charts, sortable file table, search, and a virtual-scrolling source viewer with syntax highlighting
+- **Automatic ignore for common directories** (node_modules, .git)
+- **JSON configuration** (`zig.conf.json`) to make development easier and more manageable.
+- **Real time watch mode** for real-time updates across MD, JSON and HTML files.
+- **HTML Dashboard** (`--html`) modern interactive statically generated HTML dashboard supplied with analytical data supported with real time updates using watch mode. Supports multiple popular programming languages with virtual scrolling source viewer and syntax highlighting.
 
 ## Installation
 
@@ -33,8 +34,6 @@
 brew tap LegationPro/zigzag
 brew install zigzag
 ```
-
-Homebrew verifies the download, strips the quarantine flag, and puts `zigzag` on your `PATH` automatically.
 
 ### Pre-built binaries
 
@@ -54,7 +53,7 @@ Or right-click the binary in Finder → **Open** → **Open** to approve it once
 
 ### Prerequisites (building from source)
 
-- Zig compiler version 0.15.2 or later
+- Zig version 0.15.2
 
 ### Building from Source
 
@@ -66,6 +65,8 @@ zig build -Doptimize=ReleaseFast
 
 The executable will be available at `zig-out/bin/zigzag`.
 
+On unix systems running `zigzag.sh` automatically places the binary under `usr/local/bin`
+
 ## Quick Start
 
 ### Initialize a project
@@ -73,6 +74,29 @@ The executable will be available at `zig-out/bin/zigzag`.
 ```bash
 # Create zig.conf.json with default values in the current directory
 zigzag init
+```
+
+**Generated `zig.conf.json`:**
+
+```json
+{
+  "paths": [],
+  "ignore_patterns": [],
+  "skip_cache": false,
+  "skip_git": false,
+  "small_threshold": 1048576,
+  "mmap_threshold": 16777216,
+  "timezone": null,
+  "output": "report.md",
+  "watch": false,
+  "log": false,
+  "json_output": false,
+  "html_output": false,
+  "output_dir": "zigzag-reports",
+  "llm_report": false,
+  "llm_max_lines": 150,
+  "llm_description": null
+}
 ```
 
 ### Run from config file
@@ -86,49 +110,26 @@ zigzag run --path ./src --ignore "*.test.zig"
 zigzag run --watch
 ```
 
-### Basic ad-hoc usage
+### Usage
 
-```bash
-# Generate report for a specific directory
-zigzag --path ./src
-
-# Multiple paths with ignore patterns
-zigzag --path ./backend --path ./frontend --ignore "*.test.*"
-
-# Generate report with custom timezone (UTC+1)
-zigzag --path ./project --timezone +1
-
-# Custom output filename
-zigzag --path ./src --output context.md
-
-# Skip cache operations
-zigzag --path ./project --skip-cache
-```
-
-### Advanced Examples
-
-```bash
-# Ignore specific file extensions
-zigzag --path ./src --ignore "*.png" --ignore "*.svg" --ignore "*.jpg"
-
-# Ignore specific files
-zigzag --path ./src --ignore "test.txt" --ignore "config.json"
-
-# Tune performance thresholds (in bytes)
-zigzag --path ./src --small 524288 --mmap 8388608
-
-# Generate report with specific timezone offset
-zigzag --path ./src --timezone -5    # UTC-5 (Eastern Time)
-zigzag --path ./src --timezone +5:30 # UTC+5:30 (India Standard Time)
-
-# Watch mode — react instantly to file changes
-zigzag --path ./src --watch
-
-# Generate JSON report alongside markdown
-zigzag --path ./src --json
-
-# Generate interactive HTML dashboard alongside markdown
-zigzag --path ./src --html
+```json
+{
+    "paths": ["docs", "src"] // directories that will have their own reports,
+    "ignore_patterns": [".secret", ".env"] // files, folders to be ignored during report generation,
+    "skip_cache": false // clears cache on each run,
+    "small_threshold": 1048576,
+    "mmap_threshold": 16777216,
+    "timezone": null,
+    "output": "report.md",
+    "watch": true,
+    "log": false,
+    "json_output": true,
+    "html_output": true,
+    "output_dir": "zigzag-reports",
+    "llm_report": true,
+    "llm_max_lines": 150,
+    "llm_description": null
+}
 ```
 
 ## Subcommands
@@ -139,42 +140,31 @@ zigzag --path ./src --html
 | `run`   | Loads `zig.conf.json` as the base config, then applies any CLI flags on top. Useful for project-level defaults. |
 
 Without a subcommand, ZigZag applies CLI flags directly (no file config is loaded).
-
-## Configuration File (`zig.conf.json`)
-
-Running `zigzag init` creates a `zig.conf.json` in the current directory:
-
-```json
-{
-  "paths": [],
-  "ignore_patterns": [],
-  "skip_cache": false,
-  "skip_git": false,
-  "small_threshold": 1048576,
-  "mmap_threshold": 16777216,
-  "timezone": null,
-  "output": "report.md",
-  "watch": false,
-  "json_output": false,
-  "html_output": false
-}
 ```
 
 ### Config Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `paths` | `string[]` | `[]` | Directories to scan |
-| `ignore_patterns` | `string[]` | `[]` | Ignore patterns (same syntax as `--ignore`) |
-| `skip_cache` | `bool` | `false` | Skip cache operations and clear cache |
-| `skip_git` | `bool` | `false` | Skip git operations |
-| `small_threshold` | `number` | `1048576` | Small file threshold in bytes (1 MiB) |
-| `mmap_threshold` | `number` | `16777216` | Memory-mapped file threshold in bytes (16 MiB) |
-| `timezone` | `string\|null` | `null` | Timezone offset string (e.g. `"+1"`, `"-5:30"`) |
-| `output` | `string` | `"report.md"` | Output filename for the generated report |
-| `watch` | `bool` | `false` | Enable watch mode |
-| `json_output` | `bool` | `false` | Emit a JSON report alongside the markdown report |
-| `html_output` | `bool` | `false` | Emit an interactive HTML dashboard alongside the markdown report |
+| `--version` | `bool` | `false` | Show ZigZag version. |
+| `--help` | `bool` | `false` | Show help information. |
+| `--skip-cache` | `bool` | `false` | Skip cache operations and clear the cache. |
+| `--small` | `number` | `N/A` | Threshold for small files in bytes. |
+| `--mmap` | `number` | `N/A` | Threshold for memory-mapped files in bytes. |
+| `--path` | `string` | `N/A` | Directory to scan (can be specified multiple times). |
+| `--ignore` | `string[]` | `[]` | Pattern(s) to ignore (same syntax as `zig.conf.json`). |
+| `--timezone` | `string` | `null` | Timezone offset (e.g., `"+1"`, `"-5:30"`). |
+| `--watch` | `bool` | `false` | Enable watch mode to regenerate reports on file changes. |
+| `--output` | `string` | `"report.md"` | Output filename for the Markdown report. |
+| `--output-dir` | `string` | `"zigzag-reports"` | Directory to store generated reports. |
+| `--json` | `bool` | `false` | Generate a JSON report alongside Markdown. |
+| `--html` | `bool` | `false` | Generate an interactive HTML dashboard alongside Markdown. |
+| `--llm-report` | `bool` | `false` | Enable LLM-powered report generation. |
+| `--llm-max-lines` | `number` | `150` | Maximum number of lines for LLM report. |
+| `--llm-description` | `string` | `null` | Optional description for LLM report. |
+| `--port` | `number` | `N/A` | Port for serving the HTML dashboard. |
+| `--log` | `bool` | `false` | Enable logging. |
+| `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
 
 ### Config Loading Priority
 
@@ -185,25 +175,6 @@ Settings are applied from lowest to highest priority (later values win):
 3. CLI flags (always override file config)
 
 When the first `--path` CLI flag is encountered, all file-loaded paths are replaced. Same for `--ignore`. Scalar fields (skip_cache, watch, etc.) always take the last CLI value.
-
-## CLI Options
-
-| Option | Description | Default | Example |
-|--------|-------------|---------|---------|
-| `--path` | Path to process (repeatable) | — | `--path ./src --path ./lib` |
-| `--ignore` | Ignore pattern (repeatable) | — | `--ignore "*.png" --ignore "test.txt"` |
-| `--output` | Output filename | `report.md` | `--output context.md` |
-| `--timezone` | Timezone offset from UTC | UTC (0) | `--timezone +1` or `--timezone -5:30` |
-| `--small` | Threshold for small files (bytes) | 1048576 (1 MiB) | `--small 524288` |
-| `--mmap` | Threshold for memory-mapped files (bytes) | 16777216 (16 MiB) | `--mmap 8388608` |
-| `--skip-cache` | Skip cache operations and clear cache | false | `--skip-cache` |
-| `--watch` | Watch for file changes and regenerate output | false | `--watch` |
-| `--json` | Emit a JSON report alongside the markdown report | false | `--json` |
-| `--html` | Emit an interactive HTML dashboard alongside the markdown report | false | `--html` |
-| `--help` | Show help message with examples | — | `--help` |
-| `--version` | Show version information | — | `--version` |
-
-> **Note:** `skip_git` can only be set via `zig.conf.json`, not as a CLI flag.
 
 ## Ignore Patterns
 
@@ -250,32 +221,6 @@ Binary files are automatically detected and excluded using:
    - Analyzes non-printable character ratio
    - Examines first 512 bytes for performance
 
-### Ignore Examples
-
-```bash
-# Ignore all image files
-zigzag --path ./src \
-  --ignore "*.png" \
-  --ignore "*.jpg" \
-  --ignore "*.svg" \
-  --ignore "*.gif"
-
-# Ignore test files and build artifacts
-zigzag --path ./project \
-  --ignore "*.test.js" \
-  --ignore "*.spec.ts" \
-  --ignore "dist" \
-  --ignore "coverage"
-
-# Complex multi-pattern ignore
-zigzag --path ./monorepo \
-  --ignore "*.png" \
-  --ignore "*.jpg" \
-  --ignore "node_modules" \
-  --ignore "*.log" \
-  --ignore "temp*"
-```
-
 ## Output Format
 
 Each processed directory contains a `report.md` file (or your custom `--output` filename) with the following structure:
@@ -314,24 +259,11 @@ const std = @import("std");
 
 Watch mode uses OS-level filesystem events (inotify on Linux, kqueue on macOS/BSD, ReadDirectoryChangesW on Windows) to detect changes instantly. Only the changed file is re-read from disk; the report is rebuilt from the in-memory state of all other files.
 
-```bash
-# Watch a directory — reacts within ~50 ms of any file change
-zigzag --path ./src --watch
-
-# Watch mode via config file
-zigzag run --watch
-```
-
 Events are debounced: rapid changes within a 50 ms window are batched into a single report write. Press `Ctrl+C` to stop.
 
 ## JSON Output
 
 Pass `--json` (or set `"json_output": true` in `zig.conf.json`) to generate a machine-readable JSON report alongside the markdown file. The JSON file is written to the same directory with `.json` replacing the `.md` extension (e.g. `report.json` next to `report.md`).
-
-```bash
-zigzag --path ./src --json
-zigzag run --json
-```
 
 ### JSON Report Structure
 
@@ -379,12 +311,7 @@ The JSON report is useful for CI dashboards, code analysis pipelines, or any too
 
 Pass `--html` (or set `"html_output": true` in `zig.conf.json`) to generate a self-contained interactive HTML report alongside the markdown file. The HTML file is written next to the markdown with `.html` replacing `.md` (e.g. `report.html` next to `report.md`).
 
-```bash
-zigzag --path ./src --html
-zigzag run --html
-```
-
-The dashboard is a **single `.html` file** with no external dependencies — all CSS, JavaScript, and syntax highlighting assets are bundled inline. Open it directly in any browser.
+The dashboard is a **single `.html` file** with minimal dependencies — all CSS, JavaScript, and syntax highlighting assets are bundled. Open it directly in any browser.
 
 ### Dashboard Features
 
@@ -461,14 +388,6 @@ ZigZag automatically selects the optimal reading strategy:
 | 1 - 16 MiB | `readFileMapped` | Memory-mapped I/O (platform-specific) |
 | > 16 MiB | `readFileChunked` | Stream in chunks |
 
-### Benchmarks
-
-Run the included benchmark suite:
-
-```bash
-zig build run-benchmark
-```
-
 ### Performance Tips
 
 1. **Use cache**: Don't use `--skip-cache` unless necessary
@@ -484,62 +403,12 @@ zig build test
 
 # Run specific test suite
 zig test src/root.zig
-
-# Test with debug output
-zig test src/cli/handlers.zig --summary all
 ```
-
-### Test Coverage
-
-- Configuration parsing and validation
-- Ignore pattern matching (wildcards, extensions, exact matches)
-- Timezone offset handling
-- Binary file detection
-- Cache operations and consistency
-- Directory traversal
-- Config file loading and CLI override behavior
-
-## Processing Statistics
-
-After processing, ZigZag displays a summary:
-
-```
-=== Summary for ./src ===
-=== Processing Summary ===
-Total files: 42
-Cached (from .cache): 35
-Processed (updated): 5
-Ignored: 2
-```
-
 ### Statistics Categories
 
 - **Cached**: Files read from cache (unchanged since last run)
 - **Processed**: Files that were read and processed (new or modified)
 - **Ignored**: Files excluded by patterns or binary detection
-
-## Troubleshooting
-
-### Common Issues
-
-**Q: Binary files still appearing in report**
-- A: Ensure you're using the latest version with binary detection. Check file extensions are in the binary list.
-
-**Q: Ignore patterns not working**
-- A: Use quotes around patterns: `--ignore "*.png"` not `--ignore *.png`
-- Check pattern syntax: `*.ext` for extensions, exact names for files
-
-**Q: node_modules/.bin still included**
-- A: This is fixed in the latest version. Rebuild from source.
-
-**Q: Cache taking up too much space**
-- A: Run with `--skip-cache` once to clear, or manually delete `.cache` directory
-
-**Q: Timezone not displaying correctly**
-- A: Use format `+H` or `+H:MM`. Examples: `+1`, `-5`, `+5:30`
-
-**Q: zig.conf.json settings not being picked up**
-- A: Use `zigzag run` (not `zigzag --path ...`) to load the config file. Plain flags bypass file config.
 
 ## Contributing
 
@@ -575,15 +444,6 @@ zig fmt src/
 - Write tests for new features
 - Document public APIs
 - Keep functions focused and readable
-
-## Roadmap
-
-- [ ] Regex-based ignore patterns
-- [ ] Glob pattern support (`**/*.png`)
-- [ ] MIME type detection for binary files
-- [ ] Configurable binary detection threshold
-- [ ] Progress bar for large projects
-- [ ] Incremental report updates
 
 ## License
 
