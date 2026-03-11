@@ -11,17 +11,17 @@ A blazing-fast code analytics tool that converts source code into comprehensive 
 ## Features
 
 - **Optimized file reading** designed for high-performance processing
-- **Intelligent binary file detection** prevents corrupted markdown output and preserves human readable format   
+- **Intelligent binary file detection** prevents corrupted markdown output and preserves human-readable format
 - **Flexible ignore patterns** supports wildcards, extensions, and exact matches
-- **Persistent caching system** Smart caching system with validation and atomic updates
-- **Parallel processing** distributes tasks across worker pools for concurrent execution.
-- **Cross platform compatibity** includes large OS support: `Windows`, `Linux`, and `MacOS`.
-- **Timezone aware timestamps** with configurable offsets
+- **Persistent caching system** with validation and atomic updates
+- **Parallel processing** distributes tasks across worker pools for concurrent execution
+- **Cross-platform compatibility** includes large OS support: `Windows`, `Linux`, and `macOS`
+- **Timezone-aware timestamps** with configurable offsets
 - **Multi-path support** for processing multiple directories simultaneously
 - **Automatic ignore for common directories** (node_modules, .git)
-- **JSON configuration** (`zig.conf.json`) to make development easier and more manageable.
-- **Real time watch mode** for real-time updates across MD, JSON and HTML files.
-- **HTML Dashboard** (`--html`) modern interactive statically generated HTML dashboard supplied with analytical data supported with real time updates using watch mode. Supports multiple popular programming languages with virtual scrolling source viewer and syntax highlighting.
+- **JSON configuration** (`zig.conf.json`) to make development easier and more manageable
+- **Real-time watch mode** for real-time updates across MD, JSON and HTML files
+- **HTML Dashboard** (`--html`) modern interactive statically generated HTML dashboard supplied with analytical data supported with real-time updates using watch mode. Supports multiple popular programming languages with virtual scrolling source viewer and syntax highlighting.
 
 ## Installation
 
@@ -62,7 +62,7 @@ zig build -Doptimize=ReleaseFast
 
 The executable will be available at `zig-out/bin/zigzag`.
 
-On unix systems running `zigzag.sh` automatically places the binary under `usr/local/bin`
+On Unix systems, running `zigzag.sh` automatically places the binary under `/usr/local/bin`.
 
 ## Quick Start
 
@@ -109,11 +109,11 @@ zigzag run --watch
 
 ### Usage
 
-```json
+```
 {
-    "paths": ["docs", "src"] // directories that will have their own reports,
-    "ignore_patterns": [".secret", ".env"] // files, folders to be ignored during report generation,
-    "skip_cache": false // clears cache on each run,
+    "paths": ["docs", "src"],          // directories that will have their own reports
+    "ignore_patterns": [".secret", ".env"], // files, folders to be ignored during report generation
+    "skip_cache": false,               // clears cache on each run
     "small_threshold": 1048576,
     "mmap_threshold": 16777216,
     "timezone": null,
@@ -137,9 +137,8 @@ zigzag run --watch
 | `run`   | Loads `zig.conf.json` as the base config, then applies any CLI flags on top. Useful for project-level defaults. |
 
 Without a subcommand, ZigZag applies CLI flags directly (no file config is loaded).
-```
 
-### Config Fields
+## Config Fields
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -163,7 +162,7 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--log` | `bool` | `false` | Enable logging. |
 | `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
 
-### Config Loading Priority
+## Config Loading Priority
 
 Settings are applied from lowest to highest priority (later values win):
 
