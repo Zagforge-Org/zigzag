@@ -2,12 +2,9 @@
 
 <img src="src/assets/logo.png" alt="zig-zag logo" width="64" height="64">
 
-
-### A blazing-fast code analytics tool that converts source code into comprehensive Markdown reports, optimized for modern developer workflows and LLM-powered tooling.
-
+A blazing-fast code analytics tool that converts source code into comprehensive Markdown reports, optimized for modern developer workflows and LLM-powered tooling.
 
 ## Overview
-
 
 **ZigZag** recursively scans directories provided through CLI `--flags` or a `zig.conf.json` configuration file and produces **Markdown**, **HTML**, and **JSON** reports containing your full source code, designed for modern workflows and tooling. Each **Markdown** report includes syntax-aware code blocks. The `--llm-report` flag can be enabled for LLM optimized code reports. The most recommended workflow is running `zigzag init` to initialize a `zig.conf.json` file with predefined defaults. ZigZag automatically ignores binary files to ensure outputs remain text-based and human-readable.
 
