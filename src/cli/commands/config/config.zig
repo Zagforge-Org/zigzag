@@ -21,7 +21,6 @@ pub const Config = struct {
     paths: std.ArrayList([]const u8),
     small_threshold: usize,
     mmap_threshold: usize,
-    skip_git: bool,
     skip_cache: bool,
     ignore_patterns: std.ArrayList([]const u8),
     n_threads: usize,
@@ -58,7 +57,6 @@ pub const Config = struct {
             .paths = .empty,
             .small_threshold = DEFAULT_SMALL_THRESHOLD, // 1 MiB
             .mmap_threshold = DEFAULT_MMAP_THRESHOLD, // 16 MiB
-            .skip_git = false,
             .skip_cache = false,
             .ignore_patterns = .empty,
             .n_threads = std.Thread.getCpuCount() catch 1,
@@ -122,7 +120,6 @@ pub const Config = struct {
 
         // Scalar flags
         if (conf.skip_cache) |v| self.skip_cache = v;
-        if (conf.skip_git) |v| self.skip_git = v;
         if (conf.small_threshold) |v| self.small_threshold = v;
         if (conf.mmap_threshold) |v| self.mmap_threshold = v;
         if (conf.watch) |v| self.watch = v;
