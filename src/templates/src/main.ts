@@ -1,4 +1,4 @@
-import { M } from "./state";
+import { _ReportMeta } from "./state";
 import { renderHeader, renderCards } from "./header";
 import { renderLangChart, renderSizeChart } from "./charts";
 import { buildTableDOM, renderTable, getTotalCount } from "./table";
@@ -22,15 +22,20 @@ document.getElementById("files-table")!.appendChild(tableViewport);
 
 // Wire search clear + count badge
 const searchEl = document.getElementById("search") as HTMLInputElement | null;
-const clearBtn = document.getElementById("search-clear") as HTMLButtonElement | null;
-const countEl  = document.getElementById("search-count") as HTMLElement | null;
+const clearBtn = document.getElementById(
+    "search-clear",
+) as HTMLButtonElement | null;
+const countEl = document.getElementById("search-count") as HTMLElement | null;
 
 function refreshSearchUI(): void {
     const q = searchEl?.value.trim() ?? "";
     const matched = renderTable();
     const total = getTotalCount();
     if (clearBtn) clearBtn.classList.toggle("visible", q.length > 0);
-    if (countEl) countEl.textContent = q ? `${matched} / ${total} files` : `${total} files`;
+    if (countEl)
+        countEl.textContent = q
+            ? `${matched} / ${total} files`
+            : `${total} files`;
 }
 
 if (searchEl) {
@@ -46,6 +51,6 @@ if (clearBtn) {
 // Initial render + count
 refreshSearchUI();
 
-if (M.watch_mode) {
+if (_ReportMeta.watch_mode) {
     startWatchMode();
 }
