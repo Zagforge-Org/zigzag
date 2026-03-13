@@ -60,9 +60,7 @@ test {
     _ = @import("./utils/logger/logger_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
-
-    // Benchmark tests
-    _ = @import("./benchmarks/benchmark_test.zig");
+    _ = @import("./cli/commands/bench/bench_test.zig");
 
     switch (builtin.os.tag) {
         .linux => {
