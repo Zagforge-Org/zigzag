@@ -11,9 +11,22 @@ const JobEntry = @import("../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../jobs/entry.zig").BinaryEntry;
 const WalkerCtx = @import("../../walker/context.zig").WalkerCtx;
 const report = @import("report.zig");
-const lg = @import("logger.zig");
+const lg = @import("../../utils/logger.zig");
+pub const BenchResult = @import("./bench.zig").BenchResult;
 
 const Logger = lg.Logger;
+
+/// Nanoseconds elapsed since `start` (from nanoTimestamp). Clamped to 0.
+inline fn nsElapsed(start: i128) u64 {
+    const delta = std.time.nanoTimestamp() - start;
+    return @intCast(@max(0, delta));
+}
+
+/// File size in bytes, or 0 on error.
+fn fileSizeOf(path: []const u8) u64 {
+    const stat = std.fs.cwd().statFile(path) catch return 0;
+    return stat.size;
+}
 
 /// Owned result of scanning one path. Caller (exec) controls lifetime.
 const ScanResult = struct {
@@ -173,6 +186,7 @@ fn writePathReports(
     pool: *Pool,
     allocator: std.mem.Allocator,
     logger: ?*Logger,
+    bench: ?*BenchResult,
 ) !void {
     _ = pool; // reserved for future use
 
@@ -180,6 +194,7 @@ fn writePathReports(
     const md_path = try report.resolveOutputPath(allocator, cfg, result.root_path, output_filename);
     defer allocator.free(md_path);
 
+    // HTML content sidecar — timing not tracked (see write-html block below).
     if (cfg.html_output) {
         const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path_for_content);
@@ -190,35 +205,62 @@ fn writePathReports(
         if (logger) |l| l.log("Content files written: {s}/", .{content_dir});
     }
 
+    // Aggregate — timer starts after content sidecar.
+    const t_agg = std.time.nanoTimestamp();
     var report_data = try report.ReportData.init(allocator, &result.file_entries, &result.binary_entries, cfg.timezone_offset);
     defer report_data.deinit();
+    if (bench) |b| b.aggregate_ns += nsElapsed(t_agg);
 
+    // write-md
+    const t_md = std.time.nanoTimestamp();
     try report.writeReport(&report_data, &result.file_entries, md_path, result.root_path, cfg, allocator);
     lg.printSuccess("Report written: {s}", .{md_path});
     if (logger) |l| l.log("Report written: {s}", .{md_path});
+    if (bench) |b| {
+        b.write_md_ns += nsElapsed(t_md);
+        b.md_bytes += fileSizeOf(md_path);
+    }
 
+    // write-json
     if (cfg.json_output) {
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
+        const t_json = std.time.nanoTimestamp();
         try report.writeJsonReport(&report_data, json_path, result.root_path, cfg, allocator);
         lg.printSuccess("JSON report: {s}", .{json_path});
         if (logger) |l| l.log("JSON report written: {s}", .{json_path});
+        if (bench) |b| {
+            b.write_json_ns += nsElapsed(t_json);
+            b.json_bytes += fileSizeOf(json_path);
+        }
     }
 
+    // write-html
     if (cfg.html_output) {
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
+        const t_html = std.time.nanoTimestamp();
         try report.writeHtmlReport(&report_data, html_path, result.root_path, cfg, allocator);
         lg.printSuccess("HTML report: {s}", .{html_path});
         if (logger) |l| l.log("HTML report written: {s}", .{html_path});
+        if (bench) |b| {
+            b.write_html_ns += nsElapsed(t_html);
+            b.html_bytes += fileSizeOf(html_path);
+        }
     }
 
+    // write-llm
     if (cfg.llm_report) {
         const llm_path = try report.deriveLlmPath(allocator, md_path);
         defer allocator.free(llm_path);
+        const t_llm = std.time.nanoTimestamp();
         try report.writeLlmReport(&report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, allocator);
         lg.printSuccess("LLM report: {s}", .{llm_path});
         if (logger) |l| l.log("LLM report written: {s}", .{llm_path});
+        if (bench) |b| {
+            b.write_llm_ns += nsElapsed(t_llm);
+            b.llm_bytes += fileSizeOf(llm_path);
+        }
     }
 
     const sv = result.stats.getSummary();
@@ -284,7 +326,7 @@ fn writeCombinedReports(
 }
 
 /// Executes the runner command for all configured paths.
-pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
+pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {
     if (cfg.paths.items.len == 0) return;
 
     // Set up file logger if --log is enabled
@@ -322,6 +364,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     var failed_paths: usize = 0;
 
     for (cfg.paths.items) |path| {
+        const t_scan = std.time.nanoTimestamp();
         const result = scanPath(cfg, cache, path, &pool, allocator, logger) catch |err| {
             switch (err) {
                 error.NotADirectory => {
@@ -337,6 +380,14 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
                 },
             }
         };
+        if (bench) |b| {
+            const summary = result.stats.getSummary();
+            b.scan_ns += nsElapsed(t_scan);
+            b.files_total += summary.total;
+            b.files_source += result.file_entries.count();
+            b.files_binary += result.binary_entries.count();
+            b.files_ignored += summary.ignored;
+        }
         all_results.append(allocator, result) catch |err| {
             var r = result;
             r.deinit(allocator);
@@ -345,7 +396,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     }
 
     for (all_results.items) |*result| {
-        writePathReports(result, cfg, &pool, allocator, logger) catch |err| {
+        writePathReports(result, cfg, &pool, allocator, logger, bench) catch |err| {
             lg.printError("Unexpected error: {s}", .{@errorName(err)});
             if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
         };

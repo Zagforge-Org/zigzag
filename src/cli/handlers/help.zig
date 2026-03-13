@@ -14,6 +14,7 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\Commands:
         \\  init            Initialize a new project (creates zig.conf.json)
         \\  run             Run using zig.conf.json (flags override config file)
+        \\  bench           Run with per-phase timing instrumentation
         \\
         \\Options:
         \\  --help           Print this help message

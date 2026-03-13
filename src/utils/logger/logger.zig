@@ -1,5 +1,5 @@
 const std = @import("std");
-const colors = @import("../../colors.zig");
+const colors = @import("../colors.zig");
 
 // Colored terminal output
 // Each helper writes a colored prefix then the caller's format string.

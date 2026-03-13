@@ -135,6 +135,7 @@ zigzag run --watch
 |---------|-------------|
 | `init`  | Creates `zig.conf.json` with default values in the current directory. No-ops if the file already exists. |
 | `run`   | Loads `zig.conf.json` as the base config, then applies any CLI flags on top. Useful for project-level defaults. |
+| `bench` | Runs the full report pipeline and prints a per-phase timing table (scan, aggregate, write) to stderr. Useful for profiling. |
 
 Without a subcommand, ZigZag applies CLI flags directly (no file config is loaded).
 
@@ -454,6 +455,8 @@ MIT License - see `LICENSE.md` file for details.
 
 ## Links
 
+- [ZagForge](https://zagforge.com) — official product page
+- [Documentation](https://docs.zagforge.com)
 - [GitHub Repository](https://github.com/LegationPro/zigzag)
 - [Issue Tracker](https://github.com/LegationPro/zigzag/issues)
 - [Zig Language](https://ziglang.org/)

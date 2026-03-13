@@ -2,8 +2,8 @@ const std = @import("std");
 const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
 const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
 const api = @import("../platform/windows/api.zig");
-const Context = @import("../cli/context.zig").Context;
-const TProcessChunk = @import("../cli/commands/writer.zig").TProcessChunk;
+const FileContext = @import("../cli/context.zig").FileContext;
+const TProcessChunk = @import("../cli/commands/writer.zig").TProcessWriter;
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
@@ -64,7 +64,7 @@ pub fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
 }
 
 /// Read a file in chunk
-pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *Context) !void {
+pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *FileContext) !void {
     const file = try std.fs.cwd().openFile(path, .{});
     defer file.close();
 
@@ -102,7 +102,7 @@ pub fn readFileAuto(
     allocator: std.mem.Allocator,
     path: []const u8,
     process: TProcessChunk,
-    ctx: *Context,
+    ctx: *FileContext,
 ) !ReadResult {
     const size = try getFileSize(path);
 
