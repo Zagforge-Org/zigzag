@@ -455,6 +455,8 @@ MIT License - see `LICENSE.md` file for details.
 
 ## Links
 
+- [ZagForge](https://zagforge.com) — official product page
+- [Documentation](https://docs.zagforge.com)
 - [GitHub Repository](https://github.com/LegationPro/zigzag)
 - [Issue Tracker](https://github.com/LegationPro/zigzag/issues)
 - [Zig Language](https://ziglang.org/)
