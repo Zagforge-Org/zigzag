@@ -3,6 +3,7 @@ const config = @import("./cli/commands/config/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const serve = @import("./cli/commands/serve.zig");
+const bench = @import("./cli/commands/bench.zig");
 const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
@@ -26,6 +27,7 @@ pub fn main() !void {
     var param_count: usize = 0;
     var is_run_command = false;
     var is_serve_command = false;
+    var is_bench_command = false;
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "init")) {
@@ -41,6 +43,12 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "serve")) {
             is_serve_command = true;
             continue; // "serve" itself is not forwarded to the option parser
+        }
+
+        if (std.mem.eql(u8, arg, "bench")) {
+            is_bench_command = true;
+            is_run_command = true;
+            continue;
         }
 
         if (std.mem.startsWith(u8, arg, "--")) {
@@ -66,6 +74,15 @@ pub fn main() !void {
             var typedCfg: config.Config = cfg;
             defer typedCfg.deinit();
 
+            if (is_bench_command) {
+                if (typedCfg.paths.items.len == 0) {
+                    lg.printError("bench requires at least one path (--path or zig.conf.json)", .{});
+                    return;
+                }
+                try bench.execBench(&typedCfg, allocator);
+                return;
+            }
+
             // serve subcommand: generate reports (if paths configured) then start static file server
             if (is_serve_command) {
                 // Serve always targets the HTML dashboard — force html_output on.
@@ -87,7 +104,7 @@ pub fn main() !void {
                         lg.printSuccess("Cache cleared", .{});
                     }
 
-                    _ = runner.exec(&typedCfg, &cache, allocator) catch |err| {
+                    _ = runner.exec(&typedCfg, &cache, allocator, null) catch |err| {
                         switch (err) {
                             error.ErrorNotFound => {},
                             else => lg.printError("error generating reports: {s}", .{@errorName(err)}),
@@ -144,7 +161,7 @@ pub fn main() !void {
                         lg.printError("watch error: {s}", .{@errorName(err)});
                     };
                 } else {
-                    _ = runner.exec(&typedCfg, &cache, allocator) catch |err| {
+                    _ = runner.exec(&typedCfg, &cache, allocator, null) catch |err| {
                         switch (err) {
                             error.ErrorNotFound => {
                                 return;
