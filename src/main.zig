@@ -8,7 +8,8 @@ const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
 const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init.zig").handleInit;
-const lg = @import("./utils/logger.zig");
+const lg = @import("./utils/utils.zig");
+const cli_flags = @import("./cli/flags.zig");
 
 pub fn main() !void {
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
@@ -31,6 +32,10 @@ pub fn main() !void {
 
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "init")) {
+            if (args.next()) |extra| {
+                lg.printWarn("'init' takes no arguments (unexpected: {s})", .{extra});
+                return;
+            }
             try initHandler(allocator, std.fs.cwd());
             return;
         }
@@ -46,23 +51,34 @@ pub fn main() !void {
         }
 
         if (std.mem.eql(u8, arg, "bench")) {
+            if (is_run_command or is_serve_command) {
+                lg.printWarn("'bench' is a standalone subcommand — use: zigzag bench", .{});
+                return;
+            }
             is_bench_command = true;
-            is_run_command = true;
             continue;
         }
 
         if (std.mem.startsWith(u8, arg, "--")) {
             param_count += 1;
+            try list.append(allocator, arg);
+            // If this flag takes a value, consume the next arg as its value
+            for (cli_flags.flags) |flag| {
+                if (std.mem.eql(u8, arg, flag.name) and flag.takes_value) {
+                    if (args.next()) |value| {
+                        try list.append(allocator, value);
+                    }
+                    break;
+                }
+            }
         } else {
             lg.printWarn("unknown argument: {s}", .{arg});
             return;
         }
-
-        try list.append(allocator, arg);
     }
 
     // With no flags and no subcommand, just print usage
-    if (param_count == 0 and !is_run_command and !is_serve_command) {
+    if (param_count == 0 and !is_run_command and !is_serve_command and !is_bench_command) {
         try printAsciiLogo();
         return;
     }
@@ -76,7 +92,7 @@ pub fn main() !void {
 
             if (is_bench_command) {
                 if (typedCfg.paths.items.len == 0) {
-                    lg.printError("bench requires at least one path (--path or zig.conf.json)", .{});
+                    lg.printError("bench requires at least one path (--paths or zig.conf.json)", .{});
                     return;
                 }
                 try bench.execBench(&typedCfg, allocator);
@@ -95,8 +111,11 @@ pub fn main() !void {
                     const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
                     defer allocator.free(cache_path);
 
+                    lg.printStep("Loading cache...", .{});
                     var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
                     defer cache.deinit();
+                    if (cache.entryCount() > 0)
+                        lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
 
                     if (typedCfg.skip_cache) {
                         lg.printStep("Clearing cache: {s}", .{cache_path});
@@ -147,8 +166,11 @@ pub fn main() !void {
                 defer allocator.free(cache_path);
 
                 // Initialize cache with configured threshold
+                lg.printStep("Loading cache...", .{});
                 var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
                 defer cache.deinit();
+                if (cache.entryCount() > 0)
+                    lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
 
                 if (typedCfg.skip_cache) {
                     lg.printStep("Clearing cache: {s}", .{cache_path});
@@ -173,7 +195,7 @@ pub fn main() !void {
                     };
                 }
             } else if (is_run_command) {
-                lg.printWarn("no paths configured — add --path or set \"paths\" in zig.conf.json", .{});
+                lg.printWarn("no paths configured — add --paths or set \"paths\" in zig.conf.json", .{});
             }
         },
         config.ConfigParseResult.MissingValue => |opt| {
