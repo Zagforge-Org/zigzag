@@ -8,7 +8,7 @@ const END_ALLOC_SIZE = 1 << 20; // 1 MiB
 /// All fields are optional - missing fields fallback to Config defaults.
 pub const FileConf = struct {
     paths: ?[]const []const u8 = null,
-    ignore_patterns: ?[]const []const u8 = null,
+    ignores: ?[]const []const u8 = null,
     skip_cache: ?bool = null,
     small_threshold: ?usize = null,
     mmap_threshold: ?usize = null,
@@ -22,13 +22,14 @@ pub const FileConf = struct {
     llm_report: ?bool = null,
     llm_max_lines: ?u64 = null,
     llm_description: ?[]const u8 = null,
+    llm_chunk_size: ?usize = null,
 
     /// Returns the default zig.conf.json content as a static string.
     pub fn default() []const u8 {
-        return
+        return 
         \\{
         \\  "paths": [],
-        \\  "ignore_patterns": [],
+        \\  "ignores": [],
         \\  "skip_cache": false,
         \\  "small_threshold": 1048576,
         \\  "mmap_threshold": 16777216,
@@ -41,7 +42,8 @@ pub const FileConf = struct {
         \\  "output_dir": "zigzag-reports",
         \\  "llm_report": false,
         \\  "llm_max_lines": 150,
-        \\  "llm_description": null
+        \\  "llm_description": null,
+        \\  "llm_chunk_size": 0
         \\}
         \\
         ;
