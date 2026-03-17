@@ -10,7 +10,14 @@ const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
 const isPortListening = @import("port_listening.zig").isPortListening;
-const lg = @import("../../../utils/logger.zig");
+const lg = @import("../../../utils/utils.zig");
+const ProgressBar = lg.ProgressBar;
+const ProcessStats = @import("../stats.zig").ProcessStats;
+
+inline fn nsElapsed(start: i128) u64 {
+    const delta = std.time.nanoTimestamp() - start;
+    return @intCast(@max(0, delta));
+}
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
@@ -21,6 +28,10 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
     try pool.init(.{ .allocator = allocator, .n_jobs = cfg.n_threads });
     defer pool.deinit();
 
+    // Scan phase progress is suppressed on TTY (same rationale as runner.zig: worker
+    // thread output between printPhaseStart and printPhaseDone corrupts cursor-up rewrite).
+    const is_tty = std.posix.isatty(std.fs.File.stderr().handle);
+
     // Scan all configured paths for initial state.
     var states: std.ArrayList(*State) = .empty;
     defer {
@@ -29,12 +40,25 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
     }
 
     for (cfg.paths.items) |path| {
-        const state = State.init(cfg, cache, path, &pool, allocator) catch |err| {
-            switch (err) {
-                error.NotADirectory => lg.printError("Path '{s}' is not a directory", .{path}),
-                else => lg.printError("Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
+        const t_scan = std.time.nanoTimestamp();
+        if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
+        var stats = ProcessStats.init();
+        var pb = ProgressBar.init(&stats); // pb must not be moved after this line
+        try pb.start();
+        const state = blk: {
+            if (State.init(&stats, cfg, cache, path, &pool, allocator)) |s| {
+                pb.stop();
+                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "{d} files", .{s.file_entries.count()});
+                break :blk s;
+            } else |err| {
+                pb.stop();
+                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "", .{});
+                switch (err) {
+                    error.NotADirectory => lg.printError("Path '{s}' is not a directory", .{path}),
+                    else => lg.printError("Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
+                }
+                continue;
             }
-            continue;
         };
         try states.append(allocator, state);
         // Write initial reports (no SSE server yet — will be started after all paths init)

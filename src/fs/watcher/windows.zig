@@ -8,7 +8,7 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
+const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 
 /// Thread-safe event queue shared between background watch threads and poll().
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can

@@ -38,7 +38,7 @@ test "writeLlmReport creates report with correct structure" {
     var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, alloc);
+    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
     const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
@@ -85,7 +85,7 @@ test "writeLlmReport omits boilerplate files" {
     var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, alloc);
+    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
     const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
@@ -120,7 +120,7 @@ test "writeLlmReport includes llm_description when set" {
     var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, alloc);
+    try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
     const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);

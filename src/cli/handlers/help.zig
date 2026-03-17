@@ -18,10 +18,10 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\
         \\Options:
         \\  --help           Print this help message
-        \\  --path           Path to a project directory (can be used multiple times)
+        \\  --paths          One or more paths, comma-separated (e.g. --paths ./src,./lib)
         \\  --version        Print version information
-        \\  --ignore         Ignore files matching the given pattern
-        \\                   Supports: exact filenames, *.ext, prefix*, *suffix, directory names
+        \\  --ignores        One or more ignore patterns, comma-separated (e.g. --ignores "*.png,*.jpg")
+        \\                   Note: paths/patterns containing a comma must be set in zig.conf.json
         \\  --skip-git       Skip git operations
         \\  --skip-cache     Skip cache operations
         \\  --strategy       Print strategy
@@ -34,12 +34,13 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  --html           Generate an HTML report alongside the markdown report
         \\  --watch          Watch for file changes and regenerate output
         \\  --llm-report     Generate a condensed LLM-optimized report (report.llm.md)
+        \\  --chunk-size <N> Split LLM report into chunks of N bytes (e.g. 500k, 2m)
         \\
         \\Ignore Pattern Examples:
-        \\  --ignore "*.png"              Ignore all PNG files
-        \\  --ignore "test.txt"           Ignore specific file
-        \\  --ignore "node_modules"       Ignore directory
-        \\  --ignore "*.svg" --ignore "*.jpg"  Multiple patterns
+        \\  --ignores "*.png"             Ignore all PNG files
+        \\  --ignores "test.txt"          Ignore specific file
+        \\  --ignores "node_modules"      Ignore directory
+        \\  --ignores "*.svg,*.jpg"       Multiple patterns
         \\
         \\Auto-ignored items:
         \\  - Binary files (images, executables, archives, etc.)
@@ -47,10 +48,10 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\
         \\Examples:
         \\  zigzag run
-        \\  zigzag run --path ./src --ignore "*.test.zig"
+        \\  zigzag run --paths ./src --ignores "*.test.zig"
         \\  zigzag run --watch
-        \\  zigzag --path ./project1 --path ./project2
-        \\  zigzag --path ./src --timezone +1
+        \\  zigzag --paths ./project1,./project2
+        \\  zigzag --paths ./src --timezone +1
         \\
     , .{});
 }

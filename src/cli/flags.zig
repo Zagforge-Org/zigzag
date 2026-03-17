@@ -6,8 +6,8 @@ const helpHandler = @import("./handlers/help.zig").printHelp;
 const skipCacheHandler = @import("./handlers/skip_cache.zig").handleSkipCache;
 const smallHandler = @import("./handlers/small.zig").handleSmall;
 const mmapHandler = @import("./handlers/mmap.zig").handleMmap;
-const pathHandler = @import("./handlers/path.zig").handlePath;
-const ignoreHandler = @import("./handlers/ignore.zig").handleIgnore;
+const pathHandler = @import("./handlers/path.zig").handlePaths;
+const ignoreHandler = @import("./handlers/ignore.zig").handleIgnores;
 const timezoneHandler = @import("./handlers/timezone.zig").handleTimezone;
 const watchHandler = @import("./handlers/watch.zig").handleWatch;
 const outputHandler = @import("./handlers/output.zig").handleOutput;
@@ -15,6 +15,7 @@ const outputDirHandler = @import("./handlers/output_dir.zig").handleOutputDir;
 const jsonHandler = @import("./handlers/json.zig").handleJson;
 const htmlHandler = @import("./handlers/html.zig").handleHtml;
 const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
+const chunkSizeHandler = @import("./handlers/chunk_size.zig").handleChunkSize;
 const portHandler = @import("./handlers/port.zig").handlePort;
 const logHandler = @import("./handlers/log.zig").handleLog;
 const openHandler = @import("./handlers/open.zig").handleOpen;
@@ -32,8 +33,8 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--skip-cache", .takes_value = false, .handler = &skipCacheHandler },
     .{ .name = "--small", .takes_value = true, .handler = &smallHandler },
     .{ .name = "--mmap", .takes_value = true, .handler = &mmapHandler },
-    .{ .name = "--path", .takes_value = true, .handler = &pathHandler },
-    .{ .name = "--ignore", .takes_value = true, .handler = &ignoreHandler },
+    .{ .name = "--paths", .takes_value = true, .handler = &pathHandler },
+    .{ .name = "--ignores", .takes_value = true, .handler = &ignoreHandler },
     .{ .name = "--timezone", .takes_value = true, .handler = &timezoneHandler },
     .{ .name = "--watch", .takes_value = false, .handler = &watchHandler },
     .{ .name = "--output", .takes_value = true, .handler = &outputHandler },
@@ -41,6 +42,7 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--json", .takes_value = false, .handler = &jsonHandler },
     .{ .name = "--html", .takes_value = false, .handler = &htmlHandler },
     .{ .name = "--llm-report", .takes_value = false, .handler = &llmReportHandler },
+    .{ .name = "--chunk-size", .takes_value = true, .handler = &chunkSizeHandler },
     .{ .name = "--port", .takes_value = true, .handler = &portHandler },
     .{ .name = "--log", .takes_value = false, .handler = &logHandler },
     .{ .name = "--open", .takes_value = false, .handler = &openHandler },

@@ -1,65 +1,245 @@
-# ZigZag Architecture Overview  
+# ZigZag Architecture
 
-This document provides a detailed overview of the folder structure and purpose of each module in the **ZigZag** codebase. It is intended for contributors and developers to understand the organization and responsibilities of each component.  
-
----
-
-## Folder Structure  
-
-### `src/` – All source code  
-
-- **`assets/`** – Static assets (images, icons, files used for documentation or GitHub).  
-- **`benchmarks/`** – TODO: Add benchmarking scripts and performance tests.  
-- **`cache/`** – Source code for caching system to speed up repeated operations.  
-- **`utils/`** – Utilities used across the project.  
-
-### CLI Domain  
-
-- **`cli/`** – CLI-specific logic.  
-  - **`cli/commands/`** – Definitions for all available CLI commands and their flag options.  
-  - **`cli/handlers/`** – Handlers for CLI flags and configuration options, processing user input.  
-
-### Configuration  
-
-- **`conf/`** – Contains configuration files.  
-  - `zig.conf.json` – Default configuration file for ZigZag.  
-
-### Filesystem Abstraction  
-
-- **`fs/`** – Code for interacting with the operating system’s filesystem.  
-  - **`fs/mmap/`** – Memory-mapped file implementations.  
-    - **`fs/mmap/unix/`** – Unix-specific memory-mapped file logic.  
-    - **`fs/mmap/windows/`** – Windows-specific memory-mapped file logic.  
-  - **`fs/watcher/`** – Watcher implementations for monitoring filesystem changes across different OSes.  
-
-### Jobs & Workers  
-
-- **`jobs/`** – Individual jobs for file processing tasks.  
-- **`walker/`** – File walker that orchestrates jobs to perform operations across directories and files.  
-- **`workers/`** – Implements concurrency, enabling parallel execution of tasks across multiple threads or processes.  
-
-### Platform-Specific Logic  
-
-- **`platform/`** – Platform-specific code for different operating systems.  
-  - **`platform/windows/`** – Windows-specific implementations.  
-
-### Templates & Dashboard  
-
-- **`templates/`** – HTML templating and TypeScript source code for generating the dashboard.  
-  - **`templates/src/`** – TypeScript, CSS, and HTML source code for the templates.  
+This document describes the structure, responsibilities, and key design decisions across the ZigZag codebase.
 
 ---
 
-## Summary  
+## Source Tree
 
-ZigZag’s architecture is modular and organized around **domains of responsibility**:  
+```
+src/
+├── main.zig                  — Entry point; subcommand dispatch
+├── root.zig                  — Test aggregator; imports all *_test.zig files
+│
+├── cli/
+│   ├── commands/
+│   │   ├── config/
+│   │   │   ├── config.zig        — Config struct: fields, initDefault, parse, applyFileConf
+│   │   │   └── config_test.zig
+│   │   ├── report/
+│   │   │   ├── report.zig        — Facade: re-exports aggregator, writers, paths
+│   │   │   ├── aggregator/       — ReportData: per-language stats, sorted file list
+│   │   │   ├── content/          — condenseContent, isBoilerplate, getCommentPrefix
+│   │   │   ├── paths/            — resolveOutputPath, derive{Json,Html,Llm}Path
+│   │   │   └── writers/
+│   │   │       ├── markdown/     — writeReport (Markdown)
+│   │   │       ├── json/         — writeJsonReport
+│   │   │       ├── html/         — writeHtmlReport + .stamp sidecar for watch
+│   │   │       ├── llm/
+│   │   │       │   ├── llm.zig           — writeLlmReport: single-file + chunked paths
+│   │   │       │   ├── llm_test.zig
+│   │   │       │   ├── chunk_writer.zig  — ChunkWriter: manages rotating chunk files + manifest
+│   │   │       │   └── chunk_writer_test.zig
+│   │   │       └── sse/          — buildSsePayload (Server-Sent Events for watch mode)
+│   │   ├── bench/
+│   │   │   └── bench.zig         — execBench: runs pipeline, prints per-phase timing table
+│   │   ├── runner.zig            — exec / execWatch / processPath / writePathReports
+│   │   └── watch/
+│   │       ├── exec.zig          — execWatch: OS event loop with 50 ms debounce
+│   │       ├── state.zig         — PathWatchState: per-path in-memory file entries
+│   │       └── reporter.zig      — Async report writer for watch mode
+│   │
+│   ├── flags.zig                 — Registered flag names (source of truth for --flag strings)
+│   ├── handlers/
+│   │   ├── help.zig              — --help output
+│   │   ├── path.zig              — --paths handler (comma-split, multi-call accumulation)
+│   │   ├── ignore.zig            — --ignores handler
+│   │   ├── chunk_size.zig        — --chunk-size handler (k/m suffix parsing)
+│   │   └── …                     — one file per CLI flag
+│   └── options.zig               — Maps flag strings → handler functions
+│
+├── conf/
+│   ├── file.zig                  — FileConf struct: JSON deserialization target for zig.conf.json
+│   └── file_test.zig
+│
+├── cache/
+│   ├── impl.zig                  — CacheImpl: load/save/validate/atomic-update
+│   └── impl_test.zig
+│
+├── fs/
+│   ├── watcher/
+│   │   ├── watcher.zig           — Platform-switched: inotify / kqueue / ReadDirectoryChangesW
+│   │   └── skip_dirs.zig         — Auto-skipped directory names
+│   └── mmap/
+│       ├── unix/                 — mmap/munmap wrappers
+│       └── windows/              — VirtualAlloc/MapViewOfFile wrappers
+│
+├── jobs/
+│   ├── entry.zig                 — JobEntry: per-file metadata + content slice
+│   ├── process.zig               — processFile: read strategy selection, cache lookup
+│   └── …
+│
+├── utils/
+│   ├── logger.zig                — Facade: re-exports logger sub-module + ProgressBar + getCpuName
+│   └── logger/
+│       ├── logger.zig            — printStep/Success/Error/Warn, printFinalSummary, getCpuName
+│       ├── logger_test.zig
+│       └── progress.zig          — ProgressBar: ANSI spinner for stderr
+│
+└── templates/
+    ├── dashboard.html            — Committed bundle (regenerated by `zig build bundle`)
+    ├── bundle.py                 — Python bundler: injects CSS/JS into HTML shell
+    └── src/
+        ├── template.html         — HTML shell with @inject markers
+        ├── dashboard.css
+        ├── dashboard.js          — App logic: charts, virtual table, source viewer, watch poll
+        └── highlight-worker.js   — Prism worker for off-thread syntax highlighting
+```
 
-- **CLI**: Handles user input and commands.  
-- **Filesystem**: Abstracts OS-specific file operations and watchers.  
-- **Jobs & Workers**: Provides a structured system for processing files efficiently, including concurrency.  
-- **Platform**: Houses platform-specific logic.  
-- **Templates**: Contains the front-end dashboard code for visual reports.  
-- **Cache**: Maintains performance optimizations for repeated operations.  
-- **Utils**: Provides utility functions used across the project.  
+---
 
-This structure makes the project **scalable, maintainable, and easy to extend** for new platforms, jobs, or features.
+## Entry Point & Subcommand Dispatch (`main.zig`)
+
+`main.zig` reads argv, checks for `init` / `run` / `bench` subcommands, then:
+
+- `init` → writes `zig.conf.json` via `handleInit`
+- `bench` → calls `execBench` (pipeline + timing table)
+- `run` → loads `zig.conf.json`, merges CLI flags, then falls through to scan
+- _(no subcommand)_ → applies CLI flags directly, no file config
+
+After config is resolved, the scan path calls `runner.exec` (one-shot) or `runner.execWatch` (watch loop).
+
+---
+
+## Configuration (`Config` vs `FileConf`)
+
+Two distinct types handle configuration:
+
+**`FileConf`** (`src/conf/file.zig`) is a pure JSON deserialization target. All fields are optional (`?T`). Lifetime is managed by `std.json.Parsed(FileConf)` — the arena allocator owns all strings; a single `.deinit()` frees everything.
+
+**`Config`** (`src/cli/commands/config/config.zig`) is the live runtime config. It holds `std.ArrayList` for `paths` and `ignore_patterns` (accumulated across multiple CLI calls). Scalar fields are plain values. `Config.parse` applies CLI flags one at a time; `Config.applyFileConf` merges a `FileConf` into it.
+
+### Config Loading Priority (lowest → highest)
+
+1. `Config.initDefault()` — hard-coded defaults
+2. `zig.conf.json` — via `parseFromFile` / `applyFileConf`
+3. CLI flags — first `--paths`/`--ignores` call clears file-loaded values; scalars take last CLI value
+
+### CLI Override Tracking
+
+`Config` tracks `_paths_set_by_cli` and `_patterns_set_by_cli`. On the first CLI `--paths` call, file-loaded paths are cleared (so CLI paths replace, not append to, config-file paths).
+
+---
+
+## Processing Pipeline
+
+```
+CLI flags / zig.conf.json
+        │
+        ▼
+   Config.parse / applyFileConf
+        │
+        ▼
+   CacheImpl.init          ← .cache/ (mtime + size validation)
+        │
+        ▼
+   Thread pool setup       ← CPU core count
+        │
+        ▼
+   Directory traversal     ← per path in Config.paths
+        │  skip_dirs check (node_modules, .git, .turbo, .nx, …)
+        │  binary extension check (fast path)
+        │  ignore pattern match
+        │
+        ▼
+   processFile (jobs/process.zig)
+        │  cache hit?  → use cached JobEntry
+        │  cache miss? → read (alloc / mmap / chunked) → cache
+        │
+        ▼
+   ReportData aggregation  ← language stats, sorted file list
+        │
+        ▼
+   writePathReports (runner.zig)
+        │
+        ├─ writeReport         → report.md
+        ├─ writeJsonReport     → report.json      (if --json)
+        ├─ writeHtmlReport     → report.html      (if --html)
+        │                         + report.html.stamp sidecar
+        └─ writeLlmReport      → report.llm.md    (if --llm-report)
+                                  + report.llm-N.md chunks (if --chunk-size)
+                                  + report.llm.manifest.json (if >1 chunk)
+```
+
+---
+
+## LLM Report (`src/cli/commands/report/writers/llm/`)
+
+`writeLlmReport` has two code paths controlled by `chunk_size`:
+
+**Single-file mode** (`chunk_size == 0`): writes one `report.llm.md` containing a statistics block, file index, and per-file fenced source blocks. Files over `llm_max_lines` (default 150) are condensed to first 60 + last 20 lines with an omission notice.
+
+**Chunked mode** (`chunk_size > 0`): the same condensation applies, then `ChunkWriter` manages rotating output across multiple files. Each new chunk starts with a continuation header. After all chunks are written, `ChunkWriter.finalize` writes the manifest JSON.
+
+`ChunkWriter` (`chunk_writer.zig`) exposes: `writeRaw`, `addCurrentFile`, `writeFile`, `rotateChunk`, `finalize`, `deinit`. The rotation decision is made by the caller (currently: rotate when `block.len + current_bytes > chunk_size`).
+
+---
+
+## Watch Mode (`src/cli/commands/watch/`)
+
+`execWatch` in `exec.zig` runs an event loop:
+
+1. Initial full scan via `runner.exec`
+2. `poll(timeout=-1)` — blocks until a filesystem event arrives
+3. `poll(timeout=50ms)` — drains the debounce window (batch rapid changes)
+4. For each changed file: re-read from disk, update `PathWatchState.file_entries`, rebuild all reports
+
+`PathWatchState` (`state.zig`) holds the in-memory `[]JobEntry` for one scanned path. Updated files are patched in place; the rest are reused without re-reading.
+
+In HTML mode, `writeHtmlReport` writes a small `.stamp` sidecar (just the generated-at timestamp). The browser JS polls the stamp file; only fetches the full HTML when the stamp changes.
+
+---
+
+## Logger & Progress (`src/utils/logger/`)
+
+`logger.zig` provides:
+
+- `printStep` / `printSuccess` / `printError` / `printWarn` — timestamped stderr lines
+- `printPhaseStart` / `printPhaseDone` — phase-bracketing for scan/aggregate/write
+- `printFinalSummary` — TTY-only rich summary: machine info, phase breakdown, generated reports, highlights
+- `printSeparator` — horizontal rule
+- `getCpuName(buf)` — reads CPU model name; platform-switched: `/proc/cpuinfo` (Linux), `sysctlbyname` (macOS), advapi32 registry (Windows)
+
+`ProgressBar` (`progress.zig`) writes an ANSI spinner to stderr, updating in place on TTY.
+
+**Verbose flag**: `runner.writePathReports` prints step/success lines only when `verbose = !is_tty or bench != null`. On a TTY the per-path write lines are suppressed in favour of the final summary.
+
+---
+
+## Bench Subcommand (`src/cli/commands/bench/bench.zig`)
+
+`execBench` runs the full pipeline, capturing nanosecond timestamps around each phase via `BenchResult` fields in `runner.exec`. After the run, `printTable` formats a markdown-style timing table to stderr showing:
+
+- Machine: OS + arch + core count
+- CPU: model name (via `getCpuName`)
+- ZigZag version
+- Per-phase rows: name, duration, context (file count / byte size), % of total
+
+---
+
+## HTML Dashboard (`src/templates/`)
+
+The dashboard is a single self-contained `dashboard.html` generated by `bundle.py`. The bundler resolves `<!-- @inject: file -->` markers, inlining CSS and JS. Three injection modes:
+
+- `<!-- @inject: file.css -->` → `<style>…</style>`
+- `<!-- @inject: file.js -->` → `<script>…</script>`
+- `<!-- @inject-text: file.js as id -->` → `<script type="text/plain" id="id">…</script>` (used for the Prism worker source)
+
+`build.zig` includes a `RunStep` that runs `bundle.py` automatically (`zig build bundle`).
+
+### Key frontend implementation notes
+
+- **Virtual table**: fixed 40 px row height, top/bottom spacer `<tr>` elements maintain scroll height. `overflow-anchor: none` on the container prevents CSS scroll anchoring from causing a scroll loop.
+- **Virtual code viewer**: triggered for files > 500 lines or > 200 KB. RAF-throttled scroll handler updates spacers and re-renders only the visible window. Prism highlighting runs in a Blob Worker; results are patched into live DOM elements.
+- **Watch poll**: JS polls `{html_path}.stamp` every few seconds; reloads the report data on change without a full page refresh.
+
+---
+
+## Testing Conventions
+
+- All tests live in `*_test.zig` files alongside their module.
+- No inline tests in `report/` or `config/` modules — only in `_test.zig` counterparts.
+- New test files must be registered in `src/root.zig` with `_ = @import("…");`.
+- Tests use `std.testing.tmpDir(.{})` for isolated file operations; avoid `setAsCwd()` on WSL2 (causes hangs in parallel test contexts).
+- `zig build test` hangs on WSL2. Use `make test` (or the equivalent direct `zig test` invocation with the options module) instead.
+

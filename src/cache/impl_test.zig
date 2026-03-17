@@ -207,3 +207,47 @@ test "isCached returns false for unknown path" {
     const hit = try cache.isCached("/nonexistent/path.zig", 12345, 100, null);
     try std.testing.expect(!hit);
 }
+
+test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
+    // Regression test: loadFromDisk previously had a hard 10 MiB limit which caused
+    // error.FileTooBig on large projects with many cached files.
+    const alloc = std.testing.allocator;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+
+    const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
+    defer alloc.free(cache_dir);
+
+    try tmp.dir.makeDir(".cache");
+    try tmp.dir.makeDir(".cache/files");
+
+    // Write a cache index larger than 10 MiB.
+    // Each entry uses a ~1000-char unique path so ~10,500 entries ≈ 11 MiB.
+    const index_path = try std.fmt.allocPrint(alloc, "{s}/index", .{cache_dir});
+    defer alloc.free(index_path);
+
+    {
+        const index_file = try std.fs.cwd().createFile(index_path, .{});
+        defer index_file.close();
+
+        // Use two 200-char path segments (each < NAME_MAX=255) to make long unique paths.
+        // Each line ≈ 485 bytes → 23,000 lines ≈ 11 MiB.
+        const seg = "a" ** 200;
+        const fake_hash = "aabb1122334455667788aabb1122334455667788.dat";
+        var line_buf: [600]u8 = undefined;
+
+        var i: usize = 0;
+        while (i < 23_000) : (i += 1) {
+            const line = std.fmt.bufPrint(&line_buf, "/tmp/{s}/{s}/file_{d:0>5}.zig|1234567890|100|{s}\n", .{ seg, seg, i, fake_hash }) catch unreachable;
+            try index_file.writeAll(line);
+        }
+    }
+
+    // Must not return error.FileTooBig
+    var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+    defer cache.deinit();
+}

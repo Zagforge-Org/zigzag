@@ -2,6 +2,7 @@ const std = @import("std");
 const Job = @import("job.zig").Job;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
+const DEFAULT_SKIP_DIRS = @import("../utils/utils.zig").DEFAULT_SKIP_DIRS;
 
 fn basename(path: []const u8) []const u8 {
     var lastSlash: usize = 0;
@@ -36,6 +37,7 @@ fn isBinaryFile(path: []const u8, content: []const u8) bool {
         ".mp3", ".mp4", ".avi",   ".mov",   ".mkv", ".woff", ".woff2",
         ".ttf", ".otf", ".eot",   ".class", ".jar", ".war",  ".o",
         ".a",   ".lib", ".pyc",   ".pyo",
+        ".bz2", ".lz4", ".lzma",  ".xz",    ".zst", ".zstd",
     };
 
     // Check extension first (faster)
@@ -101,26 +103,7 @@ fn matchesPattern(path: []const u8, pattern: []const u8) bool {
 }
 
 fn shouldIgnore(file: []const u8, ignore_list: std.ArrayList([]const u8)) bool {
-    // Always ignore .cache directory
-    if (std.mem.indexOf(u8, file, ".cache") != null) return true;
-
-    // Always ignore common binary/hidden/build directories
-    const auto_ignore = [_][]const u8{
-        "node_modules",
-        ".git",
-        ".svn",
-        ".hg",
-        "__pycache__",
-        ".pytest_cache",
-        "target",
-        "build",
-        "dist",
-        ".idea",
-        ".vscode",
-        ".DS_Store",
-    };
-
-    for (auto_ignore) |pattern| {
+    for (DEFAULT_SKIP_DIRS) |pattern| {
         if (std.mem.indexOf(u8, file, pattern) != null) {
             return true;
         }
@@ -202,6 +185,9 @@ pub fn processFileJob(job: Job) anyerror!void {
     const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
     var hash: ?[32]u8 = null;
     var content: []u8 = undefined;
+    // Tracks whether the file was counted in cached_files (true) or processed_files (false).
+    // Used by the binary-detection block below to subtract from the correct counter.
+    var counted_as_cached = false;
 
     // =========================
     // CACHE MODE
@@ -227,6 +213,7 @@ pub fn processFileJob(job: Job) anyerror!void {
                 .{path},
             );
             _ = stats.cached_files.fetchAdd(1, .monotonic);
+            counted_as_cached = true;
 
             content = cache.getCachedContent(path) catch blk: {
                 std.log.warn(
@@ -234,6 +221,7 @@ pub fn processFileJob(job: Job) anyerror!void {
                     .{path},
                 );
                 _ = stats.cached_files.fetchSub(1, .monotonic);
+                counted_as_cached = false;
                 _ = stats.processed_files.fetchAdd(1, .monotonic);
 
                 const original = fs.readFileAlloc(allocator, path) catch |read_err| {
@@ -315,7 +303,13 @@ pub fn processFileJob(job: Job) anyerror!void {
         std.log.debug("Skipping binary file: {s}", .{path});
         allocator.free(content);
         _ = stats.binary_files.fetchAdd(1, .monotonic);
-        _ = stats.processed_files.fetchSub(1, .monotonic);
+        // Subtract from the counter that was actually incremented above.
+        // Cached files were counted in cached_files; all others in processed_files.
+        if (counted_as_cached) {
+            _ = stats.cached_files.fetchSub(1, .monotonic);
+        } else {
+            _ = stats.processed_files.fetchSub(1, .monotonic);
+        }
 
         entries_mutex.lock();
         defer entries_mutex.unlock();

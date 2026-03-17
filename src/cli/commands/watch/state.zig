@@ -13,7 +13,7 @@ const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
 const report = @import("../report.zig");
-const lg = @import("../../../utils/logger.zig");
+const lg = @import("../../../utils/utils.zig");
 
 /// Per-path persistent state for watch mode.
 /// Heap-allocated so that entries_mutex has a stable address for thread pool jobs.
@@ -28,6 +28,7 @@ pub const State = struct {
 
     /// Run initial full directory scan and return heap-allocated state.
     pub fn init(
+        stats: *ProcessStats,
         cfg: *const Config,
         cache: ?*CacheImpl,
         path: []const u8,
@@ -59,13 +60,12 @@ pub const State = struct {
         try self.buildIgnoreList(cfg);
 
         var wg = WaitGroup.init();
-        var stats = ProcessStats.init();
         var walker_ctx = WalkerCtx{
             .pool = pool,
             .wg = &wg,
             .file_ctx = &self.file_ctx,
             .cache = cache,
-            .stats = &stats,
+            .stats = stats,
             .file_entries = &self.file_entries,
             .binary_entries = &self.binary_entries,
             .entries_mutex = &self.entries_mutex,
@@ -78,7 +78,7 @@ pub const State = struct {
         wg.wait();
 
         const sv = stats.getSummary();
-        lg.printSummary(path, sv.total, sv.source, sv.cached, sv.processed, sv.binary, sv.ignored);
+        lg.printSummary(.{ .path = path, .total = sv.total, .source = sv.source, .cached = sv.cached, .fresh = sv.processed, .binary = sv.binary, .ignored = sv.ignored });
 
         return self;
     }
@@ -95,7 +95,18 @@ pub const State = struct {
             const content_ign = try report.deriveContentPath(alloc, html_ign);
             try self.file_ctx.ignore_list.append(alloc, content_ign);
         }
-        if (cfg.llm_report) try self.file_ctx.ignore_list.append(alloc, try report.deriveLlmPath(alloc, self.md_path));
+        if (cfg.llm_report) {
+            const llm_path = try report.deriveLlmPath(alloc, self.md_path);
+            try self.file_ctx.ignore_list.append(alloc, llm_path);
+            const base: []const u8 = if (std.mem.endsWith(u8, llm_path, ".md"))
+                llm_path[0 .. llm_path.len - 3]
+            else
+                llm_path;
+            const chunk_pattern = try std.mem.concat(alloc, u8, &.{ base, "-" });
+            try self.file_ctx.ignore_list.append(alloc, chunk_pattern);
+            const manifest_pattern = try std.mem.concat(alloc, u8, &.{ base, ".manifest.json" });
+            try self.file_ctx.ignore_list.append(alloc, manifest_pattern);
+        }
         for (cfg.ignore_patterns.items) |pattern| {
             try self.file_ctx.ignore_list.append(alloc, try alloc.dupe(u8, pattern));
         }

@@ -120,7 +120,9 @@ pub const CacheImpl = struct {
         };
         defer file.close();
 
-        const data = try file.readToEndAlloc(self.allocator, 10 * 1024 * 1024);
+        const index_size = (try file.stat()).size;
+        if (index_size == 0) return;
+        const data = try file.readToEndAlloc(self.allocator, index_size);
         defer self.allocator.free(data);
 
         var lines = std.mem.splitSequence(u8, data, "\n");
@@ -239,7 +241,14 @@ pub const CacheImpl = struct {
         });
         defer self.allocator.free(cached_path);
 
-        const content = std.fs.cwd().readFileAlloc(self.allocator, cached_path, 100 * 1024 * 1024) catch |err| {
+        // Open the file safely, returning early if it doesn't exist or fails to read.
+        const cached_file = std.fs.cwd().openFile(cached_path, .{}) catch |err| {
+            std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
+            return err;
+        };
+        defer cached_file.close();
+        const cached_file_size = (try cached_file.stat()).size;
+        const content = cached_file.readToEndAlloc(self.allocator, cached_file_size) catch |err| {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
         };
@@ -327,6 +336,10 @@ pub const CacheImpl = struct {
         if (need_to_free_filename) {
             self.allocator.free(cache_filename);
         }
+    }
+
+    pub fn entryCount(self: *const Self) usize {
+        return self.memory_cache.count();
     }
 
     pub fn cleanup(self: *Self) !void {

@@ -1,4 +1,4 @@
-const colors = @import("../../utils/colors.zig");
+const colors = @import("../../utils/utils.zig");
 const stdoutPrint = @import("../../fs/stdout.zig").stdoutPrint;
 
 pub const ascii_logo =
