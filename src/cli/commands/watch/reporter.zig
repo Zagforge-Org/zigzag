@@ -3,7 +3,7 @@ const State = @import("state.zig").State;
 const SseServer = @import("server.zig").SseServer;
 const Config = @import("../config/config.zig").Config;
 const report = @import("../report.zig");
-const lg = @import("../../../utils/logger.zig");
+const lg = @import("../../../utils/utils.zig");
 
 /// Write the combined multi-path HTML dashboard and its content sidecar.
 /// No-op when html_output is false or fewer than 2 states are active.
@@ -181,7 +181,7 @@ pub fn writeAllReports(
         const llm_path = report.deriveLlmPath(allocator, state.md_path) catch null;
         if (llm_path) |lp| {
             defer allocator.free(lp);
-            report.writeLlmReport(&report_data, state.binary_entries.count(), lp, state.root_path, cfg, allocator) catch |err| {
+            report.writeLlmReport(&report_data, state.binary_entries.count(), lp, state.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
                 lg.printError("Failed to write LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
             };
         }
