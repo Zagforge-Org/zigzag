@@ -4,7 +4,7 @@ const fs = std.fs;
 
 const DEFAULT_CONF_FILENAME = @import("../../conf/file.zig").DEFAULT_CONF_FILENAME;
 const FileConf = @import("../../conf/file.zig").FileConf;
-const lg = @import("../../utils/logger.zig");
+const lg = @import("../../utils/utils.zig");
 
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
