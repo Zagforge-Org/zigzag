@@ -139,13 +139,13 @@ test "Config.applyFileConf sets paths" {
     try std.testing.expectEqualStrings("./lib", cfg.paths.items[1]);
 }
 
-test "Config.applyFileConf sets ignore_patterns" {
+test "Config.applyFileConf sets ignores" {
     const allocator = std.testing.allocator;
     var cfg = Config.default(allocator);
     defer cfg.deinit();
 
     const patterns = [_][]const u8{ "*.png", "node_modules" };
-    const fc = FileConf{ .ignore_patterns = &patterns };
+    const fc = FileConf{ .ignores = &patterns };
     try cfg.applyFileConf(&fc);
 
     try std.testing.expectEqual(@as(usize, 2), cfg.ignore_patterns.items.len);
@@ -267,4 +267,19 @@ test "Config.applyFileConf null fields leave config unchanged" {
     try std.testing.expect(cfg.output_dir == null);
     try std.testing.expectEqual(@as(usize, 0), cfg.paths.items.len);
     try std.testing.expectEqual(@as(usize, 0), cfg.ignore_patterns.items.len);
+}
+
+test "applyFileConf applies ignores from FileConf" {
+    const allocator = std.testing.allocator;
+    var cfg = Config.default(allocator);
+    defer cfg.deinit();
+
+    const patterns: []const []const u8 = &.{ "*.png", "*.jpg" };
+    const fc = FileConf{
+        .ignores = patterns,
+    };
+    try cfg.applyFileConf(&fc);
+    try std.testing.expectEqual(@as(usize, 2), cfg.ignore_patterns.items.len);
+    try std.testing.expectEqualStrings("*.png", cfg.ignore_patterns.items[0]);
+    try std.testing.expectEqualStrings("*.jpg", cfg.ignore_patterns.items[1]);
 }
