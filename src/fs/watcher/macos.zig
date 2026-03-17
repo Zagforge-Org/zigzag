@@ -8,7 +8,7 @@ pub const WatchEvent = struct {
     kind: WatchEventKind,
 };
 
-const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
+const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 
 /// Per-directory state: open fd + current file snapshot (name -> mtime)
 const DirState = struct {

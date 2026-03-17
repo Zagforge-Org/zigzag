@@ -2,7 +2,7 @@ const std = @import("std");
 const linux = std.os.linux;
 const posix = std.posix;
 
-const DEFAULT_SKIP_DIRS = @import("./skip_dirs.zig").DEFAULT_SKIP_DIRS;
+const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 
 pub const WatchEventKind = enum { modified, created, deleted };
 pub const WatchEvent = struct {
