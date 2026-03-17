@@ -35,6 +35,7 @@ pub const Config = struct {
     llm_report: bool, // Generate LLM-optimized condensed report
     llm_max_lines: u64, // Max lines per file before truncation (default: 150)
     llm_description: ?[]u8, // Optional project description for LLM report preamble
+    llm_chunk_size: usize, // Max lines per chunk for LLM report (0 = no chunking)
     serve_port: u16, // Port for SSE/HTML dev server in watch+html mode (default: 5455)
     open_browser: bool, // Open browser automatically on serve/watch (default: false)
 
@@ -76,6 +77,7 @@ pub const Config = struct {
             .llm_max_lines = 150,
             .llm_description = null,
             ._llm_description_allocated = false,
+            .llm_chunk_size = 0,
             .serve_port = 5455,
             .open_browser = false,
         };
@@ -112,7 +114,7 @@ pub const Config = struct {
         }
 
         // Ignore patterns
-        if (conf.ignore_patterns) |patterns| {
+        if (conf.ignores) |patterns| {
             for (patterns) |pattern| {
                 try self.appendIgnorePattern(pattern);
             }
@@ -157,6 +159,7 @@ pub const Config = struct {
         // LLM report
         if (conf.llm_report) |v| self.llm_report = v;
         if (conf.llm_max_lines) |v| self.llm_max_lines = v;
+        if (conf.llm_chunk_size) |v| self.llm_chunk_size = v;
 
         if (conf.llm_description) |desc| {
             const new_desc = try self.allocator.dupe(u8, desc);
