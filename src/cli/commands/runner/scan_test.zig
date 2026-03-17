@@ -78,16 +78,20 @@ test "scanPath on empty directory returns zero entries" {
 test "scanPath picks up source files in directory" {
     const alloc = std.testing.allocator;
 
-    // Use /tmp to avoid DEFAULT_SKIP_DIRS filtering (.zig-cache is in the list
-    // and std.testing.tmpDir creates dirs inside .zig-cache/tmp/).
+    // Use a CWD-relative dir (not inside .zig-cache) so DEFAULT_SKIP_DIRS
+    // doesn't filter out the test files. This matches the zztest_* pattern
+    // used elsewhere in this codebase (e.g. conf/file_test.zig).
     var rand_int: u64 = undefined;
     std.crypto.random.bytes(std.mem.asBytes(&rand_int));
-    var dir_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try std.fmt.bufPrint(&dir_buf, "/tmp/zigzag_scan_{x}", .{rand_int});
-    try std.fs.makeDirAbsolute(dir_path);
-    defer std.fs.deleteTreeAbsolute(dir_path) catch {};
+    var dir_name_buf: [32]u8 = undefined;
+    const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
+    try std.fs.cwd().makeDir(dir_name);
+    defer std.fs.cwd().deleteTree(dir_name) catch {};
 
-    var tmp_dir = try std.fs.openDirAbsolute(dir_path, .{});
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const dir_path = try std.fs.cwd().realpath(dir_name, &path_buf);
+
+    var tmp_dir = try std.fs.cwd().openDir(dir_name, .{});
     defer tmp_dir.close();
     try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
     try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });

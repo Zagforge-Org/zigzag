@@ -50,25 +50,29 @@ test "writePathReports creates markdown report file" {
 test "writePathReports with scanned files produces non-empty report" {
     const alloc = std.testing.allocator;
 
-    // Use /tmp dirs to avoid DEFAULT_SKIP_DIRS filtering (.zig-cache is in the
-    // list and std.testing.tmpDir creates dirs inside .zig-cache/tmp/).
-    // Use separate scan_dir and output_dir so the output path isn't a parent of
-    // the scanned files (which would cause shouldIgnore to filter them out).
+    // Use CWD-relative dirs (not inside .zig-cache) so DEFAULT_SKIP_DIRS
+    // doesn't filter out the test files. Use separate scan and output dirs so
+    // the output path isn't a parent of the scanned files.
     var rand_scan: u64 = undefined;
     std.crypto.random.bytes(std.mem.asBytes(&rand_scan));
-    var scan_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const scan_path = try std.fmt.bufPrint(&scan_buf, "/tmp/zigzag_scan_{x}", .{rand_scan});
-    try std.fs.makeDirAbsolute(scan_path);
-    defer std.fs.deleteTreeAbsolute(scan_path) catch {};
+    var scan_name_buf: [32]u8 = undefined;
+    const scan_name = try std.fmt.bufPrint(&scan_name_buf, "zztest_scan_{x}", .{rand_scan});
+    try std.fs.cwd().makeDir(scan_name);
+    defer std.fs.cwd().deleteTree(scan_name) catch {};
 
     var rand_out: u64 = undefined;
     std.crypto.random.bytes(std.mem.asBytes(&rand_out));
-    var out_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const out_path = try std.fmt.bufPrint(&out_buf, "/tmp/zigzag_out_{x}", .{rand_out});
-    try std.fs.makeDirAbsolute(out_path);
-    defer std.fs.deleteTreeAbsolute(out_path) catch {};
+    var out_name_buf: [32]u8 = undefined;
+    const out_name = try std.fmt.bufPrint(&out_name_buf, "zztest_out_{x}", .{rand_out});
+    try std.fs.cwd().makeDir(out_name);
+    defer std.fs.cwd().deleteTree(out_name) catch {};
 
-    var scan_dir = try std.fs.openDirAbsolute(scan_path, .{});
+    var scan_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const scan_path = try std.fs.cwd().realpath(scan_name, &scan_path_buf);
+    var out_path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const out_path = try std.fs.cwd().realpath(out_name, &out_path_buf);
+
+    var scan_dir = try std.fs.cwd().openDir(scan_name, .{});
     defer scan_dir.close();
     try scan_dir.writeFile(.{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
 
