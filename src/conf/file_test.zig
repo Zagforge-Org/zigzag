@@ -91,13 +91,13 @@ test "loadFromPath handles empty JSON object" {
     defer parsed.deinit();
 
     try std.testing.expect(parsed.value.paths == null);
-    try std.testing.expect(parsed.value.ignore_patterns == null);
+    try std.testing.expect(parsed.value.ignores == null);
     try std.testing.expect(parsed.value.skip_cache == null);
     try std.testing.expect(parsed.value.watch == null);
     try std.testing.expect(parsed.value.output == null);
 }
 
-test "loadFromPath handles ignore_patterns array" {
+test "loadFromPath handles ignores array" {
     const allocator = std.testing.allocator;
     const tmp_path = "zztest_conf_patterns.json";
     {
@@ -106,7 +106,7 @@ test "loadFromPath handles ignore_patterns array" {
         var wbuf3: [512]u8 = undefined;
         var fw3 = f.writer(&wbuf3);
         try fw3.interface.writeAll(
-            \\{"ignore_patterns": ["*.png", "*.jpg", "node_modules"]}
+            \\{"ignores": ["*.png", "*.jpg", "node_modules"]}
         );
         try fw3.interface.flush();
     }
@@ -118,11 +118,11 @@ test "loadFromPath handles ignore_patterns array" {
     var parsed = result.?;
     defer parsed.deinit();
 
-    try std.testing.expect(parsed.value.ignore_patterns != null);
-    try std.testing.expectEqual(@as(usize, 3), parsed.value.ignore_patterns.?.len);
-    try std.testing.expectEqualStrings("*.png", parsed.value.ignore_patterns.?[0]);
-    try std.testing.expectEqualStrings("*.jpg", parsed.value.ignore_patterns.?[1]);
-    try std.testing.expectEqualStrings("node_modules", parsed.value.ignore_patterns.?[2]);
+    try std.testing.expect(parsed.value.ignores != null);
+    try std.testing.expectEqual(@as(usize, 3), parsed.value.ignores.?.len);
+    try std.testing.expectEqualStrings("*.png", parsed.value.ignores.?[0]);
+    try std.testing.expectEqualStrings("*.jpg", parsed.value.ignores.?[1]);
+    try std.testing.expectEqualStrings("node_modules", parsed.value.ignores.?[2]);
 }
 
 test "FileConf.default() is valid parseable JSON" {
@@ -356,4 +356,39 @@ test "writeDefaultConfig writes FileConf.default() to file" {
 
     // Compare the contents with FileConf.default()
     try std.testing.expectEqualStrings(FileConf.default(), file_contents);
+}
+
+test "FileConf deserialises 'ignores' key" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_ignores_key.json";
+    const f = try std.fs.cwd().createFile(tmp_path, .{});
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+    defer f.close();
+    try f.writeAll(
+        \\{"ignores": ["*.png", "*.jpg"]}
+    );
+    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    defer result.?.deinit();
+    const conf = result.?.value;
+    try std.testing.expect(conf.ignores != null);
+    try std.testing.expectEqual(@as(usize, 2), conf.ignores.?.len);
+    try std.testing.expectEqualStrings("*.png", conf.ignores.?[0]);
+    try std.testing.expectEqualStrings("*.jpg", conf.ignores.?[1]);
+}
+
+test "FileConf old 'ignore_patterns' key is silently ignored" {
+    const allocator = std.testing.allocator;
+    const tmp_path = "zztest_conf_old_ignore_patterns.json";
+    const f = try std.fs.cwd().createFile(tmp_path, .{});
+    defer std.fs.cwd().deleteFile(tmp_path) catch {};
+    defer f.close();
+    try f.writeAll(
+        \\{"ignore_patterns": ["*.png"]}
+    );
+    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    try std.testing.expect(result != null);
+    defer result.?.deinit();
+    // Old key is unknown field — parsed as null
+    try std.testing.expect(result.?.value.ignores == null);
 }
