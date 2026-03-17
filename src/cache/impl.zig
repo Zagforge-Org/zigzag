@@ -241,6 +241,7 @@ pub const CacheImpl = struct {
         });
         defer self.allocator.free(cached_path);
 
+        // Open the file safely, returning early if it doesn't exist or fails to read.
         const cached_file = std.fs.cwd().openFile(cached_path, .{}) catch |err| {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
