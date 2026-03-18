@@ -17,6 +17,7 @@ test {
     _ = @import("./cli/handlers/ignore.zig");
     _ = @import("./cli/handlers/timezone.zig");
     _ = @import("./cli/handlers/watch.zig");
+    _ = @import("./cli/handlers/no_watch.zig");
     _ = @import("./cli/handlers/output.zig");
     _ = @import("./cli/handlers/output_dir.zig");
     _ = @import("./cli/handlers/json.zig");

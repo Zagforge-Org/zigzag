@@ -10,6 +10,7 @@ const pathHandler = @import("./handlers/path.zig").handlePaths;
 const ignoreHandler = @import("./handlers/ignore.zig").handleIgnores;
 const timezoneHandler = @import("./handlers/timezone.zig").handleTimezone;
 const watchHandler = @import("./handlers/watch.zig").handleWatch;
+const noWatchHandler = @import("./handlers/no_watch.zig").handleNoWatch;
 const outputHandler = @import("./handlers/output.zig").handleOutput;
 const outputDirHandler = @import("./handlers/output_dir.zig").handleOutputDir;
 const jsonHandler = @import("./handlers/json.zig").handleJson;
@@ -37,6 +38,7 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--ignores", .takes_value = true, .handler = &ignoreHandler },
     .{ .name = "--timezone", .takes_value = true, .handler = &timezoneHandler },
     .{ .name = "--watch", .takes_value = false, .handler = &watchHandler },
+    .{ .name = "--no-watch", .takes_value = false, .handler = &noWatchHandler },
     .{ .name = "--output", .takes_value = true, .handler = &outputHandler },
     .{ .name = "--output-dir", .takes_value = true, .handler = &outputDirHandler },
     .{ .name = "--json", .takes_value = false, .handler = &jsonHandler },

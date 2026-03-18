@@ -107,6 +107,15 @@ pub fn writeLlmReport(
             try cw.writeRaw(hdr);
         }
 
+        // Project Description (only when set and non-empty)
+        if (cfg.llm_description) |desc| {
+            if (desc.len > 0) {
+                const desc_block = try std.fmt.allocPrint(allocator, "## Project Description\n{s}\n\n", .{desc});
+                defer allocator.free(desc_block);
+                try cw.writeRaw(desc_block);
+            }
+        }
+
         // Stats section
         {
             var sw: std.io.Writer.Allocating = .init(allocator);

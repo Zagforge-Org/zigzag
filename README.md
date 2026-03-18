@@ -95,7 +95,7 @@ zigzag init
   "llm_report": false,
   "llm_max_lines": 150,
   "llm_description": null,
-  "llm_chunk_size": 0
+  "llm_chunk_size": null
 }
 ```
 
@@ -129,7 +129,7 @@ zigzag run --watch
   "llm_report": true,
   "llm_max_lines": 150,
   "llm_description": null,
-  "llm_chunk_size": 500000
+  "llm_chunk_size": "500k"
 }
 ```
 
@@ -156,6 +156,7 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--ignores` | `string[]` | `[]` | Pattern(s) to ignore. Comma-separated or repeated for multiple patterns. |
 | `--timezone` | `string` | `null` | Timezone offset (e.g. `"+1"`, `"-5:30"`). |
 | `--watch` | `bool` | `false` | Enable watch mode to regenerate reports on file changes. |
+| `--no-watch` | `bool` | `false` | Disable watch mode, overriding `"watch": true` in `zig.conf.json`. |
 | `--output` | `string` | `"report.md"` | Output filename for the Markdown report. |
 | `--output-dir` | `string` | `"zigzag-reports"` | Directory to store generated reports. |
 | `--json` | `bool` | `false` | Generate a JSON report alongside Markdown. |
@@ -163,7 +164,7 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--llm-report` | `bool` | `false` | Generate a condensed LLM-optimised report. |
 | `--llm-max-lines` | `number` | `150` | Maximum lines per file before condensation. |
 | `--llm-description` | `string` | `null` | Optional project description prepended to the LLM report. |
-| `--chunk-size` | `string` | `"0"` | Split the LLM report into chunks of this size (e.g. `500k`, `2m`). `0` = single file. |
+| `--chunk-size` | `string` | — | Split the LLM report into chunks of this size (e.g. `500k`, `2m`). Omit or set to `null` in config for a single file. |
 | `--log` | `bool` | `false` | Enable logging. |
 | `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
 
@@ -175,7 +176,7 @@ Settings are applied from lowest to highest priority (later values win):
 2. `zig.conf.json` (when using `zigzag run`)
 3. CLI flags (always override file config)
 
-When the first `--paths` CLI flag is encountered, all file-loaded paths are replaced. Same for `--ignores`. Scalar fields (skip_cache, watch, etc.) always take the last CLI value.
+When the first `--paths` CLI flag is encountered, all file-loaded paths are replaced. Same for `--ignores`. Scalar fields (skip_cache, watch, etc.) always take the last CLI value. `--no-watch` is a permanent override: it forces `watch = false` regardless of the config file.
 
 ## LLM Report
 
@@ -185,12 +186,20 @@ Each source file is condensed: files exceeding `llm_max_lines` are truncated to 
 
 ### LLM Chunking
 
-For large codebases, pass `--chunk-size` to split the output across multiple files. Accepts byte counts with optional `k`/`m` suffixes:
+For large codebases, pass `--chunk-size` to split the output across multiple files. Accepts byte counts with optional `k`/`m` suffixes (case-insensitive):
 
 ```bash
 zigzag run --paths ./src --llm-report --chunk-size 500k
 zigzag run --paths ./src --llm-report --chunk-size 2m
 ```
+
+The same format works in `zig.conf.json` — use a quoted string:
+
+```json
+"llm_chunk_size": "500k"
+```
+
+Plain numbers are also accepted for backward compatibility (`"llm_chunk_size": 500000`). Set to `null` (or omit) to disable chunking.
 
 When chunking is active:
 - Chunk 1 is written to `report.llm.md`
@@ -220,11 +229,12 @@ ZigZag automatically skips common directories:
 
 - `node_modules`, `.bin`
 - `.git`, `.svn`, `.hg`
-- `.cache`
+- `.cache`, `.zig-cache`
 - `__pycache__`, `.pytest_cache`
 - `target`, `build`, `dist`
 - `.idea`, `.vscode`
 - `.turbo`, `.nx`, `.parcel-cache`
+- `zig.conf.json`
 
 ### Binary File Detection
 
@@ -283,6 +293,12 @@ Watch mode uses OS-level filesystem events (inotify on Linux, kqueue on macOS/BS
 Events are debounced: rapid changes within a 50 ms window are batched into a single report write.
 
 In HTML mode, a lightweight `.stamp` sidecar file is written alongside the HTML report. The browser polls the stamp file instead of the full HTML, then fetches the HTML only when the stamp changes.
+
+Use `--no-watch` to override `"watch": true` set in `zig.conf.json` and run a single-shot report instead:
+
+```bash
+zigzag run --no-watch
+```
 
 Press `Ctrl+C` to stop.
 

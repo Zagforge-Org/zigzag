@@ -19,4 +19,5 @@ pub const DEFAULT_SKIP_DIRS = [_][]const u8{
     ".turbo",
     ".nx",
     ".parcel-cache",
+    "zig.conf.json",
 };
