@@ -48,6 +48,7 @@ pub const Config = struct {
     _output_dir_allocated: bool, // true when output_dir is heap-allocated
     _output_dir_set_by_cli: bool, // true when CLI set it (prevents file conf override)
     _llm_description_allocated: bool,
+    _no_watch_set_by_cli: bool, // true when --no-watch was explicitly passed
 
     const Self = @This();
 
@@ -80,7 +81,31 @@ pub const Config = struct {
             .llm_chunk_size = 0,
             .serve_port = 5455,
             .open_browser = false,
+            ._no_watch_set_by_cli = false,
         };
+    }
+
+    // Parses a chunk size string with optional K/M suffix (e.g. "500k", "2m", "500000").
+    fn parseChunkSizeStr(raw: []const u8) !usize {
+        const trimmed = std.mem.trim(u8, raw, &std.ascii.whitespace);
+        if (trimmed.len == 0) return error.InvalidChunkSize;
+        var multiplier: usize = 1;
+        var numeric: []const u8 = trimmed;
+        const last = trimmed[trimmed.len - 1];
+        if (last == 'k' or last == 'K') {
+            multiplier = 1_000;
+            numeric = trimmed[0 .. trimmed.len - 1];
+        } else if (last == 'm' or last == 'M') {
+            multiplier = 1_000_000;
+            numeric = trimmed[0 .. trimmed.len - 1];
+        } else if (last >= '0' and last <= '9') {
+            // bare integer
+        } else {
+            return error.InvalidChunkSize;
+        }
+        const n = std.fmt.parseInt(usize, numeric, 10) catch return error.InvalidChunkSize;
+        if (n == 0) return error.InvalidChunkSize;
+        return std.math.mul(usize, n, multiplier) catch return error.InvalidChunkSize;
     }
 
     // Appends an ignore pattern, managing memory ownership.
@@ -124,7 +149,9 @@ pub const Config = struct {
         if (conf.skip_cache) |v| self.skip_cache = v;
         if (conf.small_threshold) |v| self.small_threshold = v;
         if (conf.mmap_threshold) |v| self.mmap_threshold = v;
-        if (conf.watch) |v| self.watch = v;
+        if (!self._no_watch_set_by_cli) {
+            if (conf.watch) |v| self.watch = v;
+        }
         if (conf.log) |v| self.log = v;
 
         // Timezone
@@ -159,7 +186,21 @@ pub const Config = struct {
         // LLM report
         if (conf.llm_report) |v| self.llm_report = v;
         if (conf.llm_max_lines) |v| self.llm_max_lines = v;
-        if (conf.llm_chunk_size) |v| self.llm_chunk_size = v;
+        if (conf.llm_chunk_size) |v| {
+            switch (v) {
+                .integer => |n| {
+                    if (n > 0) self.llm_chunk_size = @intCast(n);
+                },
+                .float => |f| {
+                    const n: i64 = @intFromFloat(f);
+                    if (n > 0) self.llm_chunk_size = @intCast(n);
+                },
+                .string => |s| {
+                    self.llm_chunk_size = try parseChunkSizeStr(s);
+                },
+                else => {},
+            }
+        }
 
         if (conf.llm_description) |desc| {
             const new_desc = try self.allocator.dupe(u8, desc);
