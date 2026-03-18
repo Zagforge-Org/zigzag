@@ -95,7 +95,7 @@ zigzag init
   "llm_report": false,
   "llm_max_lines": 150,
   "llm_description": null,
-  "llm_chunk_size": 0
+  "llm_chunk_size": null
 }
 ```
 
