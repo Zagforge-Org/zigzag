@@ -154,6 +154,18 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
     }
     defer if (sse_server) |srv| srv.deinit();
 
+    // Re-write reports now that the SSE server port is finalized.
+    // The initial write (before server start) may have baked in the default port,
+    // but port fallback can change cfg.serve_port — the HTML sse_url must match.
+    if (sse_server != null) {
+        for (states.items) |state| {
+            reporter.writeAllReports(state, cfg, null, &.{}, allocator);
+        }
+        if (states.items.len > 1) {
+            reporter.writeCombinedReport(states.items, cfg, null, &.{}, allocator);
+        }
+    }
+
     // Set up OS-level filesystem watcher
     var watcher = try Watcher.init(allocator);
     defer watcher.deinit();

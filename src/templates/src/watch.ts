@@ -103,10 +103,14 @@ export function startWatchMode(): void {
         return;
     }
 
-    // Prefer the absolute SSE URL embedded at generation time (works when the
-    // HTML is opened from disk). Fall back to the relative path when served
-    // directly by the SSE server on the same origin.
-    const sseUrl = _ReportMeta.sse_url ?? "/__events";
+    // When served over HTTP (by the SSE server), use the relative path so the
+    // connection always targets the correct origin — even if the port changed
+    // since the HTML was generated. The absolute sse_url is only needed when
+    // the HTML file is opened directly from disk (file:// protocol).
+    const sseUrl =
+        location.protocol === "file:"
+            ? _ReportMeta.sse_url ?? "/__events"
+            : "/__events";
 
     let es: EventSource;
     try {
