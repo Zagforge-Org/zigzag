@@ -101,7 +101,7 @@ def run_esbuild() -> None:
     """Run npm install (if needed) then esbuild to produce dist/bundle.js and
     dist/highlight.worker.js from their TypeScript sources."""
     node_modules = TEMPLATES_DIR / "node_modules"
-    if not node_modules.exists():
+    if not node_modules.exists() or not Path(_esbuild_bin()).exists():
         print("bundle.py: node_modules not found, running npm install...")
         subprocess.run(
             ["npm", "install"],

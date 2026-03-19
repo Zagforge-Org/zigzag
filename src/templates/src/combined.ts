@@ -422,6 +422,10 @@ console.log(
     ReportMeta.sse_url,
 );
 if (ReportMeta.watch_mode && ReportMeta.sse_url) {
+    const sseUrl =
+        location.protocol === "file:"
+            ? ReportMeta.sse_url
+            : "/__events";
     const dot = document.getElementById("sse-dot") as HTMLElement | null;
     function setDot(state: "live" | "reconnecting"): void {
         if (!dot) return;
@@ -430,7 +434,7 @@ if (ReportMeta.watch_mode && ReportMeta.sse_url) {
         dot.title = state === "live" ? "Watch: live" : "Watch: reconnecting…";
     }
     try {
-        const es = new EventSource(ReportMeta.sse_url);
+        const es = new EventSource(sseUrl);
         es.onopen = () => {
             console.log("[SSE] connected");
             setDot("live");
