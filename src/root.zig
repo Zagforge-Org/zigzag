@@ -8,25 +8,33 @@ pub const options = @import("options");
 const builtin = @import("builtin");
 
 test {
-    _ = @import("./cli/handlers/version.zig");
-    _ = @import("./cli/handlers/help.zig");
-    _ = @import("./cli/handlers/skip_cache.zig");
-    _ = @import("./cli/handlers/small.zig");
-    _ = @import("./cli/handlers/mmap.zig");
-    _ = @import("./cli/handlers/path.zig");
-    _ = @import("./cli/handlers/ignore.zig");
-    _ = @import("./cli/handlers/timezone.zig");
-    _ = @import("./cli/handlers/watch.zig");
-    _ = @import("./cli/handlers/no_watch.zig");
-    _ = @import("./cli/handlers/output.zig");
-    _ = @import("./cli/handlers/output_dir.zig");
-    _ = @import("./cli/handlers/json.zig");
-    _ = @import("./cli/handlers/html.zig");
-    _ = @import("./cli/handlers/llm_report.zig");
-    _ = @import("./cli/handlers/chunk_size.zig");
-    _ = @import("./cli/handlers/port.zig");
-    _ = @import("./cli/handlers/log.zig");
-    _ = @import("./cli/handlers/open.zig");
+    // handler tests — flags/
+    _ = @import("./cli/handlers/flags/chunk_size_test.zig");
+    _ = @import("./cli/handlers/flags/html_test.zig");
+    _ = @import("./cli/handlers/flags/ignore_test.zig");
+    _ = @import("./cli/handlers/flags/json_test.zig");
+    _ = @import("./cli/handlers/flags/llm_report_test.zig");
+    _ = @import("./cli/handlers/flags/log_test.zig");
+    _ = @import("./cli/handlers/flags/mmap_test.zig");
+    _ = @import("./cli/handlers/flags/no_watch_test.zig");
+    _ = @import("./cli/handlers/flags/open_test.zig");
+    _ = @import("./cli/handlers/flags/output_test.zig");
+    _ = @import("./cli/handlers/flags/output_dir_test.zig");
+    _ = @import("./cli/handlers/flags/path_test.zig");
+    _ = @import("./cli/handlers/flags/port_test.zig");
+    _ = @import("./cli/handlers/flags/skip_cache_test.zig");
+    _ = @import("./cli/handlers/flags/small_test.zig");
+    _ = @import("./cli/handlers/flags/timezone_test.zig");
+    _ = @import("./cli/handlers/flags/upload_test.zig");
+    _ = @import("./cli/handlers/flags/watch_test.zig");
+    // handler tests — display/
+    _ = @import("./cli/handlers/display/help_test.zig");
+    _ = @import("./cli/handlers/display/version_test.zig");
+    // handler tests — upload/
+    _ = @import("./cli/handlers/upload/upload_test.zig");
+    _ = @import("./cli/handlers/upload/git_info_test.zig");
+    // handler tests — init/ (previously undiscovered — adds 2 tests)
+    _ = @import("./cli/handlers/init/init_test.zig");
     _ = @import("./cli/commands/config/config.zig");
     _ = @import("./cli/commands/runner.zig");
 
