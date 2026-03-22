@@ -6,8 +6,8 @@ const serve = @import("./cli/commands/serve.zig");
 const bench = @import("./cli/commands/bench.zig");
 const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
-const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
-const initHandler = @import("./cli/handlers/init.zig").handleInit;
+const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
+const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
 const cli_flags = @import("./cli/flags.zig");
 
