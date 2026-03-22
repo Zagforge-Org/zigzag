@@ -182,6 +182,30 @@ Settings are applied from lowest to highest priority (later values win):
 
 When the first `--paths` CLI flag is encountered, all file-loaded paths are replaced. Same for `--ignores`. Scalar fields (skip_cache, watch, etc.) always take the last CLI value. `--no-watch` is a permanent override: it forces `watch = false` regardless of the config file.
 
+## Config Fields
+
+All fields supported in `zig.conf.json`:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `paths` | `string[]` | `[]` | Directories to scan |
+| `ignores` | `string[]` | `[]` | Patterns to exclude from scanning |
+| `skip_cache` | `bool` | `false` | Bypass the cache and rebuild from scratch |
+| `small_threshold` | `number` | `1048576` | File size limit (bytes) for full in-memory reads |
+| `mmap_threshold` | `number` | `16777216` | File size limit (bytes) for memory-mapped I/O |
+| `timezone` | `string\|null` | `null` | Timezone offset for report timestamps |
+| `output` | `string` | `"report.md"` | Output filename for Markdown reports |
+| `watch` | `bool` | `false` | Enable filesystem watch mode |
+| `log` | `bool` | `false` | Enable logging output |
+| `json_output` | `bool` | `false` | Generate JSON reports |
+| `html_output` | `bool` | `false` | Generate HTML dashboards |
+| `output_dir` | `string` | `"zigzag-reports"` | Output directory for all reports |
+| `llm_report` | `bool` | `false` | Enable LLM-optimized reporting |
+| `llm_max_lines` | `number` | `150` | Max lines per file in LLM reports |
+| `llm_description` | `string\|null` | `null` | Project description for LLM reports |
+| `llm_chunk_size` | `number\|string\|null` | `null` | Split LLM report into chunks of this size. `null` or `0` = single file. Accepts numeric bytes or string with `k`/`m` suffixes (e.g. `500000` or `"500k"`) |
+| `upload` | `bool` | `false` | Upload scan result to ZagForge. Requires `ZAGFORGE_API_KEY` env var or `~/.zagforge/credentials` |
+
 ## LLM Report
 
 Pass `--llm-report` (or set `"llm_report": true` in `zig.conf.json`) to generate a condensed report alongside the Markdown file. The LLM report is written as `report.llm.md` in the same directory.
@@ -349,7 +373,7 @@ Pass `--json` (or set `"json_output": true`) to generate a machine-readable JSON
 ```json
 {
   "meta": {
-    "version": "0.14.2",
+    "version": "0.16.0",
     "generated_at_ns": 1738245534000000000,
     "scanned_paths": ["./src"]
   },
