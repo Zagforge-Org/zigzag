@@ -27,6 +27,7 @@ pub const Config = struct {
     timezone_offset: ?i64, // Offset in seconds from UTC (e.g., 3600 for UTC+1)
     version: []const u8 = VERSION,
     watch: bool,
+    upload: bool,
     log: bool,
     output: ?[]u8, // Output filename; null means "report.md"
     json_output: bool, // Emit report.json alongside report.md
@@ -64,6 +65,7 @@ pub const Config = struct {
             .n_threads = std.Thread.getCpuCount() catch 1,
             .timezone_offset = null,
             .watch = false,
+            .upload = false,
             .log = false,
             .output = null,
             .json_output = false,
@@ -182,6 +184,9 @@ pub const Config = struct {
                 self._output_dir_allocated = true;
             }
         }
+
+        // Upload
+        if (conf.upload) |v| self.upload = v;
 
         // LLM report
         if (conf.llm_report) |v| self.llm_report = v;
