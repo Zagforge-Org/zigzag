@@ -1,25 +1,26 @@
 const std = @import("std");
 const Config = @import("./commands/config/config.zig").Config;
 
-const versionHandler = @import("./handlers/version.zig").printVersion;
-const helpHandler = @import("./handlers/help.zig").printHelp;
-const skipCacheHandler = @import("./handlers/skip_cache.zig").handleSkipCache;
-const smallHandler = @import("./handlers/small.zig").handleSmall;
-const mmapHandler = @import("./handlers/mmap.zig").handleMmap;
-const pathHandler = @import("./handlers/path.zig").handlePaths;
-const ignoreHandler = @import("./handlers/ignore.zig").handleIgnores;
-const timezoneHandler = @import("./handlers/timezone.zig").handleTimezone;
-const watchHandler = @import("./handlers/watch.zig").handleWatch;
-const noWatchHandler = @import("./handlers/no_watch.zig").handleNoWatch;
-const outputHandler = @import("./handlers/output.zig").handleOutput;
-const outputDirHandler = @import("./handlers/output_dir.zig").handleOutputDir;
-const jsonHandler = @import("./handlers/json.zig").handleJson;
-const htmlHandler = @import("./handlers/html.zig").handleHtml;
-const llmReportHandler = @import("./handlers/llm_report.zig").handleLlmReport;
-const chunkSizeHandler = @import("./handlers/chunk_size.zig").handleChunkSize;
-const portHandler = @import("./handlers/port.zig").handlePort;
-const logHandler = @import("./handlers/log.zig").handleLog;
-const openHandler = @import("./handlers/open.zig").handleOpen;
+const versionHandler = @import("./handlers/display/version.zig").printVersion;
+const helpHandler = @import("./handlers/display/help.zig").printHelp;
+const skipCacheHandler = @import("./handlers/flags/skip_cache.zig").handleSkipCache;
+const smallHandler = @import("./handlers/flags/small.zig").handleSmall;
+const mmapHandler = @import("./handlers/flags/mmap.zig").handleMmap;
+const pathHandler = @import("./handlers/flags/path.zig").handlePaths;
+const ignoreHandler = @import("./handlers/flags/ignore.zig").handleIgnores;
+const timezoneHandler = @import("./handlers/flags/timezone.zig").handleTimezone;
+const watchHandler = @import("./handlers/flags/watch.zig").handleWatch;
+const noWatchHandler = @import("./handlers/flags/no_watch.zig").handleNoWatch;
+const outputHandler = @import("./handlers/flags/output.zig").handleOutput;
+const outputDirHandler = @import("./handlers/flags/output_dir.zig").handleOutputDir;
+const jsonHandler = @import("./handlers/flags/json.zig").handleJson;
+const htmlHandler = @import("./handlers/flags/html.zig").handleHtml;
+const llmReportHandler = @import("./handlers/flags/llm_report.zig").handleLlmReport;
+const chunkSizeHandler = @import("./handlers/flags/chunk_size.zig").handleChunkSize;
+const portHandler = @import("./handlers/flags/port.zig").handlePort;
+const logHandler = @import("./handlers/flags/log.zig").handleLog;
+const openHandler = @import("./handlers/flags/open.zig").handleOpen;
+const uploadHandler = @import("./handlers/flags/upload.zig").handleUpload;
 
 ///  FlagsHandler represents a command-line flag.
 pub const FlagsHandler = struct {
@@ -48,4 +49,5 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--port", .takes_value = true, .handler = &portHandler },
     .{ .name = "--log", .takes_value = false, .handler = &logHandler },
     .{ .name = "--open", .takes_value = false, .handler = &openHandler },
+    .{ .name = "--upload", .takes_value = false, .handler = &uploadHandler },
 };

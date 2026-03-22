@@ -6,8 +6,8 @@ const serve = @import("./cli/commands/serve.zig");
 const bench = @import("./cli/commands/bench.zig");
 const report = @import("./cli/commands/report.zig");
 const CacheImpl = @import("cache/impl.zig").CacheImpl;
-const printAsciiLogo = @import("./cli/handlers/logo.zig").printAsciiLogo;
-const initHandler = @import("./cli/handlers/init.zig").handleInit;
+const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
+const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
 const cli_flags = @import("./cli/flags.zig");
 
@@ -156,6 +156,13 @@ pub fn main() !void {
                 }) catch |err| {
                     lg.printError("serve error: {s}", .{@errorName(err)});
                 };
+                return;
+            }
+
+            // Warn when --upload is set but no scan will run
+            if (typedCfg.upload and !is_run_command) {
+                lg.printWarn("--upload has no effect without the 'run' subcommand", .{});
+                lg.printWarn("Usage: zigzag run --upload", .{});
                 return;
             }
 

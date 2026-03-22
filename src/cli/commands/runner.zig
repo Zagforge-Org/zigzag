@@ -1,6 +1,7 @@
 const std = @import("std");
 const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
+const upload_mod = @import("../handlers/upload/upload.zig");
 const Config = @import("config/config.zig").Config;
 const CacheImpl = @import("../../cache/impl.zig").CacheImpl;
 const Pool = @import("../../workers/pool.zig").Pool;
@@ -135,6 +136,13 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
         reports_mod.writeCombinedReports(all_results.items, failed_paths, cfg, allocator, logger) catch |err| {
             lg.printError("Combined report error: {s}", .{@errorName(err)});
             if (logger) |l| l.log("ERROR writing combined report: {s}", .{@errorName(err)});
+        };
+    }
+
+    // Upload snapshot to Zagforge if --upload was passed.
+    if (cfg.upload) {
+        upload_mod.performUpload(all_results.items, cfg, allocator) catch |err| {
+            lg.printError("Upload error: {s}", .{@errorName(err)});
         };
     }
 
