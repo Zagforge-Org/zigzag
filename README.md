@@ -25,6 +25,7 @@ A blazing-fast code analytics tool that converts source code into comprehensive 
 - **LLM report** (`--llm-report`) — condensed, token-efficient report with per-file condensation; supports chunking via `--chunk-size` for large codebases
 - **Phase progress** — scan / aggregate / write phase indicators on stderr with a final rich summary (machine info, timings, file counts)
 - **Bench subcommand** — per-phase timing table with CPU model and core count
+- **Upload to ZagForge** (`--upload`) — pushes the scan result to ZagForge; runs once on initial scan in watch mode
 
 ## Installation
 
@@ -95,7 +96,8 @@ zigzag init
   "llm_report": false,
   "llm_max_lines": 150,
   "llm_description": null,
-  "llm_chunk_size": null
+  "llm_chunk_size": null,
+  "upload": false
 }
 ```
 
@@ -129,7 +131,8 @@ zigzag run --watch
   "llm_report": true,
   "llm_max_lines": 150,
   "llm_description": null,
-  "llm_chunk_size": "500k"
+  "llm_chunk_size": "500k",
+  "upload": false
 }
 ```
 
@@ -167,6 +170,7 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--chunk-size` | `string` | — | Split the LLM report into chunks of this size (e.g. `500k`, `2m`). Omit or set to `null` in config for a single file. |
 | `--log` | `bool` | `false` | Enable logging. |
 | `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
+| `--upload` | `bool` | `false` | Upload the scan result to ZagForge. Requires `ZAGFORGE_API_KEY` env var or `~/.zagforge/credentials`. Only effective with the `run` subcommand or in watch mode (uploads once on initial scan). |
 
 ## Config Loading Priority
 
@@ -294,6 +298,8 @@ Events are debounced: rapid changes within a 50 ms window are batched into a sin
 
 In HTML mode, a lightweight `.stamp` sidecar file is written alongside the HTML report. The browser polls the stamp file instead of the full HTML, then fetches the HTML only when the stamp changes.
 
+When `--upload` is also active, ZigZag uploads the initial snapshot once after the first scan and does not re-upload on subsequent changes.
+
 Use `--no-watch` to override `"watch": true` set in `zig.conf.json` and run a single-shot report instead:
 
 ```bash
@@ -301,6 +307,38 @@ zigzag run --no-watch
 ```
 
 Press `Ctrl+C` to stop.
+
+## Upload
+
+Pass `--upload` (or set `"upload": true` in `zig.conf.json`) to push the scan result to [ZagForge](https://zagforge.com) after the report is written.
+
+```bash
+zigzag run --upload
+```
+
+### Authentication
+
+The API key is discovered in this order:
+
+1. `ZAGFORGE_API_KEY` environment variable
+2. `~/.zagforge/credentials` file containing a `ZAGFORGE_API_KEY=zf_pk_…` line
+
+### Watch mode behaviour
+
+When `--upload` is active in watch mode, ZigZag uploads the initial snapshot once after the first scan completes. It does **not** re-upload on subsequent file changes — use `zigzag run --upload` for one-shot uploads.
+
+### Timeout
+
+Upload requests time out after **30 seconds**. If the request fails, an error is printed to stderr and the watch loop continues.
+
+### Using `--upload` without `run`
+
+Passing `--upload` without the `run` subcommand (i.e. in flag-only mode) has no effect. ZigZag will print a warning:
+
+```
+warning: --upload has no effect without the 'run' subcommand
+warning: Usage: zigzag run --upload
+```
 
 ## JSON Output
 
