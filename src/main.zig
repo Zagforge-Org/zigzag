@@ -159,6 +159,13 @@ pub fn main() !void {
                 return;
             }
 
+            // Warn when --upload is set but no scan will run
+            if (typedCfg.upload and !is_run_command) {
+                lg.printWarn("--upload has no effect without the 'run' subcommand", .{});
+                lg.printWarn("Usage: zigzag run --upload", .{});
+                return;
+            }
+
             // Only initialize cache and run if paths are configured and is_run_command is true
             if (typedCfg.paths.items.len > 0 and is_run_command) {
                 // Create cache directory path (./.cache)

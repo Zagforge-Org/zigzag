@@ -13,6 +13,8 @@ const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
 const ProgressBar = lg.ProgressBar;
 const ProcessStats = @import("../stats.zig").ProcessStats;
+const ScanResult = @import("../runner/scan.zig").ScanResult;
+const upload_mod = @import("../../handlers/upload/upload.zig");
 
 inline fn nsElapsed(start: i128) u64 {
     const delta = std.time.nanoTimestamp() - start;
@@ -164,6 +166,25 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
         if (states.items.len > 1) {
             reporter.writeCombinedReport(states.items, cfg, null, &.{}, allocator);
         }
+    }
+
+    // Upload initial snapshot once if --upload was requested.
+    // Never repeated during the watch loop — use `zigzag run --upload` for one-shot uploads.
+    if (cfg.upload) {
+        lg.printStep("Uploading initial snapshot...", .{});
+        const results = try allocator.alloc(ScanResult, states.items.len);
+        defer allocator.free(results);
+        for (states.items, 0..) |state, i| {
+            results[i] = .{
+                .root_path = state.root_path,
+                .file_entries = state.file_entries,
+                .binary_entries = state.binary_entries,
+                .stats = ProcessStats.init(),
+            };
+        }
+        upload_mod.performUpload(results, cfg, allocator) catch |err| {
+            lg.printError("Upload failed: {s}", .{@errorName(err)});
+        };
     }
 
     // Set up OS-level filesystem watcher
