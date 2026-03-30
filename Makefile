@@ -1,21 +1,20 @@
 .PHONY: build test run compile_commands
 
-build:
-	echo "Building project..."
-	zig build -Doptimize=ReleaseFast
-
 AST_CFLAGS := -std=gnu99 \
 	-Iast/vendor/tree-sitter/include \
 	-Iast/vendor/tree-sitter/src \
 	-Iast/src \
 	-Iast/grammars/tree-sitter-python/src
 
+build:
+	zig build -Doptimize=ReleaseFast
+
 test:
 	mkdir -p .zig-cache
-	zig cc -c $(AST_CFLAGS) ast/vendor/tree-sitter/src/lib.c       -o .zig-cache/ts_lib.o
-	zig cc -c $(AST_CFLAGS) ast/grammars/tree-sitter-python/src/parser.c  -o .zig-cache/ts_parser.o
+	zig cc -c $(AST_CFLAGS) ast/vendor/tree-sitter/src/lib.c -o .zig-cache/ts_lib.o
+	zig cc -c $(AST_CFLAGS) ast/grammars/tree-sitter-python/src/parser.c -o .zig-cache/ts_parser.o
 	zig cc -c $(AST_CFLAGS) ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_scanner.o
-	zig cc -c $(AST_CFLAGS) ast/src/chunker.c                      -o .zig-cache/ts_chunker.o
+	zig cc -c $(AST_CFLAGS) ast/src/chunker.c -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_lib.o .zig-cache/ts_parser.o .zig-cache/ts_scanner.o .zig-cache/ts_chunker.o
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
 

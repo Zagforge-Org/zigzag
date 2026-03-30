@@ -40,17 +40,18 @@ jobs:
             - name: Bundle dashboard template
               shell: bash
               run: python3 src/templates/bundle.py
-            - name: Run tests
+            - name: Compile AST library
               shell: bash
               run: |
-                  mkdir -p .zig-cache
                   CFLAGS="-std=gnu99 -Iast/vendor/tree-sitter/include -Iast/vendor/tree-sitter/src -Iast/src -Iast/grammars/tree-sitter-python/src"
-                  zig cc -c $CFLAGS ast/vendor/tree-sitter/src/lib.c                      -o .zig-cache/ts_lib.o
-                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/parser.c          -o .zig-cache/ts_parser.o
-                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/scanner.c         -o .zig-cache/ts_scanner.o
-                  zig cc -c $CFLAGS ast/src/chunker.c                                     -o .zig-cache/ts_chunker.o
+                  mkdir -p .zig-cache
+                  zig cc -c $CFLAGS ast/vendor/tree-sitter/src/lib.c -o .zig-cache/ts_lib.o
+                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/parser.c -o .zig-cache/ts_parser.o
+                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_scanner.o
+                  zig cc -c $CFLAGS ast/src/chunker.c -o .zig-cache/ts_chunker.o
                   zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_lib.o .zig-cache/ts_parser.o .zig-cache/ts_scanner.o .zig-cache/ts_chunker.o
-                  zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
+            - name: Run tests
+              run: zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
 
     build:
         name: Build (${{ matrix.target }})
