@@ -37,6 +37,21 @@ pub fn build(b: *std.Build) void {
     mod.addImport("options", opts_mod);
     mod.link_libc = true;
 
+    // AST chunker — tree-sitter C sources
+    mod.addCSourceFiles(.{
+        .root = b.path("ast"),
+        .files = &.{
+            "vendor/tree-sitter/src/lib.c",
+            "grammars/tree-sitter-python/src/parser.c",
+            "grammars/tree-sitter-python/src/scanner.c",
+            "src/chunker.c",
+        },
+        .flags = &.{"-std=gnu99"},
+    });
+    mod.addIncludePath(b.path("ast/vendor/tree-sitter/include"));
+    mod.addIncludePath(b.path("ast/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
+
     // Define the Executable
     const exe = b.addExecutable(.{
         .name = "zigzag",
