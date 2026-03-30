@@ -13,6 +13,7 @@ USECASES.md
 PLAN.md
 report.html
 *.html.stamp
+bin
 
 .DS_Store
 __pycache__/
