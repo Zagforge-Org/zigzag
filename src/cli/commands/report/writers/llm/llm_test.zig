@@ -128,3 +128,58 @@ test "writeLlmReport includes llm_description when set" {
     try std.testing.expect(std.mem.indexOf(u8, written, "## Project Description") != null);
     try std.testing.expect(std.mem.indexOf(u8, written, "A great tool.") != null);
 }
+
+test "writeLlmReport emits AST chunks for Python files" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    defer alloc.free(tmp_path);
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+    cfg.llm_max_lines = 150;
+
+    const py_content =
+        \\def greet():
+        \\    pass
+        \\
+        \\def farewell():
+        \\    pass
+        \\
+    ;
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("src/hello.py", .{
+        .path = "src/hello.py",
+        .content = @constCast(py_content),
+        .size = py_content.len,
+        .mtime = 0,
+        .extension = ".py",
+        .line_count = 6,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    const llm_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.llm.md" });
+    defer alloc.free(llm_path);
+
+    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    defer data.deinit();
+
+    try writeLlmReport(&data, 0, llm_path, "src", &cfg, 0, alloc);
+
+    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    defer alloc.free(written);
+
+    // AST chunks appear in output
+    try std.testing.expect(std.mem.indexOf(u8, written, "src/hello.py [1–2]") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "src/hello.py [4–5]") != null);
+    // File index shows AST chunks count
+    try std.testing.expect(std.mem.indexOf(u8, written, "2 AST chunks") != null);
+    // No condensed marker
+    try std.testing.expect(std.mem.indexOf(u8, written, "lines omitted]") == null);
+}
