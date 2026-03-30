@@ -1,6 +1,8 @@
 [submodule "ast/vendor/tree-sitter"]
 	path = ast/vendor/tree-sitter
 	url = https://github.com/tree-sitter/tree-sitter
+	shallow = true
 [submodule "ast/grammars/tree-sitter-python"]
 	path = ast/grammars/tree-sitter-python
 	url = https://github.com/tree-sitter/tree-sitter-python
+	shallow = true

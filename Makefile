@@ -18,7 +18,11 @@ TS_OBJS := \
 	.zig-cache/ts_chunker.o
 
 init:
-	git submodule update --init --recursive
+	git submodule update --init --depth 1
+	git -C ast/vendor/tree-sitter sparse-checkout init --cone
+	git -C ast/vendor/tree-sitter sparse-checkout set lib
+	git -C ast/grammars/tree-sitter-python sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-python sparse-checkout set src
 
 build:
 	zig build -Doptimize=ReleaseFast
