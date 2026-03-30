@@ -39,17 +39,25 @@ pub fn build(b: *std.Build) void {
 
     // AST chunker — tree-sitter C sources
     mod.addCSourceFiles(.{
+        .root = b.path("ast/vendor/tree-sitter/lib/src"),
+        .files = &.{
+            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",  "parser.c",             "query.c",   "stack.c",
+            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+        },
+        .flags = &.{"-std=gnu99"},
+    });
+    mod.addCSourceFiles(.{
         .root = b.path("ast"),
         .files = &.{
-            "vendor/tree-sitter/src/lib.c",
             "grammars/tree-sitter-python/src/parser.c",
             "grammars/tree-sitter-python/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
     });
-    mod.addIncludePath(b.path("ast/vendor/tree-sitter/include"));
-    mod.addIncludePath(b.path("ast/vendor/tree-sitter/src"));
+    mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
+    mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));
     mod.addIncludePath(b.path("ast/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
 
@@ -98,17 +106,25 @@ pub fn build(b: *std.Build) void {
     test_mod.addImport("options", fallback_opts_mod);
     test_mod.link_libc = true;
     test_mod.addCSourceFiles(.{
+        .root = b.path("ast/vendor/tree-sitter/lib/src"),
+        .files = &.{
+            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",  "parser.c",             "query.c",   "stack.c",
+            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+        },
+        .flags = &.{"-std=gnu99"},
+    });
+    test_mod.addCSourceFiles(.{
         .root = b.path("ast"),
         .files = &.{
-            "vendor/tree-sitter/src/lib.c",
             "grammars/tree-sitter-python/src/parser.c",
             "grammars/tree-sitter-python/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
     });
-    test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/include"));
-    test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/src"));
+    test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
+    test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));
     test_mod.addIncludePath(b.path("ast/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
 

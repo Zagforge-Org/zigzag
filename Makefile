@@ -1,10 +1,21 @@
 .PHONY: build init test run compile_commands
 
-AST_CFLAGS := -std=gnu99 \
-	-Iast/vendor/tree-sitter/include \
-	-Iast/vendor/tree-sitter/src \
+TS_SRC   := ast/vendor/tree-sitter/lib/src
+TS_FLAGS := -std=gnu99 \
+	-Iast/vendor/tree-sitter/lib/include \
+	-Iast/vendor/tree-sitter/lib/src \
 	-Iast/src \
 	-Iast/grammars/tree-sitter-python/src
+
+TS_OBJS := \
+	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
+	.zig-cache/ts_language.o .zig-cache/ts_lexer.o \
+	.zig-cache/ts_node.o .zig-cache/ts_parser.o \
+	.zig-cache/ts_query.o .zig-cache/ts_stack.o \
+	.zig-cache/ts_subtree.o .zig-cache/ts_tree_cursor.o \
+	.zig-cache/ts_tree.o .zig-cache/ts_wasm_store.o \
+	.zig-cache/ts_py_parser.o .zig-cache/ts_py_scanner.o \
+	.zig-cache/ts_chunker.o
 
 init:
 	git submodule update --init --recursive
@@ -14,11 +25,22 @@ build:
 
 test:
 	mkdir -p .zig-cache
-	zig cc -c $(AST_CFLAGS) ast/vendor/tree-sitter/src/lib.c -o .zig-cache/ts_lib.o
-	zig cc -c $(AST_CFLAGS) ast/grammars/tree-sitter-python/src/parser.c -o .zig-cache/ts_parser.o
-	zig cc -c $(AST_CFLAGS) ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_scanner.o
-	zig cc -c $(AST_CFLAGS) ast/src/chunker.c -o .zig-cache/ts_chunker.o
-	zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_lib.o .zig-cache/ts_parser.o .zig-cache/ts_scanner.o .zig-cache/ts_chunker.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/alloc.c              -o .zig-cache/ts_alloc.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/get_changed_ranges.c -o .zig-cache/ts_get_changed_ranges.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/language.c           -o .zig-cache/ts_language.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/lexer.c              -o .zig-cache/ts_lexer.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/node.c               -o .zig-cache/ts_node.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/parser.c             -o .zig-cache/ts_parser.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/query.c              -o .zig-cache/ts_query.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/stack.c              -o .zig-cache/ts_stack.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/subtree.c            -o .zig-cache/ts_subtree.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/tree_cursor.c        -o .zig-cache/ts_tree_cursor.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/tree.c               -o .zig-cache/ts_tree.o
+	zig cc -c $(TS_FLAGS) $(TS_SRC)/wasm_store.c         -o .zig-cache/ts_wasm_store.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-python/src/parser.c  -o .zig-cache/ts_py_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_py_scanner.o
+	zig cc -c $(TS_FLAGS) ast/src/chunker.c              -o .zig-cache/ts_chunker.o
+	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
 
 run:

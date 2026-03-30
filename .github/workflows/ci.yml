@@ -47,13 +47,25 @@ jobs:
             - name: Compile AST library
               shell: bash
               run: |
-                  CFLAGS="-std=gnu99 -Iast/vendor/tree-sitter/include -Iast/vendor/tree-sitter/src -Iast/src -Iast/grammars/tree-sitter-python/src"
+                  TS=ast/vendor/tree-sitter/lib/src
+                  F="-std=gnu99 -Iast/vendor/tree-sitter/lib/include -Iast/vendor/tree-sitter/lib/src -Iast/src -Iast/grammars/tree-sitter-python/src"
                   mkdir -p .zig-cache
-                  zig cc -c $CFLAGS ast/vendor/tree-sitter/src/lib.c -o .zig-cache/ts_lib.o
-                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/parser.c -o .zig-cache/ts_parser.o
-                  zig cc -c $CFLAGS ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_scanner.o
-                  zig cc -c $CFLAGS ast/src/chunker.c -o .zig-cache/ts_chunker.o
-                  zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_lib.o .zig-cache/ts_parser.o .zig-cache/ts_scanner.o .zig-cache/ts_chunker.o
+                  zig cc -c $F $TS/alloc.c              -o .zig-cache/ts_alloc.o
+                  zig cc -c $F $TS/get_changed_ranges.c -o .zig-cache/ts_get_changed_ranges.o
+                  zig cc -c $F $TS/language.c           -o .zig-cache/ts_language.o
+                  zig cc -c $F $TS/lexer.c              -o .zig-cache/ts_lexer.o
+                  zig cc -c $F $TS/node.c               -o .zig-cache/ts_node.o
+                  zig cc -c $F $TS/parser.c             -o .zig-cache/ts_parser.o
+                  zig cc -c $F $TS/query.c              -o .zig-cache/ts_query.o
+                  zig cc -c $F $TS/stack.c              -o .zig-cache/ts_stack.o
+                  zig cc -c $F $TS/subtree.c            -o .zig-cache/ts_subtree.o
+                  zig cc -c $F $TS/tree_cursor.c        -o .zig-cache/ts_tree_cursor.o
+                  zig cc -c $F $TS/tree.c               -o .zig-cache/ts_tree.o
+                  zig cc -c $F $TS/wasm_store.c         -o .zig-cache/ts_wasm_store.o
+                  zig cc -c $F ast/grammars/tree-sitter-python/src/parser.c  -o .zig-cache/ts_py_parser.o
+                  zig cc -c $F ast/grammars/tree-sitter-python/src/scanner.c -o .zig-cache/ts_py_scanner.o
+                  zig cc -c $F ast/src/chunker.c                             -o .zig-cache/ts_chunker.o
+                  zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o .zig-cache/ts_language.o .zig-cache/ts_lexer.o .zig-cache/ts_node.o .zig-cache/ts_parser.o .zig-cache/ts_query.o .zig-cache/ts_stack.o .zig-cache/ts_subtree.o .zig-cache/ts_tree_cursor.o .zig-cache/ts_tree.o .zig-cache/ts_wasm_store.o .zig-cache/ts_py_parser.o .zig-cache/ts_py_scanner.o .zig-cache/ts_chunker.o
             - name: Run tests
               shell: bash
               run: zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
