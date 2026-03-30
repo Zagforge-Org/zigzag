@@ -16,6 +16,8 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v6
+              with:
+                  submodules: recursive
             - uses: mlugg/setup-zig@v2
               with:
                   version: "0.15.2"
@@ -31,6 +33,8 @@ jobs:
                 os: [ubuntu-latest, macos-latest, windows-latest]
         steps:
             - uses: actions/checkout@v6
+              with:
+                  submodules: recursive
             - uses: mlugg/setup-zig@v2
               with:
                   version: "0.15.2"
@@ -73,6 +77,8 @@ jobs:
                       archive: zigzag-x86_64-windows.zip
         steps:
             - uses: actions/checkout@v6
+              with:
+                  submodules: recursive
             - uses: mlugg/setup-zig@v2
               with:
                   version: "0.15.2"

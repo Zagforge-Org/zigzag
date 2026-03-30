@@ -1,10 +1,13 @@
-.PHONY: build test run compile_commands
+.PHONY: build init test run compile_commands
 
 AST_CFLAGS := -std=gnu99 \
 	-Iast/vendor/tree-sitter/include \
 	-Iast/vendor/tree-sitter/src \
 	-Iast/src \
 	-Iast/grammars/tree-sitter-python/src
+
+init:
+	git submodule update --init --recursive
 
 build:
 	zig build -Doptimize=ReleaseFast
