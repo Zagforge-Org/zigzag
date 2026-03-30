@@ -161,7 +161,7 @@ jobs:
                   AARCH64_LINUX_SHA=$(sha256sum zigzag-aarch64-linux.tar.gz | awk '{print $1}')
                   X86_64_LINUX_SHA=$(sha256sum zigzag-x86_64-linux.tar.gz | awk '{print $1}')
 
-                  git clone https://x-access-token:${TAP_TOKEN}@github.com/LegationPro/homebrew-zigzag.git tap
+                  git clone https://x-access-token:${TAP_TOKEN}@github.com/Zagforge-Org/homebrew-zigzag.git tap
                   cd tap
 
                   # Update version field and all download URLs
