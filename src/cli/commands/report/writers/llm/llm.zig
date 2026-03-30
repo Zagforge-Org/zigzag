@@ -7,6 +7,7 @@ const content_mod = @import("../content.zig");
 const isBoilerplate = content_mod.isBoilerplate;
 const condenseContent = content_mod.condenseContent;
 const ChunkWriter = @import("chunk_writer.zig").ChunkWriter;
+const ast_chunker = @import("ast_chunker.zig");
 
 const VERSION = @import("../../../config/config.zig").VERSION;
 
@@ -38,26 +39,40 @@ pub fn writeLlmReport(
     // LangCount: used for counting per-language files in LLM report
     const LangCount = struct { name: []const u8, count: usize };
 
+    const FileContent = union(enum) {
+        condensed: []u8,
+        ast: []ast_chunker.Chunk,
+    };
+
     var lang_map = std.StringHashMap(usize).init(allocator);
     defer lang_map.deinit();
 
     var original_lines: u64 = 0;
     var condensed_lines: u64 = 0;
 
-    var condensed_contents: std.ArrayList([]u8) = .empty;
+    var file_contents: std.ArrayList(FileContent) = .empty;
     defer {
-        for (condensed_contents.items) |c| allocator.free(c);
-        condensed_contents.deinit(allocator);
+        for (file_contents.items) |fc| switch (fc) {
+            .condensed => |s| allocator.free(s),
+            .ast => |chunks| allocator.free(chunks),
+        };
+        file_contents.deinit(allocator);
     }
 
     for (real_entries.items) |*entry| {
         original_lines += @intCast(entry.line_count);
 
-        const condensed = try condenseContent(allocator, entry.content, entry.extension, cfg.llm_max_lines);
-        try condensed_contents.append(allocator, condensed);
-
-        const newlines = std.mem.count(u8, condensed, "\n");
-        condensed_lines += @intCast(newlines);
+        if (try ast_chunker.chunkSource(entry.content, entry.extension, allocator)) |chunks| {
+            for (chunks) |chunk| {
+                condensed_lines += (chunk.end_line - chunk.start_line) + 1;
+            }
+            try file_contents.append(allocator, .{ .ast = chunks });
+        } else {
+            const condensed = try condenseContent(allocator, entry.content, entry.extension, cfg.llm_max_lines);
+            const newlines = std.mem.count(u8, condensed, "\n");
+            condensed_lines += @intCast(newlines);
+            try file_contents.append(allocator, .{ .condensed = condensed });
+        }
 
         const lang = entry.getLanguage();
         if (lang.len > 0) {
@@ -148,34 +163,56 @@ pub fn writeLlmReport(
 
         // Per-file blocks
         const llm_shown_lines: usize = 80;
-        for (real_entries.items, condensed_contents.items) |entry, condensed| {
-            const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+        for (real_entries.items, file_contents.items) |entry, fc| {
             const lang = entry.getLanguage();
 
             var fw: std.io.Writer.Allocating = .init(allocator);
             defer fw.deinit();
             const fw_w = &fw.writer;
 
-            if (is_condensed) {
-                try fw_w.print(
-                    "### {s} *(condensed — {d} of {d} lines shown)*\n",
-                    .{ entry.path, llm_shown_lines, entry.line_count },
-                );
-            } else {
-                try fw_w.print("### {s}\n", .{entry.path});
+            switch (fc) {
+                .ast => |chunks| {
+                    for (chunks) |chunk| {
+                        try fw_w.print("### {s} [{d}–{d}]\n", .{
+                            entry.path,
+                            chunk.start_line + 1,
+                            chunk.end_line + 1,
+                        });
+                        if (lang.len > 0) {
+                            try fw_w.print("```{s}\n", .{lang});
+                        } else {
+                            try fw_w.writeAll("```\n");
+                        }
+                        const chunk_content = getLineRange(entry.content, chunk.start_line, chunk.end_line);
+                        try fw_w.writeAll(chunk_content);
+                        if (chunk_content.len > 0 and chunk_content[chunk_content.len - 1] != '\n') {
+                            try fw_w.writeByte('\n');
+                        }
+                        try fw_w.writeAll("```\n\n");
+                    }
+                },
+                .condensed => |condensed| {
+                    const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+                    if (is_condensed) {
+                        try fw_w.print(
+                            "### {s} *(condensed — {d} of {d} lines shown)*\n",
+                            .{ entry.path, llm_shown_lines, entry.line_count },
+                        );
+                    } else {
+                        try fw_w.print("### {s}\n", .{entry.path});
+                    }
+                    if (lang.len > 0) {
+                        try fw_w.print("```{s}\n", .{lang});
+                    } else {
+                        try fw_w.writeAll("```\n");
+                    }
+                    try fw_w.writeAll(condensed);
+                    if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
+                        try fw_w.writeByte('\n');
+                    }
+                    try fw_w.writeAll("```\n\n");
+                },
             }
-
-            if (lang.len > 0) {
-                try fw_w.print("```{s}\n", .{lang});
-            } else {
-                try fw_w.writeAll("```\n");
-            }
-
-            try fw_w.writeAll(condensed);
-            if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
-                try fw_w.writeByte('\n');
-            }
-            try fw_w.writeAll("```\n\n");
 
             const block = try allocator.dupe(u8, fw.written());
             defer allocator.free(block);
@@ -241,49 +278,97 @@ pub fn writeLlmReport(
     // File Index
     const llm_shown_lines: usize = 80; // head (60) + tail (20) from condenseContent
     try w.writeAll("## File Index\n");
-    for (real_entries.items, condensed_contents.items) |entry, condensed| {
-        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
-        if (is_condensed) {
-            try w.print(
-                "- {s} (condensed — {d} of {d} lines shown)\n",
-                .{ entry.path, llm_shown_lines, entry.line_count },
-            );
-        } else {
-            try w.print("- {s} ({d} lines, full)\n", .{ entry.path, entry.line_count });
+    for (real_entries.items, file_contents.items) |entry, fc| {
+        switch (fc) {
+            .ast => |chunks| {
+                try w.print("- {s} ({d} AST chunks)\n", .{ entry.path, chunks.len });
+            },
+            .condensed => |condensed| {
+                const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+                if (is_condensed) {
+                    try w.print(
+                        "- {s} (condensed — {d} of {d} lines shown)\n",
+                        .{ entry.path, llm_shown_lines, entry.line_count },
+                    );
+                } else {
+                    try w.print("- {s} ({d} lines, full)\n", .{ entry.path, entry.line_count });
+                }
+            },
         }
     }
     try w.writeByte('\n');
 
     // Source
     try w.writeAll("## Source\n\n");
-    for (real_entries.items, condensed_contents.items) |entry, condensed| {
-        const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+    for (real_entries.items, file_contents.items) |entry, fc| {
         const lang = entry.getLanguage();
 
-        if (is_condensed) {
-            try w.print(
-                "### {s} *(condensed — {d} of {d} lines shown)*\n",
-                .{ entry.path, llm_shown_lines, entry.line_count },
-            );
-        } else {
-            try w.print("### {s}\n", .{entry.path});
+        switch (fc) {
+            .ast => |chunks| {
+                for (chunks) |chunk| {
+                    try w.print("### {s} [{d}–{d}]\n", .{
+                        entry.path,
+                        chunk.start_line + 1,
+                        chunk.end_line + 1,
+                    });
+                    if (lang.len > 0) {
+                        try w.print("```{s}\n", .{lang});
+                    } else {
+                        try w.writeAll("```\n");
+                    }
+                    const chunk_content = getLineRange(entry.content, chunk.start_line, chunk.end_line);
+                    try w.writeAll(chunk_content);
+                    if (chunk_content.len > 0 and chunk_content[chunk_content.len - 1] != '\n') {
+                        try w.writeByte('\n');
+                    }
+                    try w.writeAll("```\n\n");
+                }
+            },
+            .condensed => |condensed| {
+                const is_condensed = std.mem.indexOf(u8, condensed, " lines omitted]") != null;
+                if (is_condensed) {
+                    try w.print(
+                        "### {s} *(condensed — {d} of {d} lines shown)*\n",
+                        .{ entry.path, llm_shown_lines, entry.line_count },
+                    );
+                } else {
+                    try w.print("### {s}\n", .{entry.path});
+                }
+                if (lang.len > 0) {
+                    try w.print("```{s}\n", .{lang});
+                } else {
+                    try w.writeAll("```\n");
+                }
+                try w.writeAll(condensed);
+                if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
+                    try w.writeByte('\n');
+                }
+                try w.writeAll("```\n\n");
+            },
         }
-
-        if (lang.len > 0) {
-            try w.print("```{s}\n", .{lang});
-        } else {
-            try w.writeAll("```\n");
-        }
-
-        try w.writeAll(condensed);
-        if (condensed.len > 0 and condensed[condensed.len - 1] != '\n') {
-            try w.writeByte('\n');
-        }
-        try w.writeAll("```\n\n");
     }
 
     // Write to disk
     var llm_file = try std.fs.cwd().createFile(llm_path, .{ .truncate = true });
     defer llm_file.close();
     try llm_file.writeAll(aw.written());
+}
+
+/// Extracts lines [start_line..=end_line] (0-based) from content as a slice.
+/// The returned slice points into content — no allocation.
+fn getLineRange(content: []const u8, start_line: u32, end_line: u32) []const u8 {
+    var line: u32 = 0;
+    var i: usize = 0;
+
+    // Advance to start_line
+    while (i < content.len and line < start_line) : (i += 1) {
+        if (content[i] == '\n') line += 1;
+    }
+    const start_byte = i;
+
+    // Advance past end_line
+    while (i < content.len and line <= end_line) : (i += 1) {
+        if (content[i] == '\n') line += 1;
+    }
+    return content[start_byte..i];
 }

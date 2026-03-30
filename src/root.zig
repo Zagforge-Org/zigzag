@@ -60,6 +60,7 @@ test {
     _ = @import("./cli/commands/report/writers/html/html_test.zig");
     _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
     _ = @import("./cli/commands/report/writers/llm/chunk_writer_test.zig");
+    _ = @import("./cli/commands/report/writers/llm/ast_chunker_test.zig");
     _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
     _ = @import("./conf/file_test.zig");

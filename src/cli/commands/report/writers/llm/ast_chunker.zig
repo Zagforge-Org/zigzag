@@ -1,0 +1,83 @@
+const std = @import("std");
+
+// Extern declarations matching chunker.h / tree_sitter/api.h
+// Using opaque type for TSLanguage — we never inspect its internals.
+const TSLanguage = opaque {};
+
+const CChunk = extern struct {
+    start_line: u32,
+    end_line: u32,
+};
+
+const ChunkConfig = extern struct {
+    node_types: [*c]const [*c]const u8,
+    node_type_count: u32,
+};
+
+const ChunkResult = extern struct {
+    chunks: [*c]CChunk,
+    count: u32,
+};
+
+extern fn extract_chunks(language: *const TSLanguage, config: *const ChunkConfig, source: [*c]const u8, length: u32) ChunkResult;
+extern fn free_chunk_result(result: ChunkResult) void;
+extern fn tree_sitter_python() *const TSLanguage;
+
+const python_types = [_][*c]const u8{
+    "function_definition",
+    "class_definition",
+    "decorated_definition",
+};
+
+pub const Chunk = struct {
+    start_line: u32, // 0-based (tree-sitter row)
+    end_line: u32, // 0-based, inclusive
+};
+
+const LanguageConfig = struct {
+    language: *const TSLanguage,
+    node_types: []const [*c]const u8,
+};
+
+fn languageConfig(ext: []const u8) ?LanguageConfig {
+    // entry.extension always has a leading dot — strip it
+    const e = if (ext.len > 0 and ext[0] == '.') ext[1..] else ext;
+    if (std.mem.eql(u8, e, "py")) {
+        return .{
+            .language = tree_sitter_python(),
+            .node_types = &python_types,
+        };
+    }
+    return null;
+}
+
+/// Returns null if the extension is unsupported or no top-level chunks are found.
+/// Caller owns the returned slice; free with allocator.free().
+pub fn chunkSource(
+    source: []const u8,
+    ext: []const u8,
+    allocator: std.mem.Allocator,
+) !?[]Chunk {
+    const lc = languageConfig(ext) orelse return null;
+
+    const config = ChunkConfig{
+        .node_types = @ptrCast(lc.node_types.ptr),
+        .node_type_count = @intCast(lc.node_types.len),
+    };
+
+    const result = extract_chunks(
+        lc.language,
+        &config,
+        source.ptr,
+        @intCast(source.len),
+    );
+    defer free_chunk_result(result);
+
+    if (result.count == 0) return null;
+
+    const chunks = try allocator.alloc(Chunk, result.count);
+    for (result.chunks[0..result.count], chunks) |raw, *out| {
+        out.* = .{ .start_line = raw.start_line, .end_line = raw.end_line };
+    }
+    return chunks;
+}
