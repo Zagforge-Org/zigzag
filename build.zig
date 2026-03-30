@@ -81,12 +81,37 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
-    // Testing
+    // Testing — use fallback options (version 0.0.0) so isRuntime() = true and runtime tests run
+    const fallback_opts_mod = b.createModule(.{
+        .root_source_file = b.path("src/cli/version/fallback.zig"),
+    });
+
     const test_step = b.step("test", "Run library and executable tests");
 
     // Module Tests (Unit tests in src/root.zig and its children)
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_mod.addImport("options", fallback_opts_mod);
+    test_mod.link_libc = true;
+    test_mod.addCSourceFiles(.{
+        .root = b.path("ast"),
+        .files = &.{
+            "vendor/tree-sitter/src/lib.c",
+            "grammars/tree-sitter-python/src/parser.c",
+            "grammars/tree-sitter-python/src/scanner.c",
+            "src/chunker.c",
+        },
+        .flags = &.{"-std=gnu99"},
+    });
+    test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/include"));
+    test_mod.addIncludePath(b.path("ast/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
+
     const mod_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = test_mod,
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
     test_step.dependOn(&run_mod_tests.step);
@@ -96,7 +121,7 @@ pub fn build(b: *std.Build) void {
         .root_module = exe.root_module,
     });
     exe_tests.root_module.link_libc = true;
-    exe_tests.root_module.addImport("options", opts_mod);
+    exe_tests.root_module.addImport("options", fallback_opts_mod);
 
     const run_exe_tests = b.addRunArtifact(exe_tests);
     test_step.dependOn(&run_exe_tests.step);
