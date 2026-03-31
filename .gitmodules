@@ -27,3 +27,6 @@
 [submodule "ast/grammars/tree-sitter-cpp"]
 	path = ast/grammars/tree-sitter-cpp
 	url = https://github.com/tree-sitter/tree-sitter-cpp
+[submodule "ast/grammars/tree-sitter-java"]
+	path = ast/grammars/tree-sitter-java
+	url = https://github.com/tree-sitter/tree-sitter-java
