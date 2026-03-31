@@ -30,3 +30,6 @@
 [submodule "ast/grammars/tree-sitter-java"]
 	path = ast/grammars/tree-sitter-java
 	url = https://github.com/tree-sitter/tree-sitter-java
+[submodule "ast/grammars/tree-sitter-c-sharp"]
+	path = ast/grammars/tree-sitter-c-sharp
+	url = https://github.com/tree-sitter/tree-sitter-c-sharp
