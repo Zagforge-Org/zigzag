@@ -87,7 +87,28 @@ jobs:
               shell: bash
               run: |
                   TS=ast/vendor/tree-sitter/lib/src
-                  F="-std=gnu11 -Iast/vendor/tree-sitter/lib/include -Iast/vendor/tree-sitter/lib/src -Iast/src -Iast/grammars/tree-sitter-python/src -Iast/grammars/tree-sitter-javascript/src -Iast/grammars/tree-sitter-zig/src -Iast/grammars/tree-sitter-typescript/typescript/src -Iast/grammars/tree-sitter-typescript/tsx/src -Iast/grammars/tree-sitter-rust/src -Iast/grammars/tree-sitter-go/src -Iast/grammars/tree-sitter-c/src -Iast/grammars/tree-sitter-cpp/src -Iast/grammars/tree-sitter-java/src -Iast/grammars/tree-sitter-c-sharp/src -Iast/grammars/tree-sitter-ruby/src -Iast/grammars/tree-sitter-elixir/src -Iast/grammars/tree-sitter-kotlin/src -Iast/grammars/tree-sitter-swift/src -Iast/grammars/tree-sitter-lua/src -Iast/grammars/tree-sitter-bash/src -Iast/grammars/tree-sitter-php/php/src"
+                  F="-std=gnu11 \
+                      -Iast/vendor/tree-sitter/lib/include \
+                      -Iast/vendor/tree-sitter/lib/src \
+                      -Iast/src \
+                      -Iast/grammars/tree-sitter-python/src \
+                      -Iast/grammars/tree-sitter-javascript/src \
+                      -Iast/grammars/tree-sitter-zig/src \
+                      -Iast/grammars/tree-sitter-typescript/typescript/src \
+                      -Iast/grammars/tree-sitter-typescript/tsx/src \
+                      -Iast/grammars/tree-sitter-rust/src \
+                      -Iast/grammars/tree-sitter-go/src \
+                      -Iast/grammars/tree-sitter-c/src \
+                      -Iast/grammars/tree-sitter-cpp/src \
+                      -Iast/grammars/tree-sitter-java/src \
+                      -Iast/grammars/tree-sitter-c-sharp/src \
+                      -Iast/grammars/tree-sitter-ruby/src \
+                      -Iast/grammars/tree-sitter-elixir/src \
+                      -Iast/grammars/tree-sitter-kotlin/src \
+                      -Iast/grammars/tree-sitter-swift/src \
+                      -Iast/grammars/tree-sitter-lua/src \
+                      -Iast/grammars/tree-sitter-bash/src \
+                      -Iast/grammars/tree-sitter-php/php/src"
                   mkdir -p .zig-cache
                   zig cc -c $F $TS/alloc.c              -o .zig-cache/ts_alloc.o
                   zig cc -c $F $TS/get_changed_ranges.c -o .zig-cache/ts_get_changed_ranges.o
@@ -134,7 +155,52 @@ jobs:
                   zig cc -c $F ast/grammars/tree-sitter-php/php/src/parser.c                   -o .zig-cache/ts_php_parser.o
                   zig cc -c $F ast/grammars/tree-sitter-php/php/src/scanner.c                  -o .zig-cache/ts_php_scanner.o
                   zig cc -c $F ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
-                  zig ar rcs .zig-cache/ts_ast.a .zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o .zig-cache/ts_language.o .zig-cache/ts_lexer.o .zig-cache/ts_node.o .zig-cache/ts_parser.o .zig-cache/ts_query.o .zig-cache/ts_stack.o .zig-cache/ts_subtree.o .zig-cache/ts_tree_cursor.o .zig-cache/ts_tree.o .zig-cache/ts_wasm_store.o .zig-cache/ts_py_parser.o .zig-cache/ts_py_scanner.o .zig-cache/ts_js_parser.o .zig-cache/ts_js_scanner.o .zig-cache/ts_zig_parser.o .zig-cache/ts_ts_parser.o .zig-cache/ts_ts_scanner.o .zig-cache/ts_tsx_parser.o .zig-cache/ts_tsx_scanner.o .zig-cache/ts_rust_parser.o .zig-cache/ts_rust_scanner.o .zig-cache/ts_go_parser.o .zig-cache/ts_c_parser.o .zig-cache/ts_cpp_parser.o .zig-cache/ts_cpp_scanner.o .zig-cache/ts_java_parser.o .zig-cache/ts_cs_parser.o .zig-cache/ts_cs_scanner.o .zig-cache/ts_ruby_parser.o .zig-cache/ts_ruby_scanner.o .zig-cache/ts_elixir_parser.o .zig-cache/ts_elixir_scanner.o .zig-cache/ts_kotlin_parser.o .zig-cache/ts_kotlin_scanner.o .zig-cache/ts_swift_parser.o .zig-cache/ts_swift_scanner.o .zig-cache/ts_lua_parser.o .zig-cache/ts_lua_scanner.o .zig-cache/ts_bash_parser.o .zig-cache/ts_bash_scanner.o .zig-cache/ts_php_parser.o .zig-cache/ts_php_scanner.o .zig-cache/ts_chunker.o
+                  zig ar rcs .zig-cache/ts_ast.a \
+                      .zig-cache/ts_alloc.o \
+                      .zig-cache/ts_get_changed_ranges.o \
+                      .zig-cache/ts_language.o \
+                      .zig-cache/ts_lexer.o \
+                      .zig-cache/ts_node.o \
+                      .zig-cache/ts_parser.o \
+                      .zig-cache/ts_query.o \
+                      .zig-cache/ts_stack.o \
+                      .zig-cache/ts_subtree.o \
+                      .zig-cache/ts_tree_cursor.o \
+                      .zig-cache/ts_tree.o \
+                      .zig-cache/ts_wasm_store.o \
+                      .zig-cache/ts_py_parser.o \
+                      .zig-cache/ts_py_scanner.o \
+                      .zig-cache/ts_js_parser.o \
+                      .zig-cache/ts_js_scanner.o \
+                      .zig-cache/ts_zig_parser.o \
+                      .zig-cache/ts_ts_parser.o \
+                      .zig-cache/ts_ts_scanner.o \
+                      .zig-cache/ts_tsx_parser.o \
+                      .zig-cache/ts_tsx_scanner.o \
+                      .zig-cache/ts_rust_parser.o \
+                      .zig-cache/ts_rust_scanner.o \
+                      .zig-cache/ts_go_parser.o \
+                      .zig-cache/ts_c_parser.o \
+                      .zig-cache/ts_cpp_parser.o \
+                      .zig-cache/ts_cpp_scanner.o \
+                      .zig-cache/ts_java_parser.o \
+                      .zig-cache/ts_cs_parser.o \
+                      .zig-cache/ts_cs_scanner.o \
+                      .zig-cache/ts_ruby_parser.o \
+                      .zig-cache/ts_ruby_scanner.o \
+                      .zig-cache/ts_elixir_parser.o \
+                      .zig-cache/ts_elixir_scanner.o \
+                      .zig-cache/ts_kotlin_parser.o \
+                      .zig-cache/ts_kotlin_scanner.o \
+                      .zig-cache/ts_swift_parser.o \
+                      .zig-cache/ts_swift_scanner.o \
+                      .zig-cache/ts_lua_parser.o \
+                      .zig-cache/ts_lua_scanner.o \
+                      .zig-cache/ts_bash_parser.o \
+                      .zig-cache/ts_bash_scanner.o \
+                      .zig-cache/ts_php_parser.o \
+                      .zig-cache/ts_php_scanner.o \
+                      .zig-cache/ts_chunker.o
             - name: Run tests
               shell: bash
               run: zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
