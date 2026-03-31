@@ -33,3 +33,6 @@
 [submodule "ast/grammars/tree-sitter-c-sharp"]
 	path = ast/grammars/tree-sitter-c-sharp
 	url = https://github.com/tree-sitter/tree-sitter-c-sharp
+[submodule "ast/grammars/tree-sitter-ruby"]
+	path = ast/grammars/tree-sitter-ruby
+	url = https://github.com/tree-sitter/tree-sitter-ruby
