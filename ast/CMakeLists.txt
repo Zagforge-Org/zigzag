@@ -167,5 +167,16 @@ target_include_directories(tree-sitter-swift
     PRIVATE grammars/tree-sitter-swift/src
 )
 
+add_library(tree-sitter-lua
+    grammars/tree-sitter-lua/src/parser.c
+    grammars/tree-sitter-lua/src/scanner.c
+)
+
+set_target_properties(tree-sitter-lua PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-lua
+    PRIVATE grammars/tree-sitter-lua/src
+)
+
 add_executable(ast-parser src/main.c src/file_reader.c src/chunker.c)
-target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go tree-sitter-c tree-sitter-cpp tree-sitter-java tree-sitter-c-sharp tree-sitter-ruby tree-sitter-elixir tree-sitter-kotlin tree-sitter-swift)
+target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go tree-sitter-c tree-sitter-cpp tree-sitter-java tree-sitter-c-sharp tree-sitter-ruby tree-sitter-elixir tree-sitter-kotlin tree-sitter-swift tree-sitter-lua)

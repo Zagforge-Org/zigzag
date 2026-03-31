@@ -42,6 +42,7 @@ TS_INCLUDE_FLAGS = [
     "-Iast/grammars/tree-sitter-elixir/src",
     "-Iast/grammars/tree-sitter-kotlin/src",
     "-Iast/grammars/tree-sitter-swift/src",
+    "-Iast/grammars/tree-sitter-lua/src",
 ]
 
 TS_C_SOURCES = [
@@ -83,6 +84,8 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-kotlin/src/scanner.c", CACHE / "ts_kotlin_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-swift/src/parser.c", CACHE / "ts_swift_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-swift/src/scanner.c", CACHE / "ts_swift_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-lua/src/parser.c", CACHE / "ts_lua_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-lua/src/scanner.c", CACHE / "ts_lua_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -307,6 +310,14 @@ def init():
                 f = tar.extractfile(tar.getmember(member_name))
                 dest.write_bytes(f.read())
     print("  tree-sitter-swift sources downloaded.")
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-lua", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-lua", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
     print("Submodules initialized.")
 
 
