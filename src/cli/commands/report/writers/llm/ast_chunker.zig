@@ -35,6 +35,7 @@ extern fn tree_sitter_c_sharp() *const TSLanguage;
 extern fn tree_sitter_ruby() *const TSLanguage;
 extern fn tree_sitter_elixir() *const TSLanguage;
 extern fn tree_sitter_kotlin() *const TSLanguage;
+extern fn tree_sitter_swift() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -75,6 +76,14 @@ const rust_types = [_][*c]const u8{
     "trait_item",
     "impl_item",
     "type_item",
+};
+
+const swift_types = [_][*c]const u8{
+    "function_declaration",
+    "class_declaration", // covers class, struct, actor, enum, extension
+    "protocol_declaration",
+    "init_declaration",
+    "typealias_declaration",
 };
 
 const kotlin_types = [_][*c]const u8{
@@ -220,6 +229,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_kotlin(),
             .node_types = &kotlin_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "swift")) {
+        return .{
+            .language = tree_sitter_swift(),
+            .node_types = &swift_types,
         };
     }
     return null;

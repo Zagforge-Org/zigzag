@@ -9,13 +9,18 @@ Usage:
     python scripts/setup.py all      # init + build + test
 """
 
+import io
 import shutil
 import subprocess
 import sys
+import tarfile
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".zig-cache"
+
+SWIFT_PARSER_URL = "https://github.com/alex-pinkus/tree-sitter-swift/releases/download/0.7.1/tree-sitter-swift.tar.gz"
 
 TS_SRC = ROOT / "ast/vendor/tree-sitter/lib/src"
 TS_INCLUDE_FLAGS = [
@@ -36,6 +41,7 @@ TS_INCLUDE_FLAGS = [
     "-Iast/grammars/tree-sitter-ruby/src",
     "-Iast/grammars/tree-sitter-elixir/src",
     "-Iast/grammars/tree-sitter-kotlin/src",
+    "-Iast/grammars/tree-sitter-swift/src",
 ]
 
 TS_C_SOURCES = [
@@ -75,6 +81,8 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-elixir/src/scanner.c", CACHE / "ts_elixir_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-kotlin/src/parser.c", CACHE / "ts_kotlin_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-kotlin/src/scanner.c", CACHE / "ts_kotlin_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-swift/src/parser.c", CACHE / "ts_swift_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-swift/src/scanner.c", CACHE / "ts_swift_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -274,6 +282,31 @@ def init():
         ["git", "-C", "ast/grammars/tree-sitter-kotlin", "sparse-checkout", "set", "src"],
         cwd=ROOT,
     )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-swift", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-swift", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    # tree-sitter-swift does not commit parser.c or tree_sitter/ headers;
+    # download pre-generated files from release tarball
+    print("  Downloading tree-sitter-swift sources from release tarball...")
+    swift_src = ROOT / "ast/grammars/tree-sitter-swift/src"
+    (swift_src / "tree_sitter").mkdir(exist_ok=True)
+    extract = {
+        "./src/parser.c": swift_src / "parser.c",
+        "./src/tree_sitter/parser.h": swift_src / "tree_sitter/parser.h",
+        "./src/tree_sitter/alloc.h": swift_src / "tree_sitter/alloc.h",
+        "./src/tree_sitter/array.h": swift_src / "tree_sitter/array.h",
+    }
+    with urllib.request.urlopen(SWIFT_PARSER_URL) as resp:
+        with tarfile.open(fileobj=io.BytesIO(resp.read()), mode="r:gz") as tar:
+            for member_name, dest in extract.items():
+                f = tar.extractfile(tar.getmember(member_name))
+                dest.write_bytes(f.read())
+    print("  tree-sitter-swift sources downloaded.")
     print("Submodules initialized.")
 
 
