@@ -1,7 +1,7 @@
 .PHONY: build init test run compile_commands
 
 TS_SRC   := ast/vendor/tree-sitter/lib/src
-TS_FLAGS := -std=gnu99 \
+TS_FLAGS := -std=gnu11 \
 	-Iast/vendor/tree-sitter/lib/include \
 	-Iast/vendor/tree-sitter/lib/src \
 	-Iast/src \

@@ -67,7 +67,7 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-cpp/src/scanner.c",
             "src/chunker.c",
         },
-        .flags = &.{"-std=gnu99"},
+        .flags = &.{"-std=gnu11"},
     });
     mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
     mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));
@@ -155,7 +155,7 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-cpp/src/scanner.c",
             "src/chunker.c",
         },
-        .flags = &.{"-std=gnu99"},
+        .flags = &.{"-std=gnu11"},
     });
     test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
     test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));

@@ -66,7 +66,7 @@ jobs:
               shell: bash
               run: |
                   TS=ast/vendor/tree-sitter/lib/src
-                  F="-std=gnu99 -Iast/vendor/tree-sitter/lib/include -Iast/vendor/tree-sitter/lib/src -Iast/src -Iast/grammars/tree-sitter-python/src -Iast/grammars/tree-sitter-javascript/src -Iast/grammars/tree-sitter-zig/src -Iast/grammars/tree-sitter-typescript/typescript/src -Iast/grammars/tree-sitter-typescript/tsx/src -Iast/grammars/tree-sitter-rust/src -Iast/grammars/tree-sitter-go/src -Iast/grammars/tree-sitter-c/src -Iast/grammars/tree-sitter-cpp/src"
+                  F="-std=gnu11 -Iast/vendor/tree-sitter/lib/include -Iast/vendor/tree-sitter/lib/src -Iast/src -Iast/grammars/tree-sitter-python/src -Iast/grammars/tree-sitter-javascript/src -Iast/grammars/tree-sitter-zig/src -Iast/grammars/tree-sitter-typescript/typescript/src -Iast/grammars/tree-sitter-typescript/tsx/src -Iast/grammars/tree-sitter-rust/src -Iast/grammars/tree-sitter-go/src -Iast/grammars/tree-sitter-c/src -Iast/grammars/tree-sitter-cpp/src"
                   mkdir -p .zig-cache
                   zig cc -c $F $TS/alloc.c              -o .zig-cache/ts_alloc.o
                   zig cc -c $F $TS/get_changed_ranges.c -o .zig-cache/ts_get_changed_ranges.o

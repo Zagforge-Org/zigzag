@@ -235,7 +235,7 @@ def test():
 
     for src, obj in TS_C_SOURCES:
         run(
-            ["zig", "cc", "-c", "-std=gnu99"]
+            ["zig", "cc", "-c", "-std=gnu11"]
             + TS_INCLUDE_FLAGS
             + [str(src), "-o", str(obj)],
             cwd=ROOT,
