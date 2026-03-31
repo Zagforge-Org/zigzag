@@ -18,3 +18,6 @@
 [submodule "ast/grammars/tree-sitter-rust"]
 	path = ast/grammars/tree-sitter-rust
 	url = https://github.com/tree-sitter/tree-sitter-rust
+[submodule "ast/grammars/tree-sitter-go"]
+	path = ast/grammars/tree-sitter-go
+	url = https://github.com/tree-sitter/tree-sitter-go
