@@ -48,3 +48,6 @@
 [submodule "ast/grammars/tree-sitter-lua"]
 	path = ast/grammars/tree-sitter-lua
 	url = https://github.com/tree-sitter-grammars/tree-sitter-lua
+[submodule "ast/grammars/tree-sitter-bash"]
+	path = ast/grammars/tree-sitter-bash
+	url = https://github.com/tree-sitter/tree-sitter-bash
