@@ -34,6 +34,7 @@ extern fn tree_sitter_java() *const TSLanguage;
 extern fn tree_sitter_c_sharp() *const TSLanguage;
 extern fn tree_sitter_ruby() *const TSLanguage;
 extern fn tree_sitter_elixir() *const TSLanguage;
+extern fn tree_sitter_kotlin() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -74,6 +75,14 @@ const rust_types = [_][*c]const u8{
     "trait_item",
     "impl_item",
     "type_item",
+};
+
+const kotlin_types = [_][*c]const u8{
+    "function_declaration",
+    "class_declaration",
+    "object_declaration",
+    "companion_object",
+    "property_declaration",
 };
 
 const elixir_types = [_][*c]const u8{
@@ -205,6 +214,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_elixir(),
             .node_types = &elixir_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "kt") or std.mem.eql(u8, e, "kts")) {
+        return .{
+            .language = tree_sitter_kotlin(),
+            .node_types = &kotlin_types,
         };
     }
     return null;
