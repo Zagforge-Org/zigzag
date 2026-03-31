@@ -55,6 +55,10 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-javascript/src/parser.c",
             "grammars/tree-sitter-javascript/src/scanner.c",
             "grammars/tree-sitter-zig/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/scanner.c",
+            "grammars/tree-sitter-typescript/tsx/src/parser.c",
+            "grammars/tree-sitter-typescript/tsx/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
@@ -65,6 +69,8 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-javascript/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
 
     // Define the Executable
     const exe = b.addExecutable(.{
@@ -127,6 +133,10 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-javascript/src/parser.c",
             "grammars/tree-sitter-javascript/src/scanner.c",
             "grammars/tree-sitter-zig/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/scanner.c",
+            "grammars/tree-sitter-typescript/tsx/src/parser.c",
+            "grammars/tree-sitter-typescript/tsx/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
@@ -137,6 +147,8 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-javascript/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
 
     const mod_tests = b.addTest(.{
         .root_module = test_mod,

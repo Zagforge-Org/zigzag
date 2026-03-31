@@ -25,6 +25,8 @@ TS_INCLUDE_FLAGS = [
     "-Iast/grammars/tree-sitter-python/src",
     "-Iast/grammars/tree-sitter-javascript/src",
     "-Iast/grammars/tree-sitter-zig/src",
+    "-Iast/grammars/tree-sitter-typescript/typescript/src",
+    "-Iast/grammars/tree-sitter-typescript/tsx/src",
 ]
 
 TS_C_SOURCES = [
@@ -45,6 +47,10 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-javascript/src/parser.c", CACHE / "ts_js_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-javascript/src/scanner.c", CACHE / "ts_js_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-zig/src/parser.c", CACHE / "ts_zig_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/typescript/src/parser.c", CACHE / "ts_ts_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/typescript/src/scanner.c", CACHE / "ts_ts_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/tsx/src/parser.c", CACHE / "ts_tsx_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/tsx/src/scanner.c", CACHE / "ts_tsx_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -145,6 +151,30 @@ def init():
             "sparse-checkout",
             "set",
             "src",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-typescript",
+            "sparse-checkout",
+            "init",
+            "--cone",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-typescript",
+            "sparse-checkout",
+            "set",
+            "typescript/src",
+            "tsx/src",
+            "common",
         ],
         cwd=ROOT,
     )

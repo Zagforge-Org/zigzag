@@ -38,5 +38,27 @@ target_include_directories(tree-sitter-zig
     PRIVATE grammars/tree-sitter-zig/src
 )
 
+add_library(tree-sitter-typescript
+    grammars/tree-sitter-typescript/typescript/src/parser.c
+    grammars/tree-sitter-typescript/typescript/src/scanner.c
+)
+
+set_target_properties(tree-sitter-typescript PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-typescript
+    PRIVATE grammars/tree-sitter-typescript/typescript/src
+)
+
+add_library(tree-sitter-tsx
+    grammars/tree-sitter-typescript/tsx/src/parser.c
+    grammars/tree-sitter-typescript/tsx/src/scanner.c
+)
+
+set_target_properties(tree-sitter-tsx PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-tsx
+    PRIVATE grammars/tree-sitter-typescript/tsx/src
+)
+
 add_executable(ast-parser src/main.c src/file_reader.c src/chunker.c)
-target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig)
+target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx)

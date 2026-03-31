@@ -24,6 +24,8 @@ extern fn free_chunk_result(result: ChunkResult) void;
 extern fn tree_sitter_python() *const TSLanguage;
 extern fn tree_sitter_javascript() *const TSLanguage;
 extern fn tree_sitter_zig() *const TSLanguage;
+extern fn tree_sitter_typescript() *const TSLanguage;
+extern fn tree_sitter_tsx() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -42,6 +44,15 @@ const zig_types = [_][*c]const u8{
     "function_declaration",
     "variable_declaration",
     "test_declaration",
+};
+
+const typescript_types = [_][*c]const u8{
+    "function_declaration",
+    "class_declaration",
+    "interface_declaration",
+    "type_alias_declaration",
+    "enum_declaration",
+    "export_statement",
 };
 
 pub const Chunk = struct {
@@ -73,6 +84,18 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_zig(),
             .node_types = &zig_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "ts")) {
+        return .{
+            .language = tree_sitter_typescript(),
+            .node_types = &typescript_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "tsx")) {
+        return .{
+            .language = tree_sitter_tsx(),
+            .node_types = &typescript_types,
         };
     }
     return null;
