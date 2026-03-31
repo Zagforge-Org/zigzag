@@ -151,7 +151,7 @@ zigzag run --watch
 
 | Command | Description |
 |---------|-------------|
-| `init`  | Creates `zig.conf.json` with default values in the current directory. No-ops if the file already exists. |
+| `init`  | Creates `zig.conf.json` with default values in the current directory. Warns and skips if the file already exists and is non-empty; overwrites silently if the file exists but is empty. |
 | `run`   | Loads `zig.conf.json` as the base config, then applies any CLI flags on top. Useful for project-level defaults. |
 | `bench` | Runs the full report pipeline and prints a per-phase timing table (scan, aggregate, write) with CPU model and core count to stderr. |
 
@@ -176,8 +176,6 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--json` | `bool` | `false` | Generate a JSON report alongside Markdown. |
 | `--html` | `bool` | `false` | Generate an interactive HTML dashboard alongside Markdown. |
 | `--llm-report` | `bool` | `false` | Generate a condensed LLM-optimised report. |
-| `--llm-max-lines` | `number` | `150` | Maximum lines per file before condensation. |
-| `--llm-description` | `string` | `null` | Optional project description prepended to the LLM report. |
 | `--chunk-size` | `string` | — | Split the LLM report into chunks of this size (e.g. `500k`, `2m`). Omit or set to `null` in config for a single file. |
 | `--log` | `bool` | `false` | Enable logging. |
 | `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
@@ -457,13 +455,7 @@ Cache location: `./.cache/` (relative to working directory)
 
 ### File Reading Strategies
 
-ZigZag automatically selects the optimal reading strategy:
-
-| File Size | Strategy | Description |
-|-----------|----------|-------------|
-| 0 – 1 MiB | `readFileAlloc` | Load entire file into memory |
-| 1 – 16 MiB | `readFileMapped` | Memory-mapped I/O |
-| > 16 MiB | `readFileChunked` | Stream in chunks |
+Files are read fully into memory using `readFileAlloc`. The `--small` and `--mmap` thresholds configure the `readFileAuto` utility (which supports mmap and chunked streaming for large files), but the main processing path loads each file directly into memory regardless of size.
 
 ### Performance Tips
 
