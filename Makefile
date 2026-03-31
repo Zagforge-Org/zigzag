@@ -6,7 +6,8 @@ TS_FLAGS := -std=gnu99 \
 	-Iast/vendor/tree-sitter/lib/src \
 	-Iast/src \
 	-Iast/grammars/tree-sitter-python/src \
-	-Iast/grammars/tree-sitter-javascript/src
+	-Iast/grammars/tree-sitter-javascript/src \
+	-Iast/grammars/tree-sitter-zig/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -17,6 +18,7 @@ TS_OBJS := \
 	.zig-cache/ts_tree.o .zig-cache/ts_wasm_store.o \
 	.zig-cache/ts_py_parser.o .zig-cache/ts_py_scanner.o \
 	.zig-cache/ts_js_parser.o .zig-cache/ts_js_scanner.o \
+	.zig-cache/ts_zig_parser.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -27,6 +29,8 @@ init:
 	git -C ast/grammars/tree-sitter-python sparse-checkout set src
 	git -C ast/grammars/tree-sitter-javascript sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-javascript sparse-checkout set src
+	git -C ast/grammars/tree-sitter-zig sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-zig sparse-checkout set src
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -49,6 +53,7 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-python/src/scanner.c     -o .zig-cache/ts_py_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-javascript/src/parser.c  -o .zig-cache/ts_js_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-javascript/src/scanner.c -o .zig-cache/ts_js_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-zig/src/parser.c         -o .zig-cache/ts_zig_parser.o
 	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a

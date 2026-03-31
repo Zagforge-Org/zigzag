@@ -49,7 +49,7 @@ test "writeLlmReport creates report with correct structure" {
     try std.testing.expect(std.mem.indexOf(u8, written, "## Source") != null);
     try std.testing.expect(std.mem.indexOf(u8, written, "src/main.zig") != null);
     try std.testing.expect(std.mem.indexOf(u8, written, "pub fn main() void {}") != null);
-    try std.testing.expect(std.mem.indexOf(u8, written, "- src/main.zig (1 lines, full)") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "- src/main.zig (1 AST chunks)") != null);
 }
 
 test "writeLlmReport omits boilerplate files" {

@@ -23,6 +23,7 @@ extern fn extract_chunks(language: *const TSLanguage, config: *const ChunkConfig
 extern fn free_chunk_result(result: ChunkResult) void;
 extern fn tree_sitter_python() *const TSLanguage;
 extern fn tree_sitter_javascript() *const TSLanguage;
+extern fn tree_sitter_zig() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -35,6 +36,12 @@ const javascript_types = [_][*c]const u8{
     "class_declaration",
     "generator_function_declaration",
     "export_statement",
+};
+
+const zig_types = [_][*c]const u8{
+    "function_declaration",
+    "variable_declaration",
+    "test_declaration",
 };
 
 pub const Chunk = struct {
@@ -60,6 +67,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_javascript(),
             .node_types = &javascript_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "zig")) {
+        return .{
+            .language = tree_sitter_zig(),
+            .node_types = &zig_types,
         };
     }
     return null;
