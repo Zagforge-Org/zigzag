@@ -11,7 +11,8 @@ TS_FLAGS := -std=gnu99 \
 	-Iast/grammars/tree-sitter-typescript/typescript/src \
 	-Iast/grammars/tree-sitter-typescript/tsx/src \
 	-Iast/grammars/tree-sitter-rust/src \
-	-Iast/grammars/tree-sitter-go/src
+	-Iast/grammars/tree-sitter-go/src \
+	-Iast/grammars/tree-sitter-c/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -27,6 +28,7 @@ TS_OBJS := \
 	.zig-cache/ts_tsx_parser.o .zig-cache/ts_tsx_scanner.o \
 	.zig-cache/ts_rust_parser.o .zig-cache/ts_rust_scanner.o \
 	.zig-cache/ts_go_parser.o \
+	.zig-cache/ts_c_parser.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -45,6 +47,8 @@ init:
 	git -C ast/grammars/tree-sitter-rust sparse-checkout set src
 	git -C ast/grammars/tree-sitter-go sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-go sparse-checkout set src
+	git -C ast/grammars/tree-sitter-c sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-c sparse-checkout set src
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -75,6 +79,7 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-rust/src/parser.c                        -o .zig-cache/ts_rust_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-rust/src/scanner.c                       -o .zig-cache/ts_rust_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-go/src/parser.c                         -o .zig-cache/ts_go_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-c/src/parser.c                          -o .zig-cache/ts_c_parser.o
 	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
