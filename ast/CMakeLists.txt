@@ -112,5 +112,16 @@ target_include_directories(tree-sitter-java
     PRIVATE grammars/tree-sitter-java/src
 )
 
+add_library(tree-sitter-c-sharp
+    grammars/tree-sitter-c-sharp/src/parser.c
+    grammars/tree-sitter-c-sharp/src/scanner.c
+)
+
+set_target_properties(tree-sitter-c-sharp PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-c-sharp
+    PRIVATE grammars/tree-sitter-c-sharp/src
+)
+
 add_executable(ast-parser src/main.c src/file_reader.c src/chunker.c)
-target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go tree-sitter-c tree-sitter-cpp tree-sitter-java)
+target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go tree-sitter-c tree-sitter-cpp tree-sitter-java tree-sitter-c-sharp)

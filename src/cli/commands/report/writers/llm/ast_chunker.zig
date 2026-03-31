@@ -31,6 +31,7 @@ extern fn tree_sitter_go() *const TSLanguage;
 extern fn tree_sitter_c() *const TSLanguage;
 extern fn tree_sitter_cpp() *const TSLanguage;
 extern fn tree_sitter_java() *const TSLanguage;
+extern fn tree_sitter_c_sharp() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -71,6 +72,16 @@ const rust_types = [_][*c]const u8{
     "trait_item",
     "impl_item",
     "type_item",
+};
+
+const csharp_types = [_][*c]const u8{
+    "method_declaration",
+    "class_declaration",
+    "interface_declaration",
+    "enum_declaration",
+    "struct_declaration",
+    "constructor_declaration",
+    "namespace_declaration",
 };
 
 const java_types = [_][*c]const u8{
@@ -162,6 +173,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_java(),
             .node_types = &java_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "cs")) {
+        return .{
+            .language = tree_sitter_c_sharp(),
+            .node_types = &csharp_types,
         };
     }
     return null;
