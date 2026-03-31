@@ -16,7 +16,8 @@ TS_FLAGS := -std=gnu11 \
 	-Iast/grammars/tree-sitter-cpp/src \
 	-Iast/grammars/tree-sitter-java/src \
 	-Iast/grammars/tree-sitter-c-sharp/src \
-	-Iast/grammars/tree-sitter-ruby/src
+	-Iast/grammars/tree-sitter-ruby/src \
+	-Iast/grammars/tree-sitter-elixir/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -37,6 +38,7 @@ TS_OBJS := \
 	.zig-cache/ts_java_parser.o \
 	.zig-cache/ts_cs_parser.o .zig-cache/ts_cs_scanner.o \
 	.zig-cache/ts_ruby_parser.o .zig-cache/ts_ruby_scanner.o \
+	.zig-cache/ts_elixir_parser.o .zig-cache/ts_elixir_scanner.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -65,6 +67,8 @@ init:
 	git -C ast/grammars/tree-sitter-c-sharp sparse-checkout set src
 	git -C ast/grammars/tree-sitter-ruby sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-ruby sparse-checkout set src
+	git -C ast/grammars/tree-sitter-elixir sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-elixir sparse-checkout set src
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -103,6 +107,8 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-c-sharp/src/scanner.c                  -o .zig-cache/ts_cs_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-ruby/src/parser.c                      -o .zig-cache/ts_ruby_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-ruby/src/scanner.c                     -o .zig-cache/ts_ruby_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-elixir/src/parser.c                    -o .zig-cache/ts_elixir_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-elixir/src/scanner.c                   -o .zig-cache/ts_elixir_scanner.o
 	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a

@@ -33,6 +33,7 @@ extern fn tree_sitter_cpp() *const TSLanguage;
 extern fn tree_sitter_java() *const TSLanguage;
 extern fn tree_sitter_c_sharp() *const TSLanguage;
 extern fn tree_sitter_ruby() *const TSLanguage;
+extern fn tree_sitter_elixir() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -73,6 +74,10 @@ const rust_types = [_][*c]const u8{
     "trait_item",
     "impl_item",
     "type_item",
+};
+
+const elixir_types = [_][*c]const u8{
+    "call",
 };
 
 const ruby_types = [_][*c]const u8{
@@ -194,6 +199,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_ruby(),
             .node_types = &ruby_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "ex") or std.mem.eql(u8, e, "exs")) {
+        return .{
+            .language = tree_sitter_elixir(),
+            .node_types = &elixir_types,
         };
     }
     return null;
