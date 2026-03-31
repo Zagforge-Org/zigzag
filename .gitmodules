@@ -42,3 +42,6 @@
 [submodule "ast/grammars/tree-sitter-kotlin"]
 	path = ast/grammars/tree-sitter-kotlin
 	url = https://github.com/fwcd/tree-sitter-kotlin
+[submodule "ast/grammars/tree-sitter-swift"]
+	path = ast/grammars/tree-sitter-swift
+	url = https://github.com/alex-pinkus/tree-sitter-swift
