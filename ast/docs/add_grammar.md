@@ -82,7 +82,11 @@ git -C ast/grammars/tree-sitter-<lang> sparse-checkout init --cone
 git -C ast/grammars/tree-sitter-<lang> sparse-checkout set src
 ```
 
-## 6. `src/cli/commands/report/writers/llm/ast_chunker.zig`
+## 6. `.github/workflows/ci.yml`
+
+In both the `test` and `build` jobs, add the sparse-checkout lines, the include flag in `F`, the two `zig cc` compile steps, and the two `.o` files in the `zig ar` invocation.
+
+## 7. `src/cli/commands/report/writers/llm/ast_chunker.zig`
 
 Add the extern declaration, node types, and extension mapping:
 
