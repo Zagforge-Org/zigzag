@@ -37,6 +37,7 @@ extern fn tree_sitter_elixir() *const TSLanguage;
 extern fn tree_sitter_kotlin() *const TSLanguage;
 extern fn tree_sitter_swift() *const TSLanguage;
 extern fn tree_sitter_lua() *const TSLanguage;
+extern fn tree_sitter_bash() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -77,6 +78,10 @@ const rust_types = [_][*c]const u8{
     "trait_item",
     "impl_item",
     "type_item",
+};
+
+const bash_types = [_][*c]const u8{
+    "function_definition",
 };
 
 const lua_types = [_][*c]const u8{
@@ -247,6 +252,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_lua(),
             .node_types = &lua_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "sh") or std.mem.eql(u8, e, "bash") or std.mem.eql(u8, e, "zsh")) {
+        return .{
+            .language = tree_sitter_bash(),
+            .node_types = &bash_types,
         };
     }
     return null;

@@ -20,7 +20,8 @@ TS_FLAGS := -std=gnu11 \
 	-Iast/grammars/tree-sitter-elixir/src \
 	-Iast/grammars/tree-sitter-kotlin/src \
 	-Iast/grammars/tree-sitter-swift/src \
-	-Iast/grammars/tree-sitter-lua/src
+	-Iast/grammars/tree-sitter-lua/src \
+	-Iast/grammars/tree-sitter-bash/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -45,6 +46,7 @@ TS_OBJS := \
 	.zig-cache/ts_kotlin_parser.o .zig-cache/ts_kotlin_scanner.o \
 	.zig-cache/ts_swift_parser.o .zig-cache/ts_swift_scanner.o \
 	.zig-cache/ts_lua_parser.o .zig-cache/ts_lua_scanner.o \
+	.zig-cache/ts_bash_parser.o .zig-cache/ts_bash_scanner.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -84,6 +86,8 @@ init:
 		  ./src/parser.c ./src/tree_sitter/parser.h ./src/tree_sitter/alloc.h ./src/tree_sitter/array.h
 	git -C ast/grammars/tree-sitter-lua sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-lua sparse-checkout set src
+	git -C ast/grammars/tree-sitter-bash sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-bash sparse-checkout set src
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -130,6 +134,8 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-swift/src/scanner.c                    -o .zig-cache/ts_swift_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-lua/src/parser.c                       -o .zig-cache/ts_lua_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-lua/src/scanner.c                      -o .zig-cache/ts_lua_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/parser.c                      -o .zig-cache/ts_bash_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/scanner.c                     -o .zig-cache/ts_bash_scanner.o
 	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a

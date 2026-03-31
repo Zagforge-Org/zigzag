@@ -43,6 +43,7 @@ TS_INCLUDE_FLAGS = [
     "-Iast/grammars/tree-sitter-kotlin/src",
     "-Iast/grammars/tree-sitter-swift/src",
     "-Iast/grammars/tree-sitter-lua/src",
+    "-Iast/grammars/tree-sitter-bash/src",
 ]
 
 TS_C_SOURCES = [
@@ -86,6 +87,8 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-swift/src/scanner.c", CACHE / "ts_swift_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-lua/src/parser.c", CACHE / "ts_lua_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-lua/src/scanner.c", CACHE / "ts_lua_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-bash/src/parser.c", CACHE / "ts_bash_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-bash/src/scanner.c", CACHE / "ts_bash_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -316,6 +319,14 @@ def init():
     )
     run(
         ["git", "-C", "ast/grammars/tree-sitter-lua", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-bash", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-bash", "sparse-checkout", "set", "src"],
         cwd=ROOT,
     )
     print("Submodules initialized.")
