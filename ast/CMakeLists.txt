@@ -71,5 +71,15 @@ target_include_directories(tree-sitter-rust
     PRIVATE grammars/tree-sitter-rust/src
 )
 
+add_library(tree-sitter-go
+    grammars/tree-sitter-go/src/parser.c
+)
+
+set_target_properties(tree-sitter-go PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-go
+    PRIVATE grammars/tree-sitter-go/src
+)
+
 add_executable(ast-parser src/main.c src/file_reader.c src/chunker.c)
-target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust)
+target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go)
