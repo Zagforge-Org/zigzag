@@ -21,3 +21,6 @@
 [submodule "ast/grammars/tree-sitter-go"]
 	path = ast/grammars/tree-sitter-go
 	url = https://github.com/tree-sitter/tree-sitter-go
+[submodule "ast/grammars/tree-sitter-c"]
+	path = ast/grammars/tree-sitter-c
+	url = https://github.com/tree-sitter/tree-sitter-c
