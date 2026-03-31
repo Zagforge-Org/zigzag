@@ -45,3 +45,6 @@
 [submodule "ast/grammars/tree-sitter-swift"]
 	path = ast/grammars/tree-sitter-swift
 	url = https://github.com/alex-pinkus/tree-sitter-swift
+[submodule "ast/grammars/tree-sitter-lua"]
+	path = ast/grammars/tree-sitter-lua
+	url = https://github.com/tree-sitter-grammars/tree-sitter-lua
