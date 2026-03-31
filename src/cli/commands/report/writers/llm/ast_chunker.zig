@@ -29,6 +29,7 @@ extern fn tree_sitter_tsx() *const TSLanguage;
 extern fn tree_sitter_rust() *const TSLanguage;
 extern fn tree_sitter_go() *const TSLanguage;
 extern fn tree_sitter_c() *const TSLanguage;
+extern fn tree_sitter_cpp() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -114,6 +115,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
     if (std.mem.eql(u8, e, "c") or std.mem.eql(u8, e, "h")) {
         return .{
             .language = tree_sitter_c(),
+            .node_types = &c_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "cpp") or std.mem.eql(u8, e, "cc") or std.mem.eql(u8, e, "cxx") or std.mem.eql(u8, e, "hpp")) {
+        return .{
+            .language = tree_sitter_cpp(),
             .node_types = &c_types,
         };
     }
