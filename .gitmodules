@@ -39,3 +39,6 @@
 [submodule "ast/grammars/tree-sitter-elixir"]
 	path = ast/grammars/tree-sitter-elixir
 	url = https://github.com/elixir-lang/tree-sitter-elixir
+[submodule "ast/grammars/tree-sitter-kotlin"]
+	path = ast/grammars/tree-sitter-kotlin
+	url = https://github.com/fwcd/tree-sitter-kotlin
