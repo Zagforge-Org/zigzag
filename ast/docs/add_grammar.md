@@ -82,7 +82,19 @@ git -C ast/grammars/tree-sitter-<lang> sparse-checkout init --cone
 git -C ast/grammars/tree-sitter-<lang> sparse-checkout set src
 ```
 
-## 6. `src/cli/commands/report/writers/llm/ast_chunker.zig`
+## 6. `.github/workflows/ci.yml`
+
+In both the `test` and `build` jobs, add the sparse-checkout lines, the include flag in `F`, the two `zig cc` compile steps, and the two `.o` files in the `zig ar` invocation.
+
+## Special case: one submodule, multiple grammars
+
+Some repos (e.g. `tree-sitter-typescript`) contain multiple grammars in subdirectories instead of a single `src/`. In that case:
+
+- The sparse-checkout `set` must include all needed subdirectories plus any shared code (e.g. `typescript/src tsx/src common`)
+- Each subdirectory gets its own `add_library` target in CMakeLists, its own include path, its own `.o` files, and its own `extern fn` in `ast_chunker.zig`
+- Check whether the scanners include from a shared directory (`../../common/scanner.h`) — if so, `common` must be in the sparse-checkout or compilation will fail
+
+## 7. `src/cli/commands/report/writers/llm/ast_chunker.zig`
 
 Add the extern declaration, node types, and extension mapping:
 

@@ -1,12 +1,28 @@
 .PHONY: build init test run compile_commands
 
 TS_SRC   := ast/vendor/tree-sitter/lib/src
-TS_FLAGS := -std=gnu99 \
+TS_FLAGS := -std=gnu11 \
 	-Iast/vendor/tree-sitter/lib/include \
 	-Iast/vendor/tree-sitter/lib/src \
 	-Iast/src \
 	-Iast/grammars/tree-sitter-python/src \
-	-Iast/grammars/tree-sitter-javascript/src
+	-Iast/grammars/tree-sitter-javascript/src \
+	-Iast/grammars/tree-sitter-zig/src \
+	-Iast/grammars/tree-sitter-typescript/typescript/src \
+	-Iast/grammars/tree-sitter-typescript/tsx/src \
+	-Iast/grammars/tree-sitter-rust/src \
+	-Iast/grammars/tree-sitter-go/src \
+	-Iast/grammars/tree-sitter-c/src \
+	-Iast/grammars/tree-sitter-cpp/src \
+	-Iast/grammars/tree-sitter-java/src \
+	-Iast/grammars/tree-sitter-c-sharp/src \
+	-Iast/grammars/tree-sitter-ruby/src \
+	-Iast/grammars/tree-sitter-elixir/src \
+	-Iast/grammars/tree-sitter-kotlin/src \
+	-Iast/grammars/tree-sitter-swift/src \
+	-Iast/grammars/tree-sitter-lua/src \
+	-Iast/grammars/tree-sitter-bash/src \
+	-Iast/grammars/tree-sitter-php/php/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -17,6 +33,22 @@ TS_OBJS := \
 	.zig-cache/ts_tree.o .zig-cache/ts_wasm_store.o \
 	.zig-cache/ts_py_parser.o .zig-cache/ts_py_scanner.o \
 	.zig-cache/ts_js_parser.o .zig-cache/ts_js_scanner.o \
+	.zig-cache/ts_zig_parser.o \
+	.zig-cache/ts_ts_parser.o .zig-cache/ts_ts_scanner.o \
+	.zig-cache/ts_tsx_parser.o .zig-cache/ts_tsx_scanner.o \
+	.zig-cache/ts_rust_parser.o .zig-cache/ts_rust_scanner.o \
+	.zig-cache/ts_go_parser.o \
+	.zig-cache/ts_c_parser.o \
+	.zig-cache/ts_cpp_parser.o .zig-cache/ts_cpp_scanner.o \
+	.zig-cache/ts_java_parser.o \
+	.zig-cache/ts_cs_parser.o .zig-cache/ts_cs_scanner.o \
+	.zig-cache/ts_ruby_parser.o .zig-cache/ts_ruby_scanner.o \
+	.zig-cache/ts_elixir_parser.o .zig-cache/ts_elixir_scanner.o \
+	.zig-cache/ts_kotlin_parser.o .zig-cache/ts_kotlin_scanner.o \
+	.zig-cache/ts_swift_parser.o .zig-cache/ts_swift_scanner.o \
+	.zig-cache/ts_lua_parser.o .zig-cache/ts_lua_scanner.o \
+	.zig-cache/ts_bash_parser.o .zig-cache/ts_bash_scanner.o \
+	.zig-cache/ts_php_parser.o .zig-cache/ts_php_scanner.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -27,6 +59,39 @@ init:
 	git -C ast/grammars/tree-sitter-python sparse-checkout set src
 	git -C ast/grammars/tree-sitter-javascript sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-javascript sparse-checkout set src
+	git -C ast/grammars/tree-sitter-zig sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-zig sparse-checkout set src
+	git -C ast/grammars/tree-sitter-typescript sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-typescript sparse-checkout set typescript/src tsx/src common
+	git -C ast/grammars/tree-sitter-rust sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-rust sparse-checkout set src
+	git -C ast/grammars/tree-sitter-go sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-go sparse-checkout set src
+	git -C ast/grammars/tree-sitter-c sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-c sparse-checkout set src
+	git -C ast/grammars/tree-sitter-cpp sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-cpp sparse-checkout set src
+	git -C ast/grammars/tree-sitter-java sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-java sparse-checkout set src
+	git -C ast/grammars/tree-sitter-c-sharp sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-c-sharp sparse-checkout set src
+	git -C ast/grammars/tree-sitter-ruby sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-ruby sparse-checkout set src
+	git -C ast/grammars/tree-sitter-elixir sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-elixir sparse-checkout set src
+	git -C ast/grammars/tree-sitter-kotlin sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-kotlin sparse-checkout set src
+	git -C ast/grammars/tree-sitter-swift sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-swift sparse-checkout set src
+	curl -sL "https://github.com/alex-pinkus/tree-sitter-swift/releases/download/0.7.1/tree-sitter-swift.tar.gz" \
+		| tar -xz -C ast/grammars/tree-sitter-swift/src --strip-components=2 \
+		  ./src/parser.c ./src/tree_sitter/parser.h ./src/tree_sitter/alloc.h ./src/tree_sitter/array.h
+	git -C ast/grammars/tree-sitter-lua sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-lua sparse-checkout set src
+	git -C ast/grammars/tree-sitter-bash sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-bash sparse-checkout set src
+	git -C ast/grammars/tree-sitter-php sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-php sparse-checkout set php/src php_only/src common
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -49,7 +114,35 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-python/src/scanner.c     -o .zig-cache/ts_py_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-javascript/src/parser.c  -o .zig-cache/ts_js_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-javascript/src/scanner.c -o .zig-cache/ts_js_scanner.o
-	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                  -o .zig-cache/ts_chunker.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-zig/src/parser.c                          -o .zig-cache/ts_zig_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-typescript/typescript/src/parser.c        -o .zig-cache/ts_ts_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-typescript/typescript/src/scanner.c       -o .zig-cache/ts_ts_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-typescript/tsx/src/parser.c               -o .zig-cache/ts_tsx_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-typescript/tsx/src/scanner.c              -o .zig-cache/ts_tsx_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-rust/src/parser.c                        -o .zig-cache/ts_rust_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-rust/src/scanner.c                       -o .zig-cache/ts_rust_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-go/src/parser.c                         -o .zig-cache/ts_go_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-c/src/parser.c                          -o .zig-cache/ts_c_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-cpp/src/parser.c                       -o .zig-cache/ts_cpp_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-cpp/src/scanner.c                      -o .zig-cache/ts_cpp_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-java/src/parser.c                      -o .zig-cache/ts_java_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-c-sharp/src/parser.c                   -o .zig-cache/ts_cs_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-c-sharp/src/scanner.c                  -o .zig-cache/ts_cs_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-ruby/src/parser.c                      -o .zig-cache/ts_ruby_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-ruby/src/scanner.c                     -o .zig-cache/ts_ruby_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-elixir/src/parser.c                    -o .zig-cache/ts_elixir_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-elixir/src/scanner.c                   -o .zig-cache/ts_elixir_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-kotlin/src/parser.c                    -o .zig-cache/ts_kotlin_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-kotlin/src/scanner.c                   -o .zig-cache/ts_kotlin_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-swift/src/parser.c                     -o .zig-cache/ts_swift_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-swift/src/scanner.c                    -o .zig-cache/ts_swift_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-lua/src/parser.c                       -o .zig-cache/ts_lua_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-lua/src/scanner.c                      -o .zig-cache/ts_lua_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/parser.c                      -o .zig-cache/ts_bash_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/scanner.c                     -o .zig-cache/ts_bash_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-php/php/src/parser.c                   -o .zig-cache/ts_php_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-php/php/src/scanner.c                  -o .zig-cache/ts_php_scanner.o
+	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
 

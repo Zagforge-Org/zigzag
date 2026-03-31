@@ -54,15 +54,59 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-python/src/scanner.c",
             "grammars/tree-sitter-javascript/src/parser.c",
             "grammars/tree-sitter-javascript/src/scanner.c",
+            "grammars/tree-sitter-zig/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/scanner.c",
+            "grammars/tree-sitter-typescript/tsx/src/parser.c",
+            "grammars/tree-sitter-typescript/tsx/src/scanner.c",
+            "grammars/tree-sitter-rust/src/parser.c",
+            "grammars/tree-sitter-rust/src/scanner.c",
+            "grammars/tree-sitter-go/src/parser.c",
+            "grammars/tree-sitter-c/src/parser.c",
+            "grammars/tree-sitter-cpp/src/parser.c",
+            "grammars/tree-sitter-cpp/src/scanner.c",
+            "grammars/tree-sitter-java/src/parser.c",
+            "grammars/tree-sitter-c-sharp/src/parser.c",
+            "grammars/tree-sitter-c-sharp/src/scanner.c",
+            "grammars/tree-sitter-ruby/src/parser.c",
+            "grammars/tree-sitter-ruby/src/scanner.c",
+            "grammars/tree-sitter-elixir/src/parser.c",
+            "grammars/tree-sitter-elixir/src/scanner.c",
+            "grammars/tree-sitter-kotlin/src/parser.c",
+            "grammars/tree-sitter-kotlin/src/scanner.c",
+            "grammars/tree-sitter-swift/src/parser.c",
+            "grammars/tree-sitter-swift/src/scanner.c",
+            "grammars/tree-sitter-lua/src/parser.c",
+            "grammars/tree-sitter-lua/src/scanner.c",
+            "grammars/tree-sitter-bash/src/parser.c",
+            "grammars/tree-sitter-bash/src/scanner.c",
+            "grammars/tree-sitter-php/php/src/parser.c",
+            "grammars/tree-sitter-php/php/src/scanner.c",
             "src/chunker.c",
         },
-        .flags = &.{"-std=gnu99"},
+        .flags = &.{"-std=gnu11"},
     });
     mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
     mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));
     mod.addIncludePath(b.path("ast/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-javascript/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-rust/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-go/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-c/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-cpp/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-java/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-c-sharp/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-ruby/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-elixir/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-kotlin/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-swift/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-lua/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-bash/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-php/php/src"));
 
     // Define the Executable
     const exe = b.addExecutable(.{
@@ -124,15 +168,59 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-python/src/scanner.c",
             "grammars/tree-sitter-javascript/src/parser.c",
             "grammars/tree-sitter-javascript/src/scanner.c",
+            "grammars/tree-sitter-zig/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/parser.c",
+            "grammars/tree-sitter-typescript/typescript/src/scanner.c",
+            "grammars/tree-sitter-typescript/tsx/src/parser.c",
+            "grammars/tree-sitter-typescript/tsx/src/scanner.c",
+            "grammars/tree-sitter-rust/src/parser.c",
+            "grammars/tree-sitter-rust/src/scanner.c",
+            "grammars/tree-sitter-go/src/parser.c",
+            "grammars/tree-sitter-c/src/parser.c",
+            "grammars/tree-sitter-cpp/src/parser.c",
+            "grammars/tree-sitter-cpp/src/scanner.c",
+            "grammars/tree-sitter-java/src/parser.c",
+            "grammars/tree-sitter-c-sharp/src/parser.c",
+            "grammars/tree-sitter-c-sharp/src/scanner.c",
+            "grammars/tree-sitter-ruby/src/parser.c",
+            "grammars/tree-sitter-ruby/src/scanner.c",
+            "grammars/tree-sitter-elixir/src/parser.c",
+            "grammars/tree-sitter-elixir/src/scanner.c",
+            "grammars/tree-sitter-kotlin/src/parser.c",
+            "grammars/tree-sitter-kotlin/src/scanner.c",
+            "grammars/tree-sitter-swift/src/parser.c",
+            "grammars/tree-sitter-swift/src/scanner.c",
+            "grammars/tree-sitter-lua/src/parser.c",
+            "grammars/tree-sitter-lua/src/scanner.c",
+            "grammars/tree-sitter-bash/src/parser.c",
+            "grammars/tree-sitter-bash/src/scanner.c",
+            "grammars/tree-sitter-php/php/src/parser.c",
+            "grammars/tree-sitter-php/php/src/scanner.c",
             "src/chunker.c",
         },
-        .flags = &.{"-std=gnu99"},
+        .flags = &.{"-std=gnu11"},
     });
     test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/include"));
     test_mod.addIncludePath(b.path("ast/vendor/tree-sitter/lib/src"));
     test_mod.addIncludePath(b.path("ast/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-python/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-javascript/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-rust/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-go/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-c/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-cpp/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-java/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-c-sharp/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-ruby/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-elixir/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-kotlin/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-swift/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-lua/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-bash/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-php/php/src"));
 
     const mod_tests = b.addTest(.{
         .root_module = test_mod,

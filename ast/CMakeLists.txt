@@ -28,5 +28,177 @@ target_include_directories(tree-sitter-javascript
     PRIVATE grammars/tree-sitter-javascript/src
 )
 
+add_library(tree-sitter-zig
+    grammars/tree-sitter-zig/src/parser.c
+)
+
+set_target_properties(tree-sitter-zig PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-zig
+    PRIVATE grammars/tree-sitter-zig/src
+)
+
+add_library(tree-sitter-typescript
+    grammars/tree-sitter-typescript/typescript/src/parser.c
+    grammars/tree-sitter-typescript/typescript/src/scanner.c
+)
+
+set_target_properties(tree-sitter-typescript PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-typescript
+    PRIVATE grammars/tree-sitter-typescript/typescript/src
+)
+
+add_library(tree-sitter-tsx
+    grammars/tree-sitter-typescript/tsx/src/parser.c
+    grammars/tree-sitter-typescript/tsx/src/scanner.c
+)
+
+set_target_properties(tree-sitter-tsx PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-tsx
+    PRIVATE grammars/tree-sitter-typescript/tsx/src
+)
+
+add_library(tree-sitter-rust
+    grammars/tree-sitter-rust/src/parser.c
+    grammars/tree-sitter-rust/src/scanner.c
+)
+
+set_target_properties(tree-sitter-rust PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-rust
+    PRIVATE grammars/tree-sitter-rust/src
+)
+
+add_library(tree-sitter-go
+    grammars/tree-sitter-go/src/parser.c
+)
+
+set_target_properties(tree-sitter-go PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-go
+    PRIVATE grammars/tree-sitter-go/src
+)
+
+add_library(tree-sitter-c
+    grammars/tree-sitter-c/src/parser.c
+)
+
+set_target_properties(tree-sitter-c PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-c
+    PRIVATE grammars/tree-sitter-c/src
+)
+
+add_library(tree-sitter-cpp
+    grammars/tree-sitter-cpp/src/parser.c
+    grammars/tree-sitter-cpp/src/scanner.c
+)
+
+set_target_properties(tree-sitter-cpp PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-cpp
+    PRIVATE grammars/tree-sitter-cpp/src
+)
+
+add_library(tree-sitter-java
+    grammars/tree-sitter-java/src/parser.c
+)
+
+set_target_properties(tree-sitter-java PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-java
+    PRIVATE grammars/tree-sitter-java/src
+)
+
+add_library(tree-sitter-c-sharp
+    grammars/tree-sitter-c-sharp/src/parser.c
+    grammars/tree-sitter-c-sharp/src/scanner.c
+)
+
+set_target_properties(tree-sitter-c-sharp PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-c-sharp
+    PRIVATE grammars/tree-sitter-c-sharp/src
+)
+
+add_library(tree-sitter-ruby
+    grammars/tree-sitter-ruby/src/parser.c
+    grammars/tree-sitter-ruby/src/scanner.c
+)
+
+set_target_properties(tree-sitter-ruby PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-ruby
+    PRIVATE grammars/tree-sitter-ruby/src
+)
+
+add_library(tree-sitter-elixir
+    grammars/tree-sitter-elixir/src/parser.c
+    grammars/tree-sitter-elixir/src/scanner.c
+)
+
+set_target_properties(tree-sitter-elixir PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-elixir
+    PRIVATE grammars/tree-sitter-elixir/src
+)
+
+add_library(tree-sitter-kotlin
+    grammars/tree-sitter-kotlin/src/parser.c
+    grammars/tree-sitter-kotlin/src/scanner.c
+)
+
+set_target_properties(tree-sitter-kotlin PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-kotlin
+    PRIVATE grammars/tree-sitter-kotlin/src
+)
+
+add_library(tree-sitter-swift
+    grammars/tree-sitter-swift/src/parser.c
+    grammars/tree-sitter-swift/src/scanner.c
+)
+
+set_target_properties(tree-sitter-swift PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-swift
+    PRIVATE grammars/tree-sitter-swift/src
+)
+
+add_library(tree-sitter-lua
+    grammars/tree-sitter-lua/src/parser.c
+    grammars/tree-sitter-lua/src/scanner.c
+)
+
+set_target_properties(tree-sitter-lua PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-lua
+    PRIVATE grammars/tree-sitter-lua/src
+)
+
+add_library(tree-sitter-bash
+    grammars/tree-sitter-bash/src/parser.c
+    grammars/tree-sitter-bash/src/scanner.c
+)
+
+set_target_properties(tree-sitter-bash PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-bash
+    PRIVATE grammars/tree-sitter-bash/src
+)
+
+add_library(tree-sitter-php
+    grammars/tree-sitter-php/php/src/parser.c
+    grammars/tree-sitter-php/php/src/scanner.c
+)
+
+set_target_properties(tree-sitter-php PROPERTIES C_STANDARD 99)
+
+target_include_directories(tree-sitter-php
+    PRIVATE grammars/tree-sitter-php/php/src
+)
+
 add_executable(ast-parser src/main.c src/file_reader.c src/chunker.c)
-target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript)
+target_link_libraries(ast-parser PRIVATE tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-zig tree-sitter-typescript tree-sitter-tsx tree-sitter-rust tree-sitter-go tree-sitter-c tree-sitter-cpp tree-sitter-java tree-sitter-c-sharp tree-sitter-ruby tree-sitter-elixir tree-sitter-kotlin tree-sitter-swift tree-sitter-lua tree-sitter-bash tree-sitter-php)

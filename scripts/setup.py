@@ -9,13 +9,18 @@ Usage:
     python scripts/setup.py all      # init + build + test
 """
 
+import io
 import shutil
 import subprocess
 import sys
+import tarfile
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / ".zig-cache"
+
+SWIFT_PARSER_URL = "https://github.com/alex-pinkus/tree-sitter-swift/releases/download/0.7.1/tree-sitter-swift.tar.gz"
 
 TS_SRC = ROOT / "ast/vendor/tree-sitter/lib/src"
 TS_INCLUDE_FLAGS = [
@@ -24,6 +29,22 @@ TS_INCLUDE_FLAGS = [
     "-Iast/src",
     "-Iast/grammars/tree-sitter-python/src",
     "-Iast/grammars/tree-sitter-javascript/src",
+    "-Iast/grammars/tree-sitter-zig/src",
+    "-Iast/grammars/tree-sitter-typescript/typescript/src",
+    "-Iast/grammars/tree-sitter-typescript/tsx/src",
+    "-Iast/grammars/tree-sitter-rust/src",
+    "-Iast/grammars/tree-sitter-go/src",
+    "-Iast/grammars/tree-sitter-c/src",
+    "-Iast/grammars/tree-sitter-cpp/src",
+    "-Iast/grammars/tree-sitter-java/src",
+    "-Iast/grammars/tree-sitter-c-sharp/src",
+    "-Iast/grammars/tree-sitter-ruby/src",
+    "-Iast/grammars/tree-sitter-elixir/src",
+    "-Iast/grammars/tree-sitter-kotlin/src",
+    "-Iast/grammars/tree-sitter-swift/src",
+    "-Iast/grammars/tree-sitter-lua/src",
+    "-Iast/grammars/tree-sitter-bash/src",
+    "-Iast/grammars/tree-sitter-php/php/src",
 ]
 
 TS_C_SOURCES = [
@@ -43,6 +64,34 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-python/src/scanner.c", CACHE / "ts_py_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-javascript/src/parser.c", CACHE / "ts_js_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-javascript/src/scanner.c", CACHE / "ts_js_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-zig/src/parser.c", CACHE / "ts_zig_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/typescript/src/parser.c", CACHE / "ts_ts_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/typescript/src/scanner.c", CACHE / "ts_ts_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/tsx/src/parser.c", CACHE / "ts_tsx_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-typescript/tsx/src/scanner.c", CACHE / "ts_tsx_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-rust/src/parser.c",  CACHE / "ts_rust_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-rust/src/scanner.c", CACHE / "ts_rust_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-go/src/parser.c", CACHE / "ts_go_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-c/src/parser.c",    CACHE / "ts_c_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-cpp/src/parser.c",  CACHE / "ts_cpp_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-cpp/src/scanner.c", CACHE / "ts_cpp_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-java/src/parser.c", CACHE / "ts_java_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-c-sharp/src/parser.c", CACHE / "ts_cs_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-c-sharp/src/scanner.c", CACHE / "ts_cs_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-ruby/src/parser.c", CACHE / "ts_ruby_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-ruby/src/scanner.c", CACHE / "ts_ruby_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-elixir/src/parser.c", CACHE / "ts_elixir_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-elixir/src/scanner.c", CACHE / "ts_elixir_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-kotlin/src/parser.c", CACHE / "ts_kotlin_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-kotlin/src/scanner.c", CACHE / "ts_kotlin_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-swift/src/parser.c", CACHE / "ts_swift_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-swift/src/scanner.c", CACHE / "ts_swift_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-lua/src/parser.c", CACHE / "ts_lua_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-lua/src/scanner.c", CACHE / "ts_lua_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-bash/src/parser.c", CACHE / "ts_bash_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-bash/src/scanner.c", CACHE / "ts_bash_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-php/php/src/parser.c", CACHE / "ts_php_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-php/php/src/scanner.c", CACHE / "ts_php_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -124,6 +173,173 @@ def init():
         ],
         cwd=ROOT,
     )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-zig",
+            "sparse-checkout",
+            "init",
+            "--cone",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-zig",
+            "sparse-checkout",
+            "set",
+            "src",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-typescript",
+            "sparse-checkout",
+            "init",
+            "--cone",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        [
+            "git",
+            "-C",
+            "ast/grammars/tree-sitter-typescript",
+            "sparse-checkout",
+            "set",
+            "typescript/src",
+            "tsx/src",
+            "common",
+        ],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-rust", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-rust", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-go", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-go", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-c", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-c", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-cpp", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-cpp", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-java", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-java", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-c-sharp", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-c-sharp", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-ruby", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-ruby", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-elixir", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-elixir", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-kotlin", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-kotlin", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-swift", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-swift", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    # tree-sitter-swift does not commit parser.c or tree_sitter/ headers;
+    # download pre-generated files from release tarball
+    print("  Downloading tree-sitter-swift sources from release tarball...")
+    swift_src = ROOT / "ast/grammars/tree-sitter-swift/src"
+    (swift_src / "tree_sitter").mkdir(exist_ok=True)
+    extract = {
+        "./src/parser.c": swift_src / "parser.c",
+        "./src/tree_sitter/parser.h": swift_src / "tree_sitter/parser.h",
+        "./src/tree_sitter/alloc.h": swift_src / "tree_sitter/alloc.h",
+        "./src/tree_sitter/array.h": swift_src / "tree_sitter/array.h",
+    }
+    with urllib.request.urlopen(SWIFT_PARSER_URL) as resp:
+        with tarfile.open(fileobj=io.BytesIO(resp.read()), mode="r:gz") as tar:
+            for member_name, dest in extract.items():
+                f = tar.extractfile(tar.getmember(member_name))
+                dest.write_bytes(f.read())
+    print("  tree-sitter-swift sources downloaded.")
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-lua", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-lua", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-bash", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-bash", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-php", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-php", "sparse-checkout", "set", "php/src", "php_only/src", "common"],
+        cwd=ROOT,
+    )
     print("Submodules initialized.")
 
 
@@ -139,7 +355,7 @@ def test():
 
     for src, obj in TS_C_SOURCES:
         run(
-            ["zig", "cc", "-c", "-std=gnu99"]
+            ["zig", "cc", "-c", "-std=gnu11"]
             + TS_INCLUDE_FLAGS
             + [str(src), "-o", str(obj)],
             cwd=ROOT,
