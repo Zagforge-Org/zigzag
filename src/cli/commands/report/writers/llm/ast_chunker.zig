@@ -26,6 +26,7 @@ extern fn tree_sitter_javascript() *const TSLanguage;
 extern fn tree_sitter_zig() *const TSLanguage;
 extern fn tree_sitter_typescript() *const TSLanguage;
 extern fn tree_sitter_tsx() *const TSLanguage;
+extern fn tree_sitter_rust() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -44,6 +45,15 @@ const zig_types = [_][*c]const u8{
     "function_declaration",
     "variable_declaration",
     "test_declaration",
+};
+
+const rust_types = [_][*c]const u8{
+    "function_item",
+    "struct_item",
+    "enum_item",
+    "trait_item",
+    "impl_item",
+    "type_item",
 };
 
 const typescript_types = [_][*c]const u8{
@@ -84,6 +94,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_zig(),
             .node_types = &zig_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "rs")) {
+        return .{
+            .language = tree_sitter_rust(),
+            .node_types = &rust_types,
         };
     }
     if (std.mem.eql(u8, e, "ts")) {

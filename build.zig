@@ -59,6 +59,8 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-typescript/typescript/src/scanner.c",
             "grammars/tree-sitter-typescript/tsx/src/parser.c",
             "grammars/tree-sitter-typescript/tsx/src/scanner.c",
+            "grammars/tree-sitter-rust/src/parser.c",
+            "grammars/tree-sitter-rust/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
@@ -71,6 +73,7 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
     mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
+    mod.addIncludePath(b.path("ast/grammars/tree-sitter-rust/src"));
 
     // Define the Executable
     const exe = b.addExecutable(.{
@@ -137,6 +140,8 @@ pub fn build(b: *std.Build) void {
             "grammars/tree-sitter-typescript/typescript/src/scanner.c",
             "grammars/tree-sitter-typescript/tsx/src/parser.c",
             "grammars/tree-sitter-typescript/tsx/src/scanner.c",
+            "grammars/tree-sitter-rust/src/parser.c",
+            "grammars/tree-sitter-rust/src/scanner.c",
             "src/chunker.c",
         },
         .flags = &.{"-std=gnu99"},
@@ -149,6 +154,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-zig/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/typescript/src"));
     test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-typescript/tsx/src"));
+    test_mod.addIncludePath(b.path("ast/grammars/tree-sitter-rust/src"));
 
     const mod_tests = b.addTest(.{
         .root_module = test_mod,
