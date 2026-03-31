@@ -61,12 +61,23 @@ Or right-click the binary in Finder → **Open** → **Open** to approve it once
 ```bash
 git clone https://github.com/LegationPro/zigzag.git
 cd zigzag
-zig build -Doptimize=ReleaseFast
+```
+
+**With `make` (Linux/macOS):**
+
+```bash
+make init   # init submodules (sparse checkout)
+make build  # build release binary
+```
+
+**Without `make` (cross-platform):**
+
+```bash
+python scripts/setup.py        # init + build
+python scripts/setup.py all    # init + build + test
 ```
 
 The executable will be available at `zig-out/bin/zigzag`.
-
-On Unix systems, running `zigzag.sh` automatically places the binary under `/usr/local/bin`.
 
 ## Quick Start
 
@@ -488,11 +499,17 @@ zig test --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zi
 git clone https://github.com/LegationPro/zigzag.git
 cd zigzag
 
-# Build
-zig build
+# Init submodules + build (make)
+make init && make build
 
-# Run tests
+# Init submodules + build (cross-platform, no make required)
+python scripts/setup.py
+
+# Run tests (make)
 make test
+
+# Run tests (cross-platform)
+python scripts/setup.py test
 
 # Format code
 zig fmt src/
