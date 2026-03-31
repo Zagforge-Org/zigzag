@@ -38,6 +38,7 @@ extern fn tree_sitter_kotlin() *const TSLanguage;
 extern fn tree_sitter_swift() *const TSLanguage;
 extern fn tree_sitter_lua() *const TSLanguage;
 extern fn tree_sitter_bash() *const TSLanguage;
+extern fn tree_sitter_php() *const TSLanguage;
 
 const python_types = [_][*c]const u8{
     "function_definition",
@@ -82,6 +83,15 @@ const rust_types = [_][*c]const u8{
 
 const bash_types = [_][*c]const u8{
     "function_definition",
+};
+
+const php_types = [_][*c]const u8{
+    "function_definition",
+    "method_declaration",
+    "class_declaration",
+    "interface_declaration",
+    "trait_declaration",
+    "enum_declaration",
 };
 
 const lua_types = [_][*c]const u8{
@@ -258,6 +268,12 @@ fn languageConfig(ext: []const u8) ?LanguageConfig {
         return .{
             .language = tree_sitter_bash(),
             .node_types = &bash_types,
+        };
+    }
+    if (std.mem.eql(u8, e, "php")) {
+        return .{
+            .language = tree_sitter_php(),
+            .node_types = &php_types,
         };
     }
     return null;

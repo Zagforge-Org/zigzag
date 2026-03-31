@@ -44,6 +44,7 @@ TS_INCLUDE_FLAGS = [
     "-Iast/grammars/tree-sitter-swift/src",
     "-Iast/grammars/tree-sitter-lua/src",
     "-Iast/grammars/tree-sitter-bash/src",
+    "-Iast/grammars/tree-sitter-php/php/src",
 ]
 
 TS_C_SOURCES = [
@@ -89,6 +90,8 @@ TS_C_SOURCES = [
     (ROOT / "ast/grammars/tree-sitter-lua/src/scanner.c", CACHE / "ts_lua_scanner.o"),
     (ROOT / "ast/grammars/tree-sitter-bash/src/parser.c", CACHE / "ts_bash_parser.o"),
     (ROOT / "ast/grammars/tree-sitter-bash/src/scanner.c", CACHE / "ts_bash_scanner.o"),
+    (ROOT / "ast/grammars/tree-sitter-php/php/src/parser.c", CACHE / "ts_php_parser.o"),
+    (ROOT / "ast/grammars/tree-sitter-php/php/src/scanner.c", CACHE / "ts_php_scanner.o"),
     (ROOT / "ast/src/chunker.c", CACHE / "ts_chunker.o"),
 ]
 
@@ -327,6 +330,14 @@ def init():
     )
     run(
         ["git", "-C", "ast/grammars/tree-sitter-bash", "sparse-checkout", "set", "src"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-php", "sparse-checkout", "init", "--cone"],
+        cwd=ROOT,
+    )
+    run(
+        ["git", "-C", "ast/grammars/tree-sitter-php", "sparse-checkout", "set", "php/src", "php_only/src", "common"],
         cwd=ROOT,
     )
     print("Submodules initialized.")

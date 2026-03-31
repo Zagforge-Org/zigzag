@@ -21,7 +21,8 @@ TS_FLAGS := -std=gnu11 \
 	-Iast/grammars/tree-sitter-kotlin/src \
 	-Iast/grammars/tree-sitter-swift/src \
 	-Iast/grammars/tree-sitter-lua/src \
-	-Iast/grammars/tree-sitter-bash/src
+	-Iast/grammars/tree-sitter-bash/src \
+	-Iast/grammars/tree-sitter-php/php/src
 
 TS_OBJS := \
 	.zig-cache/ts_alloc.o .zig-cache/ts_get_changed_ranges.o \
@@ -47,6 +48,7 @@ TS_OBJS := \
 	.zig-cache/ts_swift_parser.o .zig-cache/ts_swift_scanner.o \
 	.zig-cache/ts_lua_parser.o .zig-cache/ts_lua_scanner.o \
 	.zig-cache/ts_bash_parser.o .zig-cache/ts_bash_scanner.o \
+	.zig-cache/ts_php_parser.o .zig-cache/ts_php_scanner.o \
 	.zig-cache/ts_chunker.o
 
 init:
@@ -88,6 +90,8 @@ init:
 	git -C ast/grammars/tree-sitter-lua sparse-checkout set src
 	git -C ast/grammars/tree-sitter-bash sparse-checkout init --cone
 	git -C ast/grammars/tree-sitter-bash sparse-checkout set src
+	git -C ast/grammars/tree-sitter-php sparse-checkout init --cone
+	git -C ast/grammars/tree-sitter-php sparse-checkout set php/src php_only/src common
 
 build:
 	zig build -Doptimize=ReleaseFast
@@ -136,6 +140,8 @@ test:
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-lua/src/scanner.c                      -o .zig-cache/ts_lua_scanner.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/parser.c                      -o .zig-cache/ts_bash_parser.o
 	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-bash/src/scanner.c                     -o .zig-cache/ts_bash_scanner.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-php/php/src/parser.c                   -o .zig-cache/ts_php_parser.o
+	zig cc -c $(TS_FLAGS) ast/grammars/tree-sitter-php/php/src/scanner.c                  -o .zig-cache/ts_php_scanner.o
 	zig cc -c $(TS_FLAGS) ast/src/chunker.c                                                  -o .zig-cache/ts_chunker.o
 	zig ar rcs .zig-cache/ts_ast.a $(TS_OBJS)
 	zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
