@@ -12,3 +12,6 @@
 [submodule "ast/grammars/tree-sitter-zig"]
 	path = ast/grammars/tree-sitter-zig
 	url = https://github.com/tree-sitter-grammars/tree-sitter-zig
+[submodule "ast/grammars/tree-sitter-typescript"]
+	path = ast/grammars/tree-sitter-typescript
+	url = https://github.com/tree-sitter/tree-sitter-typescript
