@@ -15,7 +15,7 @@ pub const CacheImpl = struct {
     pub fn init(allocator: std.mem.Allocator, cache_dir: []const u8, small_file_threshold: usize) !Self {
         const cwd = std.Io.Dir.cwd();
 
-        // Create .cache directory
+        // Create .cache directory if one does not already exist.
         cwd.createDir(rt.io(), cache_dir, .default_dir) catch |err| {
             switch (err) {
                 error.PathAlreadyExists => {},
@@ -23,7 +23,7 @@ pub const CacheImpl = struct {
             }
         };
 
-        // Create .cache/files directory
+        // Create .cache/files directory if one does not already exist.
         const files_dir = try std.fmt.allocPrint(allocator, "{s}/files", .{cache_dir});
         cwd.createDir(rt.io(), files_dir, .default_dir) catch |err| {
             switch (err) {
