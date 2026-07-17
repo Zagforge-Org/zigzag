@@ -23,7 +23,7 @@ pub fn writeHtmlReport(
         return error.MissingTemplateMarker;
 
     // --- Build report JSON (metadata + stats, no content) ---
-    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    var json_aw: std.Io.Writer.Allocating = .init(allocator);
     defer json_aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
@@ -118,7 +118,7 @@ pub fn writeHtmlReport(
     defer allocator.free(json_safe);
 
     // Assemble: template_prefix + report_json + rest_of_template
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     try aw.writer.writeAll(dashboard_template[0..split_pos]);
     try aw.writer.writeAll(json_safe);
@@ -162,7 +162,7 @@ pub fn writeContentJson(
         first = false;
 
         // Encode key as JSON string using a small allocating writer
-        var key_aw: std.io.Writer.Allocating = .init(allocator);
+        var key_aw: std.Io.Writer.Allocating = .init(allocator);
         defer key_aw.deinit();
         var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
         try kws.write(kv.key_ptr.*);
@@ -171,7 +171,7 @@ pub fn writeContentJson(
         try file.writeStreamingAll(rt.io(), ":");
 
         // Encode value as JSON string using a small allocating writer
-        var val_aw: std.io.Writer.Allocating = .init(allocator);
+        var val_aw: std.Io.Writer.Allocating = .init(allocator);
         defer val_aw.deinit();
         var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
         try vws.write(kv.value_ptr.content);
@@ -209,7 +209,7 @@ pub fn writeCombinedContentJson(
             const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
             defer allocator.free(combined_key);
 
-            var key_aw: std.io.Writer.Allocating = .init(allocator);
+            var key_aw: std.Io.Writer.Allocating = .init(allocator);
             defer key_aw.deinit();
             var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
             try kws.write(combined_key);
@@ -217,7 +217,7 @@ pub fn writeCombinedContentJson(
 
             try file.writeStreamingAll(rt.io(), ":");
 
-            var val_aw: std.io.Writer.Allocating = .init(allocator);
+            var val_aw: std.Io.Writer.Allocating = .init(allocator);
             defer val_aw.deinit();
             var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
             try vws.write(kv.value_ptr.content);
@@ -381,7 +381,7 @@ pub fn writeCombinedHtmlReport(
         "unknown";
 
     // --- Build combined JSON ---
-    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    var json_aw: std.Io.Writer.Allocating = .init(allocator);
     defer json_aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
@@ -510,7 +510,7 @@ pub fn writeCombinedHtmlReport(
     const json_safe = try std.mem.replaceOwned(u8, allocator, json_raw, "</script>", "<\\/script>");
     defer allocator.free(json_safe);
 
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     try aw.writer.writeAll(combined_dashboard_template[0..split_pos]);
     try aw.writer.writeAll(json_safe);

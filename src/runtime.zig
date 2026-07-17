@@ -4,6 +4,7 @@
 const std = @import("std");
 
 var instance: std.Io = undefined;
+var env_map: ?*const std.process.Environ.Map = null;
 
 /// Called once before any filesystem/I/O work.
 pub fn setIo(io_handle: std.Io) void {
@@ -13,4 +14,16 @@ pub fn setIo(io_handle: std.Io) void {
 /// The global Io handle.
 pub fn io() std.Io {
     return instance;
+}
+
+/// Called once at startup with the process environment.
+pub fn setEnviron(map: *const std.process.Environ.Map) void {
+    env_map = map;
+}
+
+/// Look up an environment variable, returning a borrowed slice that lives for
+/// the duration of the process.
+pub fn getEnv(key: []const u8) ?[]const u8 {
+    const map = env_map orelse return null;
+    return map.get(key);
 }

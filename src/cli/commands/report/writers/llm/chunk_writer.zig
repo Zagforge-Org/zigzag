@@ -120,8 +120,7 @@ pub const ChunkWriter = struct {
         const mf = try std.Io.Dir.cwd().createFile(rt.io(), manifest_path, .{});
         defer mf.close(rt.io());
 
-        // Build JSON using std.io.Writer.Allocating
-        var aw: std.io.Writer.Allocating = .init(self.allocator);
+        var aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer aw.deinit();
 
         const ts_raw = std.Io.Timestamp.now(rt.io(), .real).toSeconds();

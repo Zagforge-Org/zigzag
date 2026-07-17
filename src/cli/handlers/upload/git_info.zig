@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 
 pub const GitInfo = struct {
     commit_sha: []const u8,
@@ -16,8 +17,7 @@ pub const GitInfo = struct {
 
 /// Run a git command and return duped, whitespace-trimmed stdout. Caller owns result.
 fn runGit(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
-    const result = try std.process.Child.run(.{
-        .allocator = allocator,
+    const result = try std.process.run(allocator, rt.io(), .{
         .argv = argv,
     });
     allocator.free(result.stderr);

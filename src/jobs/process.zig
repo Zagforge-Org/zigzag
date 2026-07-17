@@ -183,7 +183,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     }
 
-    const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
+    const mtime_seconds: u64 = @intCast(mtime.toSeconds());
     var hash: ?[32]u8 = null;
     var content: []u8 = undefined;
     // Tracks whether the file was counted in cached_files (true) or processed_files (false).
@@ -320,7 +320,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         try binary_entries.put(path_copy, .{
             .path = path_copy,
             .size = size,
-            .mtime = mtime,
+            .mtime = mtime.nanoseconds,
             .extension = ext_copy,
         });
         return;
@@ -344,7 +344,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         .path = path_copy,
         .content = content,
         .size = size,
-        .mtime = mtime,
+        .mtime = mtime.nanoseconds,
         .extension = ext_copy,
         .line_count = line_count,
     });

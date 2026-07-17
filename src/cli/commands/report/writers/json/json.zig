@@ -13,7 +13,7 @@ pub fn writeJsonReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{ .whitespace = .indent_2 } };

@@ -16,8 +16,7 @@ const UPLOAD_PATH = "/api/v1/upload";
 /// base (e.g. "https://api.zagforge.com"), then falls back to DEFAULT_API_BASE.
 /// Caller owns the returned slice.
 pub fn resolveUploadUrl(allocator: std.mem.Allocator) ![]const u8 {
-    const base = std.process.getEnvVarOwned(allocator, "ZAGFORGE_API_URL") catch
-        try allocator.dupe(u8, DEFAULT_API_BASE);
+    const base = try allocator.dupe(u8, rt.getEnv("ZAGFORGE_API_URL") orelse DEFAULT_API_BASE);
     defer allocator.free(base);
     // Strip any trailing slash so concatenation is consistent.
     const base_clean = std.mem.trimRight(u8, base, "/");
@@ -28,18 +27,17 @@ pub fn resolveUploadUrl(allocator: std.mem.Allocator) ![]const u8 {
 /// ~/.zagforge/credentials. Caller owns the returned slice.
 pub fn getApiKey(allocator: std.mem.Allocator) ![]const u8 {
     // 1. Environment variable
-    if (std.process.getEnvVarOwned(allocator, "ZAGFORGE_API_KEY")) |key| {
-        return key;
-    } else |_| {}
+    if (rt.getEnv("ZAGFORGE_API_KEY")) |key| {
+        return try allocator.dupe(u8, key);
+    }
 
     // 2. ~/.zagforge/credentials  (ZAGFORGE_API_KEY=zf_pk_...)
-    const home = std.process.getEnvVarOwned(allocator, "HOME") catch return error.MissingApiKey;
-    defer allocator.free(home);
+    const home = rt.getEnv("HOME") orelse return error.MissingApiKey;
 
     const cred_path = try std.fs.path.join(allocator, &.{ home, ".zagforge", "credentials" });
     defer allocator.free(cred_path);
 
-    const contents = std.Io.Dir.cwd().readFileAlloc(allocator, cred_path, 4096) catch return error.MissingApiKey;
+    const contents = std.Io.Dir.cwd().readFileAlloc(rt.io(), cred_path, allocator, .limited(4096)) catch return error.MissingApiKey;
     defer allocator.free(contents);
 
     return parseApiKeyFromCredentials(allocator, contents) orelse error.MissingApiKey;
@@ -109,7 +107,7 @@ fn uploadResult(
     }
 
     // Build JSON payload
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{ .whitespace = .minified } };
@@ -277,7 +275,7 @@ pub fn performUpload(
                 timed_out = true;
                 break;
             }
-            std.Io.sleep(rt.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .monotonic) catch {};
+            std.Io.sleep(rt.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
         }
 
         if (timed_out) {

@@ -134,7 +134,7 @@ pub fn writeLlmReport(
 
         // Stats section
         {
-            var sw: std.io.Writer.Allocating = .init(allocator);
+            var sw: std.Io.Writer.Allocating = .init(allocator);
             defer sw.deinit();
             const sw_w = &sw.writer;
             try sw_w.writeAll("## Statistics\n");
@@ -167,7 +167,7 @@ pub fn writeLlmReport(
         for (real_entries.items, file_contents.items) |entry, fc| {
             const lang = entry.getLanguage();
 
-            var fw: std.io.Writer.Allocating = .init(allocator);
+            var fw: std.Io.Writer.Allocating = .init(allocator);
             defer fw.deinit();
             const fw_w = &fw.writer;
 
@@ -235,7 +235,7 @@ pub fn writeLlmReport(
     }
 
     // --- Build output in allocating writer, then flush to disk ---
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 
     const w = &aw.writer;

@@ -14,6 +14,7 @@ const rt = @import("./runtime.zig");
 
 pub fn main(init: std.process.Init) !void {
     rt.setIo(init.io);
+    rt.setEnviron(init.environ_map);
     const allocator = init.gpa;
 
     // Create list to hold command-line arguments
