@@ -23,7 +23,7 @@ fn runGit(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
     allocator.free(result.stderr);
     defer allocator.free(result.stdout);
     switch (result.term) {
-        .Exited => |code| if (code != 0) return error.GitCommandFailed,
+        .exited => |code| if (code != 0) return error.GitCommandFailed,
         else => return error.GitCommandFailed,
     }
     const trimmed = std.mem.trim(u8, result.stdout, &std.ascii.whitespace);
