@@ -227,7 +227,7 @@ pub fn build(b: *std.Build) void {
 
     const mod_tests = b.addTest(.{
         .root_module = test_mod,
-        // build via LLVM.
+        // build via LLVM (temporary).
         .use_llvm = true,
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
