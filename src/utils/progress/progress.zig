@@ -44,7 +44,7 @@ pub const ProgressBar = struct {
             break :blk @intCast(@max(0, delta));
         };
         writeSuccessLine(sv.total, sv.cached, elapsed_ns);
-        std.Io.File.stderr().writeAll(sep) catch {};
+        std.Io.File.stderr().writeStreamingAll(rt.io(), sep) catch {};
     }
 
     fn writeSuccessLine(total: usize, cached: usize, elapsed_ns: u64) void {
@@ -57,7 +57,7 @@ pub const ProgressBar = struct {
             "\r\x1B[2K\x1b[92m✓\x1b[0m Scanned \x1b[97m{d}\x1b[0m {s} \x1b[90m({d} cached)  {s}\x1b[0m\n",
             .{ total, file_word, cached, elapsed },
         ) catch return;
-        std.Io.File.stderr().writeAll(line) catch {};
+        std.Io.File.stderr().writeStreamingAll(rt.io(), line) catch {};
     }
 
     fn renderLoop(pb: *Self) void {

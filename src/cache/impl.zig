@@ -167,7 +167,7 @@ pub const CacheImpl = struct {
                 entry.value_ptr.cache_filename,
             });
             defer self.allocator.free(line);
-            try file.writeAll(line);
+            try file.writeStreamingAll(rt.io(), line);
         }
 
         // Atomic rename
@@ -302,7 +302,7 @@ pub const CacheImpl = struct {
         };
         defer file.close(rt.io());
 
-        file.writeAll(content) catch |err| {
+        file.writeStreamingAll(rt.io(), content) catch |err| {
             std.log.err("Failed to write cache file {s}: {}", .{ cached_path, err });
 
             // Clean up the partial file

@@ -154,11 +154,11 @@ pub fn writeContentJson(
     var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
     defer file.close(rt.io());
 
-    try file.writeAll("{");
+    try file.writeStreamingAll(rt.io(), "{");
     var first = true;
     var it = file_entries.iterator();
     while (it.next()) |kv| {
-        if (!first) try file.writeAll(",");
+        if (!first) try file.writeStreamingAll(rt.io(), ",");
         first = false;
 
         // Encode key as JSON string using a small allocating writer
@@ -166,18 +166,18 @@ pub fn writeContentJson(
         defer key_aw.deinit();
         var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
         try kws.write(kv.key_ptr.*);
-        try file.writeAll(key_aw.written());
+        try file.writeStreamingAll(rt.io(), key_aw.written());
 
-        try file.writeAll(":");
+        try file.writeStreamingAll(rt.io(), ":");
 
         // Encode value as JSON string using a small allocating writer
         var val_aw: std.io.Writer.Allocating = .init(allocator);
         defer val_aw.deinit();
         var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
         try vws.write(kv.value_ptr.content);
-        try file.writeAll(val_aw.written());
+        try file.writeStreamingAll(rt.io(), val_aw.written());
     }
-    try file.writeAll("}");
+    try file.writeStreamingAll(rt.io(), "}");
 }
 
 /// Per-path entry for the combined content writer.
@@ -197,12 +197,12 @@ pub fn writeCombinedContentJson(
     var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
     defer file.close(rt.io());
 
-    try file.writeAll("{");
+    try file.writeStreamingAll(rt.io(), "{");
     var first = true;
     for (paths) |p| {
         var it = p.file_entries.iterator();
         while (it.next()) |kv| {
-            if (!first) try file.writeAll(",");
+            if (!first) try file.writeStreamingAll(rt.io(), ",");
             first = false;
 
             // Key: "{root_path}:{path}"
@@ -213,18 +213,18 @@ pub fn writeCombinedContentJson(
             defer key_aw.deinit();
             var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
             try kws.write(combined_key);
-            try file.writeAll(key_aw.written());
+            try file.writeStreamingAll(rt.io(), key_aw.written());
 
-            try file.writeAll(":");
+            try file.writeStreamingAll(rt.io(), ":");
 
             var val_aw: std.io.Writer.Allocating = .init(allocator);
             defer val_aw.deinit();
             var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
             try vws.write(kv.value_ptr.content);
-            try file.writeAll(val_aw.written());
+            try file.writeStreamingAll(rt.io(), val_aw.written());
         }
     }
-    try file.writeAll("}");
+    try file.writeStreamingAll(rt.io(), "}");
 }
 
 /// FNV-1a 32-bit hash — identical algorithm to fnv1a32() in content.ts.
@@ -254,7 +254,7 @@ pub fn writeContentFiles(
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
         defer f.close(rt.io());
-        try f.writeAll(kv.value_ptr.content);
+        try f.writeStreamingAll(rt.io(), kv.value_ptr.content);
     }
 }
 
@@ -277,7 +277,7 @@ pub fn writeChangedContentFiles(
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
         defer f.close(rt.io());
-        try f.writeAll(entry.content);
+        try f.writeStreamingAll(rt.io(), entry.content);
     }
 }
 
@@ -301,7 +301,7 @@ pub fn writeCombinedContentFiles(
             defer allocator.free(fname);
             var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
             defer f.close(rt.io());
-            try f.writeAll(kv.value_ptr.content);
+            try f.writeStreamingAll(rt.io(), kv.value_ptr.content);
         }
     }
 }
@@ -340,7 +340,7 @@ pub fn writeCombinedChangedContentFiles(
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
         defer f.close(rt.io());
-        try f.writeAll(entry.content);
+        try f.writeStreamingAll(rt.io(), entry.content);
     }
 }
 

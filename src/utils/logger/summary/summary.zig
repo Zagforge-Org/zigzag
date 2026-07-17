@@ -30,5 +30,5 @@ pub fn printSummary(args: SummaryArgs) void {
     pos += (std.fmt.bufPrint(buf[pos..], "    Source:  {d}  (cached: {d}, fresh: {d})\n", .{ args.source, args.cached, args.fresh }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "    Binary:  {d}\n", .{args.binary}) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "    Ignored: {d}\n", .{args.ignored}) catch return).len;
-    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }

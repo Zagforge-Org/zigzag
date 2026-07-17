@@ -21,7 +21,7 @@ pub fn printPhaseStart(comptime fmt: []const u8, args: anytype) void {
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt, args) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "\n", .{}) catch return).len;
-    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context_args: anytype) void {
@@ -63,7 +63,7 @@ pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context
         pos += (std.fmt.bufPrint(buf[pos..], ")", .{}) catch return).len;
     }
     pos += (std.fmt.bufPrint(buf[pos..], "\n", .{}) catch return).len;
-    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 pub const FinalSummaryData = struct {
