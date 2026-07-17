@@ -475,7 +475,7 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
     const file_path = std.fs.path.join(allocator, &.{ root_dir, req_path }) catch return;
     defer allocator.free(file_path);
 
-    const file = std.fs.cwd().openFile(file_path, .{}) catch {
+    const file = std.Io.Dir.cwd().openFile(file_path, .{}) catch {
         stream.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     };

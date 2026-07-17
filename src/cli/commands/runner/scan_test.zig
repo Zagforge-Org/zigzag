@@ -85,13 +85,13 @@ test "scanPath picks up source files in directory" {
     std.crypto.random.bytes(std.mem.asBytes(&rand_int));
     var dir_name_buf: [32]u8 = undefined;
     const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
-    try std.fs.cwd().makeDir(dir_name);
-    defer std.fs.cwd().deleteTree(dir_name) catch {};
+    try std.Io.Dir.cwd().makeDir(dir_name);
+    defer std.Io.Dir.cwd().deleteTree(dir_name) catch {};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try std.fs.cwd().realpath(dir_name, &path_buf);
+    const dir_path = try std.Io.Dir.cwd().realpath(dir_name, &path_buf);
 
-    var tmp_dir = try std.fs.cwd().openDir(dir_name, .{});
+    var tmp_dir = try std.Io.Dir.cwd().openDir(dir_name, .{});
     defer tmp_dir.close();
     try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
     try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });

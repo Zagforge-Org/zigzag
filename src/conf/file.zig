@@ -53,7 +53,7 @@ pub const FileConf = struct {
 
     pub fn writeDefaultConfig(full_path: []const u8) !void {
         var buf: [1024]u8 = undefined;
-        var file = try std.fs.cwd().createFile(full_path, .{});
+        var file = try std.Io.Dir.cwd().createFile(full_path, .{});
         defer file.close();
 
         var w = file.writer(&buf);
@@ -69,7 +69,7 @@ pub const FileConf = struct {
     }
 
     pub fn read(allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
-        const data = std.fs.cwd().readFileAlloc(allocator, path, END_ALLOC_SIZE) catch |err| {
+        const data = std.Io.Dir.cwd().readFileAlloc(allocator, path, END_ALLOC_SIZE) catch |err| {
             switch (err) {
                 error.FileNotFound => return null,
                 else => return err,
@@ -82,7 +82,7 @@ pub const FileConf = struct {
     /// loadFromPathEmpty loads a FileConf from a JSON file at the given path.
     /// Returns null if the file does not exist or is empty.
     pub fn loadFromPathEmpty(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        const file = std.Io.Dir.cwd().openFile(path, .{}) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };
@@ -114,7 +114,7 @@ pub const FileConf = struct {
     /// Returns null if the file doesn't exist, or parses the file contents.
     /// If the file is empty (only whitespace), parses the default JSON instead.
     pub fn loadFromPath(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.fs.cwd().openFile(path, .{}) catch |err| switch (err) {
+        const file = std.Io.Dir.cwd().openFile(path, .{}) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };

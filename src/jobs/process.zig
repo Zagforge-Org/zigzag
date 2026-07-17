@@ -156,7 +156,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const allocator = job.allocator;
 
     // Check if file still exists
-    const stat = std.fs.cwd().statFile(path) catch |err| {
+    const stat = std.Io.Dir.cwd().statFile(path) catch |err| {
         if (err == error.FileNotFound) {
             std.log.debug(
                 "File not found (may have been moved/deleted): {s}",

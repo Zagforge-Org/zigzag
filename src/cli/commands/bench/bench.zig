@@ -100,7 +100,7 @@ pub fn printTable(result: *const runner.BenchResult) void {
     pos += (std.fmt.bufPrint(buf[pos..], "{s}\n", .{sep}) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "  {s:<16} {s:>10}\n\n", .{ "total", total_dur }) catch return).len;
 
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
 }
 
 /// Appends one table row into `buf`. Returns bytes written, or NoSpaceLeft.

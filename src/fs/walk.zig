@@ -68,7 +68,7 @@ pub const Walk = struct {
         walker_ctx: *WalkerCtx,
     ) !void {
         walker_ctx.dir_semaphore.wait(); // cap the number of simultaneously open dirs
-        var dir = std.fs.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true }) catch {
+        var dir = std.Io.Dir.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true }) catch {
             walker_ctx.dir_semaphore.post();
             return;
         };
@@ -115,7 +115,7 @@ pub const Walk = struct {
         callback: TProcessWriter,
         ctx: ?*FileContext,
     ) !void {
-        var dir = try std.fs.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true });
+        var dir = try std.Io.Dir.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true });
         defer dir.close();
 
         var it = dir.iterate();

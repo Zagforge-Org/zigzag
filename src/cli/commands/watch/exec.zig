@@ -32,7 +32,7 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
 
     // Scan phase progress is suppressed on TTY (same rationale as runner.zig: worker
     // thread output between printPhaseStart and printPhaseDone corrupts cursor-up rewrite).
-    const is_tty = std.posix.isatty(std.fs.File.stderr().handle);
+    const is_tty = std.posix.isatty(std.Io.File.stderr().handle);
 
     // Scan all configured paths for initial state.
     var states: std.ArrayList(*State) = .empty;

@@ -35,7 +35,7 @@ pub const State = struct {
         pool: *Pool,
         allocator: std.mem.Allocator,
     ) !*State {
-        var dir = std.fs.cwd().openDir(path, .{}) catch return error.NotADirectory;
+        var dir = std.Io.Dir.cwd().openDir(path, .{}) catch return error.NotADirectory;
         dir.close();
 
         const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";

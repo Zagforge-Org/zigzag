@@ -5,8 +5,8 @@ const FileConf = @import("../../../conf/file.zig").FileConf;
 const lg = @import("../../../utils/utils.zig");
 
 /// handleInit creates the zig.conf.json configuration file with default values.
-/// dir is the directory in which to create the file (use std.fs.cwd() for normal use).
-pub fn handleInit(allocator: std.mem.Allocator, dir: std.fs.Dir) anyerror!void {
+/// dir is the directory in which to create the file (use std.Io.Dir.cwd() for normal use).
+pub fn handleInit(allocator: std.mem.Allocator, dir: std.Io.Dir) anyerror!void {
     const file = dir.createFile(DEFAULT_CONF_FILENAME, .{
         .read = true,
         .exclusive = true,

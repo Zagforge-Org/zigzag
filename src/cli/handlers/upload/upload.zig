@@ -38,7 +38,7 @@ pub fn getApiKey(allocator: std.mem.Allocator) ![]const u8 {
     const cred_path = try std.fs.path.join(allocator, &.{ home, ".zagforge", "credentials" });
     defer allocator.free(cred_path);
 
-    const contents = std.fs.cwd().readFileAlloc(allocator, cred_path, 4096) catch return error.MissingApiKey;
+    const contents = std.Io.Dir.cwd().readFileAlloc(allocator, cred_path, 4096) catch return error.MissingApiKey;
     defer allocator.free(contents);
 
     return parseApiKeyFromCredentials(allocator, contents) orelse error.MissingApiKey;

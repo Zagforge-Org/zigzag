@@ -116,7 +116,7 @@ pub const Watcher = struct {
 
     fn watchDirRecursive(self: *Watcher, path: []const u8) !void {
         if (self.shouldSkipPath(path)) return;
-        const dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
+        const dir = std.Io.Dir.cwd().openDir(path, .{ .iterate = true }) catch return;
         const fd = dir.fd;
 
         // Deduplicate by inode: "apps" and "./apps" are the same physical directory.
@@ -272,7 +272,7 @@ pub const Watcher = struct {
 };
 
 fn buildSnapshot(allocator: std.mem.Allocator, path: []const u8, files: *std.StringHashMap(i128)) !void {
-    var dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
+    var dir = std.Io.Dir.cwd().openDir(path, .{ .iterate = true }) catch return;
     defer dir.close();
     var it = dir.iterate();
     while (try it.next()) |entry| {

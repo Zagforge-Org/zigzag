@@ -17,7 +17,7 @@ pub const ProgressBar = struct {
     pub fn init(stats: *const ProcessStats) Self {
         return .{
             .stats = stats,
-            .is_tty = std.posix.isatty(std.fs.File.stderr().handle),
+            .is_tty = std.posix.isatty(std.Io.File.stderr().handle),
         };
     }
 
@@ -43,7 +43,7 @@ pub const ProgressBar = struct {
             break :blk @intCast(@max(0, delta));
         };
         writeSuccessLine(sv.total, sv.cached, elapsed_ns);
-        std.fs.File.stderr().writeAll(sep) catch {};
+        std.Io.File.stderr().writeAll(sep) catch {};
     }
 
     fn writeSuccessLine(total: usize, cached: usize, elapsed_ns: u64) void {
@@ -56,13 +56,13 @@ pub const ProgressBar = struct {
             "\r\x1B[2K\x1b[92m✓\x1b[0m Scanned \x1b[97m{d}\x1b[0m {s} \x1b[90m({d} cached)  {s}\x1b[0m\n",
             .{ total, file_word, cached, elapsed },
         ) catch return;
-        std.fs.File.stderr().writeAll(line) catch {};
+        std.Io.File.stderr().writeAll(line) catch {};
     }
 
     fn renderLoop(pb: *Self) void {
         var frame: usize = 0;
         var estimate: usize = 1; // starts at 1 to prevent div-by-zero when total=0
-        const stderr = std.fs.File.stderr();
+        const stderr = std.Io.File.stderr();
 
         while (!pb.done.load(.acquire)) {
             const sv = pb.stats.getSummary();

@@ -11,7 +11,7 @@ pub const WinMMap = struct {
     const Self = @This();
 
     pub fn open(path: []const u8) !Self {
-        var file = try std.fs.cwd().openFile(path, .{});
+        var file = try std.Io.Dir.cwd().openFile(path, .{});
         errdefer file.close();
 
         const size = try file.getEndPos();

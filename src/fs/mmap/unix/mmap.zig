@@ -7,7 +7,7 @@ pub const UnixMMap = struct {
     data: []u8,
 
     pub fn open(path: []const u8) !Self {
-        const file = try std.fs.cwd().openFile(path, .{});
+        const file = try std.Io.Dir.cwd().openFile(path, .{});
         defer file.close();
 
         const file_size = (try file.stat()).size;

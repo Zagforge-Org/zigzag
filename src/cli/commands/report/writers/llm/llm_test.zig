@@ -40,7 +40,7 @@ test "writeLlmReport creates report with correct structure" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "# LLM Context: src") != null);
@@ -87,7 +87,7 @@ test "writeLlmReport omits boilerplate files" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "package-lock.json") == null);
@@ -122,7 +122,7 @@ test "writeLlmReport includes llm_description when set" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "## Project Description") != null);
@@ -172,7 +172,7 @@ test "writeLlmReport emits AST chunks for Python files" {
 
     try writeLlmReport(&data, 0, llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
     defer alloc.free(written);
 
     // AST chunks appear in output

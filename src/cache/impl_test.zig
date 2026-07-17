@@ -2,12 +2,12 @@ const std = @import("std");
 const CacheImpl = @import("./impl.zig").CacheImpl;
 
 /// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
-fn mtimeSeconds(dir: std.fs.Dir, name: []const u8) !u64 {
+fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
     const s = try dir.statFile(name);
     return @intCast(@divFloor(s.mtime, std.time.ns_per_s));
 }
 
-fn fileSize(dir: std.fs.Dir, name: []const u8) !usize {
+fn fileSize(dir: std.Io.Dir, name: []const u8) !usize {
     const s = try dir.statFile(name);
     return s.size;
 }
@@ -231,7 +231,7 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     defer alloc.free(index_path);
 
     {
-        const index_file = try std.fs.cwd().createFile(index_path, .{});
+        const index_file = try std.Io.Dir.cwd().createFile(index_path, .{});
         defer index_file.close();
 
         // Use two 200-char path segments (each < NAME_MAX=255) to make long unique paths.

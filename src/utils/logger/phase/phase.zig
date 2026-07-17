@@ -20,11 +20,11 @@ pub fn printPhaseStart(comptime fmt: []const u8, args: anytype) void {
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt, args) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "\n", .{}) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
 }
 
 pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context_args: anytype) void {
-    const is_tty = std.posix.isatty(std.fs.File.stderr().handle);
+    const is_tty = std.posix.isatty(std.Io.File.stderr().handle);
     var buf: [4096]u8 = undefined;
     var elapsed_buf: [32]u8 = undefined;
     const elapsed = fmt_utils.fmtElapsed(elapsed_ns, &elapsed_buf);
@@ -34,9 +34,9 @@ pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context
         if (comptime builtin.os.tag == .windows) {
             const windows = std.os.windows;
             var mode: windows.DWORD = 0;
-            if (windows.kernel32.GetConsoleMode(std.fs.File.stderr().handle, &mode) != 0) {
+            if (windows.kernel32.GetConsoleMode(std.Io.File.stderr().handle, &mode) != 0) {
                 _ = windows.kernel32.SetConsoleMode(
-                    std.fs.File.stderr().handle,
+                    std.Io.File.stderr().handle,
                     mode | 0x0004, // ENABLE_VIRTUAL_TERMINAL_PROCESSING
                 );
             }
@@ -62,7 +62,7 @@ pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context
         pos += (std.fmt.bufPrint(buf[pos..], ")", .{}) catch return).len;
     }
     pos += (std.fmt.bufPrint(buf[pos..], "\n", .{}) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeAll(buf[0..pos]) catch {};
 }
 
 pub const FinalSummaryData = struct {
@@ -81,7 +81,7 @@ pub const FinalSummaryData = struct {
 
 pub fn printFinalSummary(data: *const FinalSummaryData) void {
     const options = @import("options");
-    const stderr = std.fs.File.stderr();
+    const stderr = std.Io.File.stderr();
     const sep = "\x1b[90m────────────────────────────────────────\x1b[0m\n";
 
     const os_name = comptime switch (builtin.os.tag) {
@@ -202,7 +202,7 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
 }
 
 const PhaseRowCtx = struct {
-    stderr: std.fs.File,
+    stderr: std.Io.File,
     total_ns: u64,
     buf: []u8,
 

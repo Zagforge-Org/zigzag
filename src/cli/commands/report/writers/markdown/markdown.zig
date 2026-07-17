@@ -6,7 +6,7 @@ const ReportData = @import("../aggregator.zig").ReportData;
 
 /// Write a single file entry to the report with metadata.
 fn writeFileEntry(
-    md_file: *std.fs.File,
+    md_file: *std.Io.File,
     entry: *const JobEntry,
     allocator: std.mem.Allocator,
     timezone_offset: ?i64,
@@ -62,7 +62,7 @@ pub fn writeReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    var md_file = try std.fs.cwd().createFile(md_path, .{ .truncate = true });
+    var md_file = try std.Io.Dir.cwd().createFile(md_path, .{ .truncate = true });
     defer md_file.close();
 
     // Header

@@ -124,7 +124,7 @@ pub fn writeHtmlReport(
     try aw.writer.writeAll(dashboard_template[split_pos + marker.len ..]);
 
     // Write to disk
-    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
+    var html_file = try std.Io.Dir.cwd().createFile(html_path, .{ .truncate = true });
     defer html_file.close();
     try html_file.writeAll(aw.written());
 
@@ -136,7 +136,7 @@ pub fn writeHtmlReport(
 pub fn writeStampFile(html_path: []const u8, generated_at: []const u8, allocator: std.mem.Allocator) !void {
     const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
     defer allocator.free(stamp_path);
-    var stamp_file = try std.fs.cwd().createFile(stamp_path, .{ .truncate = true });
+    var stamp_file = try std.Io.Dir.cwd().createFile(stamp_path, .{ .truncate = true });
     defer stamp_file.close();
     try stamp_file.writeAll(generated_at);
 }
@@ -150,7 +150,7 @@ pub fn writeContentJson(
     content_path: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
+    var file = try std.Io.Dir.cwd().createFile(content_path, .{ .truncate = true });
     defer file.close();
 
     try file.writeAll("{");
@@ -193,7 +193,7 @@ pub fn writeCombinedContentJson(
     content_path: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
+    var file = try std.Io.Dir.cwd().createFile(content_path, .{ .truncate = true });
     defer file.close();
 
     try file.writeAll("{");
@@ -243,7 +243,7 @@ pub fn writeContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().makePath(content_dir);
     var it = file_entries.iterator();
     while (it.next()) |kv| {
         const hash = fnv1a32Hash(kv.key_ptr.*);
@@ -251,7 +251,7 @@ pub fn writeContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        var f = try std.Io.Dir.cwd().createFile(fname, .{ .truncate = true });
         defer f.close();
         try f.writeAll(kv.value_ptr.content);
     }
@@ -266,7 +266,7 @@ pub fn writeChangedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().makePath(content_dir);
     for (changed_paths) |path| {
         const entry = file_entries.get(path) orelse continue;
         const hash = fnv1a32Hash(path);
@@ -274,7 +274,7 @@ pub fn writeChangedContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        var f = try std.Io.Dir.cwd().createFile(fname, .{ .truncate = true });
         defer f.close();
         try f.writeAll(entry.content);
     }
@@ -287,7 +287,7 @@ pub fn writeCombinedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().makePath(content_dir);
     for (paths) |p| {
         var it = p.file_entries.iterator();
         while (it.next()) |kv| {
@@ -298,7 +298,7 @@ pub fn writeCombinedContentFiles(
             const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
             const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
             defer allocator.free(fname);
-            var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+            var f = try std.Io.Dir.cwd().createFile(fname, .{ .truncate = true });
             defer f.close();
             try f.writeAll(kv.value_ptr.content);
         }
@@ -315,7 +315,7 @@ pub fn writeCombinedChangedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().makePath(content_dir);
     for (changed_file_paths) |changed_path| {
         // Find which CombinedContentPath owns this file by root_path prefix match
         var owning_path: ?CombinedContentPath = null;
@@ -337,7 +337,7 @@ pub fn writeCombinedChangedContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
+        var f = try std.Io.Dir.cwd().createFile(fname, .{ .truncate = true });
         defer f.close();
         try f.writeAll(entry.content);
     }
@@ -515,7 +515,7 @@ pub fn writeCombinedHtmlReport(
     try aw.writer.writeAll(json_safe);
     try aw.writer.writeAll(combined_dashboard_template[split_pos + marker.len ..]);
 
-    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
+    var html_file = try std.Io.Dir.cwd().createFile(html_path, .{ .truncate = true });
     defer html_file.close();
     try html_file.writeAll(aw.written());
 }

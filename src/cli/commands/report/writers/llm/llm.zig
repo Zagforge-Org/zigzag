@@ -349,7 +349,7 @@ pub fn writeLlmReport(
     }
 
     // Write to disk
-    var llm_file = try std.fs.cwd().createFile(llm_path, .{ .truncate = true });
+    var llm_file = try std.Io.Dir.cwd().createFile(llm_path, .{ .truncate = true });
     defer llm_file.close();
     try llm_file.writeAll(aw.written());
 }

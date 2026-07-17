@@ -111,7 +111,7 @@ fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
     const file_path = try std.fs.path.join(cfg.allocator, &.{ cfg.root_dir, req_path });
     defer cfg.allocator.free(file_path);
 
-    const file = std.fs.cwd().openFile(file_path, .{}) catch {
+    const file = std.Io.Dir.cwd().openFile(file_path, .{}) catch {
         try conn.stream.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
         return;
     };

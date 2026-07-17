@@ -53,7 +53,7 @@ pub fn scanPath(
     allocator: std.mem.Allocator,
     logger: ?*Logger,
 ) !ScanResult {
-    var dir = std.fs.cwd().openDir(path, .{}) catch {
+    var dir = std.Io.Dir.cwd().openDir(path, .{}) catch {
         return error.NotADirectory;
     };
     defer dir.close();

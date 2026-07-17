@@ -10,7 +10,7 @@ const BenchResult = @import("../bench.zig").BenchResult;
 
 /// File size in bytes, or 0 on error.
 fn fileSizeOf(path: []const u8) u64 {
-    const stat = std.fs.cwd().statFile(path) catch return 0;
+    const stat = std.Io.Dir.cwd().statFile(path) catch return 0;
     return stat.size;
 }
 

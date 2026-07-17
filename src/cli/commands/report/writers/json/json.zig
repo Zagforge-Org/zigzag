@@ -99,7 +99,7 @@ pub fn writeJsonReport(
 
     try ws.endObject();
 
-    var json_file = try std.fs.cwd().createFile(json_path, .{ .truncate = true });
+    var json_file = try std.Io.Dir.cwd().createFile(json_path, .{ .truncate = true });
     defer json_file.close();
     try json_file.writeAll(aw.written());
 }

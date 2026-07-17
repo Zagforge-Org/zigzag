@@ -12,7 +12,7 @@ pub const CacheImpl = struct {
     const Self = @This();
 
     pub fn init(allocator: std.mem.Allocator, cache_dir: []const u8, small_file_threshold: usize) !Self {
-        const cwd = std.fs.cwd();
+        const cwd = std.Io.Dir.cwd();
 
         // Create .cache directory
         cwd.makeDir(cache_dir) catch |err| {
@@ -63,7 +63,7 @@ pub const CacheImpl = struct {
         while (it.next()) |entry| {
             const path = entry.key_ptr.*;
 
-            const stat = std.fs.cwd().statFile(path) catch |err| switch (err) {
+            const stat = std.Io.Dir.cwd().statFile(path) catch |err| switch (err) {
                 error.FileNotFound => {
                     // File genuinely gone → mark for removal
                     const path_copy = try self.allocator.dupe(u8, path);
@@ -97,7 +97,7 @@ pub const CacheImpl = struct {
                     kv.value.cache_filename,
                 });
                 defer self.allocator.free(cached_path);
-                std.fs.cwd().deleteFile(cached_path) catch {};
+                std.Io.Dir.cwd().deleteFile(cached_path) catch {};
 
                 // Free memory
                 self.allocator.free(kv.key);
@@ -114,7 +114,7 @@ pub const CacheImpl = struct {
         const cache_index_path = try std.fmt.allocPrint(self.allocator, "{s}/index", .{self.cache_dir});
         defer self.allocator.free(cache_index_path);
 
-        const file = std.fs.cwd().openFile(cache_index_path, .{}) catch |err| {
+        const file = std.Io.Dir.cwd().openFile(cache_index_path, .{}) catch |err| {
             if (err == error.FileNotFound) return;
             return err;
         };
@@ -158,7 +158,7 @@ pub const CacheImpl = struct {
         const temp_path = try std.fmt.allocPrint(self.allocator, "{s}.tmp", .{cache_index_path});
         defer self.allocator.free(temp_path);
 
-        var file = try std.fs.cwd().createFile(temp_path, .{ .truncate = true });
+        var file = try std.Io.Dir.cwd().createFile(temp_path, .{ .truncate = true });
         defer file.close();
 
         var it = self.memory_cache.iterator();
@@ -174,7 +174,7 @@ pub const CacheImpl = struct {
         }
 
         // Atomic rename
-        try std.fs.cwd().rename(temp_path, cache_index_path);
+        try std.Io.Dir.cwd().rename(temp_path, cache_index_path);
     }
 
     /// Generate a safe filename from a path (now includes hash for uniqueness)
@@ -216,7 +216,7 @@ pub const CacheImpl = struct {
         });
         defer self.allocator.free(cached_path);
 
-        std.fs.cwd().access(cached_path, .{}) catch {
+        std.Io.Dir.cwd().access(cached_path, .{}) catch {
             // Cache file is missing - invalidate entry
             std.log.debug("Cache file missing for {s}, invalidating", .{path});
             return false;
@@ -242,7 +242,7 @@ pub const CacheImpl = struct {
         defer self.allocator.free(cached_path);
 
         // Open the file safely, returning early if it doesn't exist or fails to read.
-        const cached_file = std.fs.cwd().openFile(cached_path, .{}) catch |err| {
+        const cached_file = std.Io.Dir.cwd().openFile(cached_path, .{}) catch |err| {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
         };
@@ -297,7 +297,7 @@ pub const CacheImpl = struct {
         defer self.allocator.free(cached_path);
 
         // Ensure we can write the file
-        var file = std.fs.cwd().createFile(cached_path, .{ .truncate = true }) catch |err| {
+        var file = std.Io.Dir.cwd().createFile(cached_path, .{ .truncate = true }) catch |err| {
             std.log.err("Failed to create cache file {s}: {}", .{ cached_path, err });
 
             // If we just added this entry, remove it from the cache
@@ -315,7 +315,7 @@ pub const CacheImpl = struct {
             std.log.err("Failed to write cache file {s}: {}", .{ cached_path, err });
 
             // Clean up the partial file
-            std.fs.cwd().deleteFile(cached_path) catch {};
+            std.Io.Dir.cwd().deleteFile(cached_path) catch {};
 
             // If we just added this entry, remove it from the cache
             if (is_new_entry) {
@@ -355,7 +355,7 @@ pub const CacheImpl = struct {
         self.memory_cache.clearAndFree();
 
         // Delete all cache files
-        var dir = try std.fs.cwd().openDir(self.cache_dir, .{ .iterate = true });
+        var dir = try std.Io.Dir.cwd().openDir(self.cache_dir, .{ .iterate = true });
         defer dir.close();
 
         var dir_it = dir.iterate();
@@ -412,7 +412,7 @@ pub const CacheImpl = struct {
             });
             defer self.allocator.free(cached_path);
 
-            std.fs.cwd().access(cached_path, .{}) catch {
+            std.Io.Dir.cwd().access(cached_path, .{}) catch {
                 std.log.warn("Cache inconsistency: index has {s} but file {s} is missing", .{
                     entry.key_ptr.*,
                     entry.value_ptr.cache_filename,
