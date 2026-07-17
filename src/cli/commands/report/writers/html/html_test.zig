@@ -545,7 +545,7 @@ test "writeContentFiles creates directory and correct number of files" {
 
     // Verify directory exists and has 2 files
     var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });
-    defer dir.close();
+    defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
     while (try it.next()) |_| count += 1;
@@ -582,7 +582,7 @@ test "writeCombinedContentFiles uses combined key for hashing" {
 
     // Two different combined keys should produce two different files
     var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });
-    defer dir.close();
+    defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
     while (try it.next()) |_| count += 1;

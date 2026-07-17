@@ -9,12 +9,12 @@ const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 // ── nsElapsed ─────────────────────────────────────────────────────────────────
 
 test "nsElapsed clamps future timestamp to 0" {
-    const future = std.time.nanoTimestamp() + 1_000_000_000_000;
+    const future = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds + 1_000_000_000_000;
     try std.testing.expectEqual(@as(u64, 0), scan.nsElapsed(future));
 }
 
 test "nsElapsed returns positive for past timestamp" {
-    const past = std.time.nanoTimestamp() - 1_000_000;
+    const past = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds - 1_000_000;
     try std.testing.expect(scan.nsElapsed(past) > 0);
 }
 
@@ -39,7 +39,7 @@ test "scanPath returns NotADirectory for a file path" {
     defer tmp.cleanup();
 
     const f = try tmp.dir.createFile(std.testing.io, "not_a_dir.txt", .{});
-    f.close();
+    f.close(std.testing.io);
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const file_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, "not_a_dir.txt", &path_buf)];
@@ -85,14 +85,14 @@ test "scanPath picks up source files in directory" {
     std.crypto.random.bytes(std.mem.asBytes(&rand_int));
     var dir_name_buf: [32]u8 = undefined;
     const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
-    try std.Io.Dir.cwd().makeDir(std.testing.io, dir_name);
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_name, .default_dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_name) catch {};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const dir_path = path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, dir_name, &path_buf)];
 
     var tmp_dir = try std.Io.Dir.cwd().openDir(std.testing.io, dir_name, .{});
-    defer tmp_dir.close();
+    defer tmp_dir.close(std.testing.io);
     try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
     try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });
 

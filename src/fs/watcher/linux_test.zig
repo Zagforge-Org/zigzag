@@ -11,8 +11,8 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     // Create a subdirectory that will be skipped
-    try tmp.dir.makeDir(std.testing.io, "skip_me");
-    try tmp.dir.makeDir(std.testing.io, "keep_me");
+    try tmp.dir.createDir(std.testing.io, "skip_me", .default_dir);
+    try tmp.dir.createDir(std.testing.io, "keep_me", .default_dir);
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -25,12 +25,12 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "skip_me/hidden.txt", .{});
         try f.writeAll("should not appear");
-        f.close();
+        f.close(std.testing.io);
     }
     {
         const f = try tmp.dir.createFile(std.testing.io, "keep_me/visible.txt", .{});
         try f.writeAll("should appear");
-        f.close();
+        f.close(std.testing.io);
     }
 
     var events: std.ArrayList(WatchEvent) = .empty;
@@ -70,7 +70,7 @@ test "Watcher.poll emits modified event on CLOSE_WRITE" {
     // Create file before watching so its creation doesn't pollute events
     {
         const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
-        f.close();
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);
@@ -81,7 +81,7 @@ test "Watcher.poll emits modified event on CLOSE_WRITE" {
     {
         const f = try tmp.dir.openFile(std.testing.io, "existing.txt", .{ .mode = .write_only });
         try f.writeAll("new content");
-        f.close();
+        f.close(std.testing.io);
     }
 
     var events: std.ArrayList(WatchEvent) = .empty;
@@ -110,7 +110,7 @@ test "Watcher.poll emits deleted event on file removal" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "to_delete.txt", .{});
-        f.close();
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);

@@ -7,7 +7,7 @@ const SseServer = @import("./server.zig").SseServer;
 test "isPortListening returns false for an occupied port" {
     // Bind to an ephemeral port (0), record the assigned port, then release it.
     // After release the port should no longer have an active listener.
-    const addr = try std.net.Address.parseIp("127.0.0.1", 0);
+    const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
     var listener = try addr.listen(.{});
     const ephemeral_port = listener.listen_address.getPort();
     listener.deinit();
@@ -50,7 +50,7 @@ test "port probe works even when SO_REUSEADDR would allow duplicate bind" {
     const occupied_port = srv.listener.listen_address.getPort();
 
     // Attempt a second bind with SO_REUSEADDR on the same port.
-    const addr = try std.net.Address.parseIp("127.0.0.1", occupied_port);
+    const addr = try std.Io.net.IpAddress.parse("127.0.0.1", occupied_port);
     const maybe_second = addr.listen(.{ .reuse_address = true });
     if (maybe_second) |second_srv| {
         // On some kernels SO_REUSEADDR allows this bind — exactly the bug we fix.
@@ -84,7 +84,7 @@ test "port selection skips an occupied port and binds to next free port" {
     // If it's also occupied in the test environment, the assertion below is a no-op.
     if (!isPortListening(next_port)) {
         // Verify we can actually bind to the next port.
-        const addr = try std.net.Address.parseIp("127.0.0.1", next_port);
+        const addr = try std.Io.net.IpAddress.parse("127.0.0.1", next_port);
         var listener = try addr.listen(.{ .reuse_address = true });
         defer listener.deinit();
         // After binding, isPortListening must return true for that port too.

@@ -12,7 +12,7 @@ test "loadFromPath returns default for empty file" {
     const tmp_path = "zztest_conf_empty_file.json";
 
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-    defer f.close();
+    defer f.close(std.testing.io);
 
     defer {
         std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch |err| {
@@ -49,13 +49,13 @@ test "loadFromPath parses valid JSON with all fields" {
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
 
     var wbuf1: [512]u8 = undefined;
-    var fw1 = f.writer(&wbuf1);
+    var fw1 = f.writer(std.testing.io, &wbuf1);
     try fw1.interface.writeAll(
         \\{"paths": ["./src"], "skip_cache": true, "watch": false}
     );
     try fw1.interface.flush();
 
-    defer f.close();
+    defer f.close(std.testing.io);
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
     const result = try FileConf.loadFromPath(allocator, tmp_path);
@@ -76,9 +76,9 @@ test "loadFromPath handles empty JSON object" {
     const tmp_path = "zztest_conf_empty_obj.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf2: [8]u8 = undefined;
-        var fw2 = f.writer(&wbuf2);
+        var fw2 = f.writer(std.testing.io, &wbuf2);
         try fw2.interface.writeAll("{}");
         try fw2.interface.flush();
     }
@@ -102,9 +102,9 @@ test "loadFromPath handles ignores array" {
     const tmp_path = "zztest_conf_patterns.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf3: [512]u8 = undefined;
-        var fw3 = f.writer(&wbuf3);
+        var fw3 = f.writer(std.testing.io, &wbuf3);
         try fw3.interface.writeAll(
             \\{"ignores": ["*.png", "*.jpg", "node_modules"]}
         );
@@ -157,9 +157,9 @@ test "loadFromPath parses json_output true" {
     const tmp_path = "zztest_conf_json_output_true.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf4: [64]u8 = undefined;
-        var fw4 = f.writer(&wbuf4);
+        var fw4 = f.writer(std.testing.io, &wbuf4);
         try fw4.interface.writeAll("{\"json_output\": true}");
         try fw4.interface.flush();
     }
@@ -189,9 +189,9 @@ test "loadFromPathEmpty parses html_output true" {
     const tmp_path = "zztest_conf_html_output_true.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf5: [64]u8 = undefined;
-        var fw5 = f.writer(&wbuf5);
+        var fw5 = f.writer(std.testing.io, &wbuf5);
         try fw5.interface.writeAll("{\"html_output\": true}");
         try fw5.interface.flush();
     }
@@ -209,9 +209,9 @@ test "loadFromPathEmpty sets json_output to null when field is absent" {
     const tmp_path = "zztest_conf_json_output_absent.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf6: [64]u8 = undefined;
-        var fw6 = f.writer(&wbuf6);
+        var fw6 = f.writer(std.testing.io, &wbuf6);
         try fw6.interface.writeAll("{\"skip_cache\": true}");
         try fw6.interface.flush();
     }
@@ -229,9 +229,9 @@ test "loadFromPathEmpty ignores unknown JSON fields" {
     const tmp_path = "zztest_conf_unknown.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf7: [512]u8 = undefined;
-        var fw7 = f.writer(&wbuf7);
+        var fw7 = f.writer(std.testing.io, &wbuf7);
         try fw7.interface.writeAll(
             \\{"unknown_field": true, "another_unknown": 42, "watch": true}
         );
@@ -253,9 +253,9 @@ test "loadFromPathEmpty parses output_dir field" {
     const tmp_path = "zztest_conf_output_dir.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf8: [64]u8 = undefined;
-        var fw8 = f.writer(&wbuf8);
+        var fw8 = f.writer(std.testing.io, &wbuf8);
         try fw8.interface.writeAll("{\"output_dir\": \"my-reports\"}");
         try fw8.interface.flush();
     }
@@ -273,9 +273,9 @@ test "loadFromPathEmpty parses llm_report field" {
     const tmp_path = "zztest_conf_llm_report.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf9: [64]u8 = undefined;
-        var fw9 = f.writer(&wbuf9);
+        var fw9 = f.writer(std.testing.io, &wbuf9);
         try fw9.interface.writeAll("{\"llm_report\": true}");
         try fw9.interface.flush();
     }
@@ -292,9 +292,9 @@ test "loadFromPathEmpty parses llm_max_lines field" {
     const tmp_path = "zztest_conf_llm_max_lines.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf10: [64]u8 = undefined;
-        var fw10 = f.writer(&wbuf10);
+        var fw10 = f.writer(std.testing.io, &wbuf10);
         try fw10.interface.writeAll("{\"llm_max_lines\": 200}");
         try fw10.interface.flush();
     }
@@ -311,9 +311,9 @@ test "loadFromPathEmpty parses llm_description field" {
     const tmp_path = "zztest_conf_llm_desc.json";
     {
         const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         var wbuf11: [64]u8 = undefined;
-        var fw11 = f.writer(&wbuf11);
+        var fw11 = f.writer(std.testing.io, &wbuf11);
         try fw11.interface.writeAll("{\"llm_description\": \"A CLI tool\"}");
         try fw11.interface.flush();
     }
@@ -363,7 +363,7 @@ test "FileConf deserialises 'ignores' key" {
     const tmp_path = "zztest_conf_ignores_key.json";
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
-    defer f.close();
+    defer f.close(std.testing.io);
     try f.writeAll(
         \\{"ignores": ["*.png", "*.jpg"]}
     );
@@ -382,7 +382,7 @@ test "FileConf old 'ignore_patterns' key is silently ignored" {
     const tmp_path = "zztest_conf_old_ignore_patterns.json";
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
-    defer f.close();
+    defer f.close(std.testing.io);
     try f.writeAll(
         \\{"ignore_patterns": ["*.png"]}
     );

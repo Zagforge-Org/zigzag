@@ -3,12 +3,12 @@ const CacheImpl = @import("./impl.zig").CacheImpl;
 
 /// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
 fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
-    const s = try dir.statFile(std.testing.io, name);
+    const s = try dir.statFile(std.testing.io, name, .{});
     return @intCast(@divFloor(s.mtime, std.time.ns_per_s));
 }
 
 fn fileSize(dir: std.Io.Dir, name: []const u8) !usize {
-    const s = try dir.statFile(std.testing.io, name);
+    const s = try dir.statFile(std.testing.io, name, .{});
     return s.size;
 }
 
@@ -25,7 +25,7 @@ test "validateCache does not invalidate an unmodified file" {
     // Create real source file
     {
         const f = try tmp.dir.createFile(std.testing.io, "file.zig", .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         try f.writeAll("const x = 1;\n");
     }
 
@@ -68,7 +68,7 @@ test "cache survives a full init/saveToDisk/deinit/init round-trip" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "hello.zig", .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         try f.writeAll("// hello\n");
     }
 
@@ -113,7 +113,7 @@ test "validateCache evicts entries for deleted files" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "gone.zig", .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         try f.writeAll("// temp\n");
     }
 
@@ -157,7 +157,7 @@ test "validateCache evicts entries whose mtime changed" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "changing.zig", .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         try f.writeAll("v1\n");
     }
 
@@ -222,8 +222,8 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
 
-    try tmp.dir.makeDir(std.testing.io, ".cache");
-    try tmp.dir.makeDir(std.testing.io, ".cache/files");
+    try tmp.dir.createDir(std.testing.io, ".cache", .default_dir);
+    try tmp.dir.createDir(std.testing.io, ".cache/files", .default_dir);
 
     // Write a cache index larger than 10 MiB.
     // Each entry uses a ~1000-char unique path so ~10,500 entries ≈ 11 MiB.
@@ -232,7 +232,7 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
 
     {
         const index_file = try std.Io.Dir.cwd().createFile(std.testing.io, index_path, .{});
-        defer index_file.close();
+        defer index_file.close(std.testing.io);
 
         // Use two 200-char path segments (each < NAME_MAX=255) to make long unique paths.
         // Each line ≈ 485 bytes → 23,000 lines ≈ 11 MiB.

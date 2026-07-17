@@ -12,7 +12,7 @@ test "Logger.init creates log file in output dir" {
     var l = try Logger.init(tmp_path, alloc);
     defer l.deinit();
 
-    const stat = try tmp.dir.statFile(std.testing.io, "zigzag.log");
+    const stat = try tmp.dir.statFile(std.testing.io, "zigzag.log", .{});
     try std.testing.expect(stat.kind == .file);
 }
 

@@ -10,8 +10,8 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir(std.testing.io, "skip_me");
-    try tmp.dir.makeDir(std.testing.io, "keep_me");
+    try tmp.dir.createDir(std.testing.io, "skip_me", .default_dir);
+    try tmp.dir.createDir(std.testing.io, "keep_me", .default_dir);
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -24,12 +24,12 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "skip_me\\hidden.txt", .{});
         try f.writeAll("should not appear");
-        f.close();
+        f.close(std.testing.io);
     }
     {
         const f = try tmp.dir.createFile(std.testing.io, "keep_me\\visible.txt", .{});
         try f.writeAll("should appear");
-        f.close();
+        f.close(std.testing.io);
     }
 
     std.Thread.sleep(100 * std.time.ns_per_ms);
@@ -70,7 +70,7 @@ test "Watcher.poll emits modified event on file write" {
     // Create file before watching so its creation doesn't pollute events
     {
         const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
-        f.close();
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);
@@ -83,7 +83,7 @@ test "Watcher.poll emits modified event on file write" {
     {
         const f = try tmp.dir.openFile(std.testing.io, "existing.txt", .{ .mode = .write_only });
         try f.writeAll("new content");
-        f.close();
+        f.close(std.testing.io);
     }
 
     // Give the background thread time to receive and enqueue the event
@@ -115,7 +115,7 @@ test "Watcher.poll emits deleted event on file removal" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "to_delete.txt", .{});
-        f.close();
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);

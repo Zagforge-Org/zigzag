@@ -39,7 +39,7 @@ test "handleInit does not overwrite existing file" {
     // Create the file with custom content first
     {
         const f = try tmp_dir.dir.createFile(std.testing.io, DEFAULT_CONF_FILENAME, .{});
-        defer f.close();
+        defer f.close(std.testing.io);
         try f.writeAll("{\"watch\": true}");
     }
 

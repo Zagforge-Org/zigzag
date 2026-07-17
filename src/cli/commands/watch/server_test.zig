@@ -17,9 +17,9 @@ test "SseServer.broadcast queues a payload" {
 
     srv.broadcast("hello world");
 
-    srv.mu.lock();
+    srv.mu.lockUncancelable(std.testing.io);
     const payload = srv.pending_payload;
-    srv.mu.unlock();
+    srv.mu.unlock(std.testing.io);
 
     try std.testing.expect(payload != null);
     try std.testing.expectEqualStrings("hello world", payload.?);
@@ -33,9 +33,9 @@ test "SseServer.broadcast replaces a previous pending payload" {
     srv.broadcast("first");
     srv.broadcast("second");
 
-    srv.mu.lock();
+    srv.mu.lockUncancelable(std.testing.io);
     const payload = srv.pending_payload;
-    srv.mu.unlock();
+    srv.mu.unlock(std.testing.io);
 
     try std.testing.expect(payload != null);
     try std.testing.expectEqualStrings("second", payload.?);
@@ -48,9 +48,9 @@ test "SseServer.broadcastReload sets pending_reload flag" {
 
     srv.broadcastReload();
 
-    srv.mu.lock();
+    srv.mu.lockUncancelable(std.testing.io);
     const reload = srv.pending_reload;
-    srv.mu.unlock();
+    srv.mu.unlock(std.testing.io);
 
     try std.testing.expect(reload);
 }
@@ -62,9 +62,9 @@ test "SseServer.stop sets stopped flag" {
 
     srv.stop();
 
-    srv.mu.lock();
+    srv.mu.lockUncancelable(std.testing.io);
     const stopped = srv.stopped;
-    srv.mu.unlock();
+    srv.mu.unlock(std.testing.io);
 
     try std.testing.expect(stopped);
 }

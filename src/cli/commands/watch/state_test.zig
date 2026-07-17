@@ -5,7 +5,7 @@ const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 
 test "State.removeFile removes file entry and frees memory" {
     var state: State = undefined;
-    state.entries_mutex = .{};
+    state.entries_mutex = .init;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -32,7 +32,7 @@ test "State.removeFile removes file entry and frees memory" {
 
 test "State.removeFile is a no-op for unknown paths" {
     var state: State = undefined;
-    state.entries_mutex = .{};
+    state.entries_mutex = .init;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -45,7 +45,7 @@ test "State.removeFile is a no-op for unknown paths" {
 
 test "State.removeFile removes binary entry and frees memory" {
     var state: State = undefined;
-    state.entries_mutex = .{};
+    state.entries_mutex = .init;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -69,7 +69,7 @@ test "State.removeFile removes binary entry and frees memory" {
 
 test "State.removeFile handles both file and binary entries for the same path" {
     var state: State = undefined;
-    state.entries_mutex = .{};
+    state.entries_mutex = .init;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();

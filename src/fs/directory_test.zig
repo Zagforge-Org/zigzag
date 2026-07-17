@@ -9,7 +9,7 @@ test "isDirectory" {
     defer std.testing.allocator.free(tmp_path);
 
     // Test a directory
-    try tmp.dir.makeDir(std.testing.io, "subdir");
+    try tmp.dir.createDir(std.testing.io, "subdir", .default_dir);
     const subdir_path = try std.fs.path.join(std.testing.allocator, &.{ tmp_path, "subdir" });
     defer std.testing.allocator.free(subdir_path);
     try std.testing.expectEqual(true, try isDirectory(subdir_path));
