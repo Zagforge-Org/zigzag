@@ -24,7 +24,6 @@ pub const FileConf = struct {
     llm_max_lines: ?u64 = null,
     llm_description: ?[]const u8 = null,
     llm_chunk_size: ?std.json.Value = null,
-    upload: ?bool = null,
 
     /// Returns the default zig.conf.json content as a static string.
     pub fn default() []const u8 {
@@ -45,8 +44,7 @@ pub const FileConf = struct {
         \\  "llm_report": false,
         \\  "llm_max_lines": 150,
         \\  "llm_description": null,
-        \\  "llm_chunk_size": null,
-        \\  "upload": false
+        \\  "llm_chunk_size": null
         \\}
         \\
         ;
