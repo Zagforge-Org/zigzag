@@ -1,10 +1,11 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 const builtin = @import("builtin");
 const WaitGroup = @import("wait_group.zig").WaitGroup;
 
 pub const Pool = struct {
-    mutex: std.Thread.Mutex = .{},
-    cond: std.Thread.Condition = .{},
+    mutex: std.Io.Mutex = .init,
+    cond: std.Io.Condition = .init,
     run_queue: std.DoublyLinkedList = .{},
     is_running: bool = true,
     allocator: std.mem.Allocator = undefined,
@@ -23,8 +24,8 @@ pub const Pool = struct {
     pub fn init(self: *Self, options: Options) !void {
         self.* = .{
             .allocator = options.allocator,
-            .mutex = .{},
-            .cond = .{},
+            .mutex = .init,
+            .cond = .init,
             .run_queue = .{ .first = null, .last = null },
             .is_running = true,
         };
@@ -62,11 +63,11 @@ pub const Pool = struct {
     fn join(self: *Self, spawned: usize) void {
         if (builtin.single_threaded) return;
 
-        self.mutex.lock();
+        self.mutex.lockUncancelable(rt.io());
         self.is_running = false;
-        self.mutex.unlock();
+        self.mutex.unlock(rt.io());
 
-        self.cond.broadcast();
+        self.cond.broadcast(rt.io());
 
         for (self.threads[0..spawned]) |thread| {
             thread.join();
@@ -125,18 +126,18 @@ pub const Pool = struct {
                 closure.wait_group.finish();
 
                 const pool = closure.pool;
-                pool.mutex.lock();
-                defer pool.mutex.unlock();
+                pool.mutex.lockUncancelable(rt.io());
+                defer pool.mutex.unlock(rt.io());
                 pool.allocator.destroy(closure);
             }
         };
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
 
         const closure = self.allocator.create(Closure) catch {
-            self.mutex.unlock();
-            defer self.mutex.lock();
+            self.mutex.unlock(rt.io());
+            defer self.mutex.lockUncancelable(rt.io());
 
             if (@typeInfo(@TypeOf(@call(.auto, func, args))) == .error_union) {
                 try @call(.auto, func, args);
@@ -155,7 +156,7 @@ pub const Pool = struct {
         };
 
         self.run_queue.append(&closure.runnable.node);
-        self.cond.signal();
+        self.cond.signal(rt.io());
     }
 };
 
@@ -172,8 +173,8 @@ fn worker(pool: *Pool) void {
     var arena = std.heap.ArenaAllocator.init(pool.allocator);
     defer arena.deinit();
 
-    pool.mutex.lock();
-    defer pool.mutex.unlock();
+    pool.mutex.lockUncancelable(rt.io());
+    defer pool.mutex.unlock(rt.io());
 
     if (pool.ids) |ids_map| {
         const thread_id = std.Thread.getCurrentId();
@@ -182,8 +183,8 @@ fn worker(pool: *Pool) void {
 
     while (true) {
         while (pool.run_queue.popFirst()) |run_node| {
-            pool.mutex.unlock();
-            defer pool.mutex.lock();
+            pool.mutex.unlock(rt.io());
+            defer pool.mutex.lockUncancelable(rt.io());
 
             const runnable: *Runnable = @fieldParentPtr("node", run_node);
             runnable.thread_allocator = arena.allocator();
@@ -193,6 +194,6 @@ fn worker(pool: *Pool) void {
 
         if (!pool.is_running) break;
 
-        pool.cond.wait(&pool.mutex);
+        pool.cond.waitUncancelable(rt.io(), &pool.mutex);
     }
 }
