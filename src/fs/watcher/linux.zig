@@ -119,7 +119,7 @@ pub const Watcher = struct {
         var it = self.wd_map.valueIterator();
         while (it.next()) |v| self.allocator.free(v.*);
         self.wd_map.deinit();
-        posix.close(self.ifd);
+        _ = linux.close(self.ifd);
         for (self.skip_dirs.items) |d| self.allocator.free(d);
         self.skip_dirs.deinit(self.allocator);
     }
@@ -158,7 +158,7 @@ pub const Watcher = struct {
         const path_z = try self.allocator.dupeZ(u8, path);
         defer self.allocator.free(path_z);
 
-        const wd = posix.inotify_add_watch(self.ifd, path_z, WATCH_MASK) catch |err| switch (err) {
+        const wd = inotifyAddWatchZ(self.ifd, path_z, WATCH_MASK) catch |err| switch (err) {
             error.FileNotFound, error.NotDir => return,
             error.SystemResources => {
                 std.log.warn("inotify watch limit reached; increase fs.inotify.max_user_watches (e.g. sudo sysctl fs.inotify.max_user_watches=524288)", .{});
@@ -181,7 +181,7 @@ pub const Watcher = struct {
         var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
         defer dir.close(rt.io());
         var it = dir.iterate();
-        while (try it.next()) |entry| {
+        while (try it.next(rt.io())) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(self.allocator, &.{ path, entry.name });
             defer self.allocator.free(sub);

@@ -120,6 +120,9 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "options", .module = opts_mod },
             },
         }),
+        // The Zig 0.16.0 self-hosted x86 backend/linker cannot yet emit some
+        // relocations used here (R_X86_64_PC64), so build through LLVM.
+        .use_llvm = true,
     });
     exe.root_module.link_libc = true;
 
