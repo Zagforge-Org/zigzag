@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
 
@@ -82,7 +83,7 @@ pub const FileConf = struct {
     /// loadFromPathEmpty loads a FileConf from a JSON file at the given path.
     /// Returns null if the file does not exist or is empty.
     pub fn loadFromPathEmpty(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.Io.Dir.cwd().openFile(path, .{}) catch |err| switch (err) {
+        const file = std.Io.Dir.cwd().openFile(rt.io(), path, .{}) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };
@@ -114,7 +115,7 @@ pub const FileConf = struct {
     /// Returns null if the file doesn't exist, or parses the file contents.
     /// If the file is empty (only whitespace), parses the default JSON instead.
     pub fn loadFromPath(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.Io.Dir.cwd().openFile(path, .{}) catch |err| switch (err) {
+        const file = std.Io.Dir.cwd().openFile(rt.io(), path, .{}) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };

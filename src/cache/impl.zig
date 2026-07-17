@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 const CacheEntry = @import("entry.zig").CacheEntry;
 
 pub const CacheImpl = struct {
@@ -7,7 +8,7 @@ pub const CacheImpl = struct {
     files_dir: []const u8,
     small_file_threshold: usize,
     memory_cache: std.StringHashMap(CacheEntry),
-    mutex: std.Thread.Mutex,
+    mutex: std.Io.Mutex,
 
     const Self = @This();
 
@@ -42,7 +43,7 @@ pub const CacheImpl = struct {
             .files_dir = files_dir,
             .small_file_threshold = small_file_threshold,
             .memory_cache = std.StringHashMap(CacheEntry).init(allocator),
-            .mutex = .{},
+            .mutex = .init,
         };
 
         try cache.loadFromDisk();
@@ -204,8 +205,8 @@ pub const CacheImpl = struct {
     }
 
     pub fn isCached(self: *Self, path: []const u8, mtime: u64, size: usize, _: ?[32]u8) !bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
 
         const entry = self.memory_cache.get(path) orelse return false;
 
@@ -227,13 +228,13 @@ pub const CacheImpl = struct {
 
     /// Get content from cache - returns owned slice that caller must free
     pub fn getCachedContent(self: *Self, path: []const u8) ![]u8 {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(rt.io());
         const entry = self.memory_cache.get(path) orelse {
-            self.mutex.unlock();
+            self.mutex.unlock(rt.io());
             return error.NotCached;
         };
         const cache_filename = entry.cache_filename;
-        self.mutex.unlock();
+        self.mutex.unlock(rt.io());
 
         const cached_path = try std.fmt.allocPrint(self.allocator, "{s}/{s}", .{
             self.files_dir,
@@ -259,8 +260,8 @@ pub const CacheImpl = struct {
 
     /// Update cache - copies file content to cache
     pub fn update(self: *Self, path: []const u8, _: ?[32]u8, mtime: u64, size: usize, content: []const u8) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
 
         // Get or create cache filename
         var cache_filename: []u8 = undefined;
@@ -343,8 +344,8 @@ pub const CacheImpl = struct {
     }
 
     pub fn cleanup(self: *Self) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
 
         // Free memory cache
         var it = self.memory_cache.iterator();
