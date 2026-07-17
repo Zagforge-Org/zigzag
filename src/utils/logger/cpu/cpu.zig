@@ -16,7 +16,7 @@ fn getCpuNameLinux(buf: []u8) []const u8 {
     const f = std.Io.Dir.openFileAbsolute(rt.io(), "/proc/cpuinfo", .{}) catch return "unknown";
     defer f.close(rt.io());
     var tmp: [8192]u8 = undefined;
-    const n = f.read(&tmp) catch return "unknown";
+    const n = f.readStreaming(rt.io(), &.{tmp[0..]}) catch return "unknown";
     const needle = "model name\t: ";
     const idx = std.mem.indexOf(u8, tmp[0..n], needle) orelse return "unknown";
     const start = idx + needle.len;

@@ -184,7 +184,7 @@ fn uploadResult(
     const auth_header = try std.fmt.allocPrint(allocator, "Bearer {s}", .{api_key});
     defer allocator.free(auth_header);
 
-    var client: std.http.Client = .{ .allocator = allocator };
+    var client: std.http.Client = .{ .allocator = allocator, .io = rt.io() };
     defer client.deinit();
 
     const fetch_result = try client.fetch(.{

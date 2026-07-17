@@ -31,7 +31,7 @@ pub fn isPathSafe(req_path: []const u8) bool {
 pub fn execServe(cfg: ServeConfig) !void {
     const max_port_attempts = 10;
     var port = cfg.port;
-    var server: std.net.Server = blk: {
+    var server: std.Io.net.Server = blk: {
         for (0..max_port_attempts) |i| {
             if (isPortListening(port)) {
                 if (i == 0) {
@@ -44,8 +44,8 @@ pub fn execServe(cfg: ServeConfig) !void {
                 port += 1;
                 continue;
             }
-            const addr = try std.net.Address.parseIp("127.0.0.1", port);
-            if (addr.listen(.{ .reuse_address = true })) |srv| {
+            const addr = try std.Io.net.IpAddress.parse("127.0.0.1", port);
+            if (addr.listen(rt.io(), .{ .reuse_address = true })) |srv| {
                 break :blk srv;
             } else |err| {
                 // Bind still failed (race condition or other error); treat as occupied.
@@ -59,7 +59,7 @@ pub fn execServe(cfg: ServeConfig) !void {
         lg.printError("Ports {d}..{d} are all occupied. Cannot start server.", .{ cfg.port, port - 1 });
         return error.AddressInUse;
     };
-    defer server.deinit();
+    defer server.deinit(rt.io());
 
     lg.printSuccess("Serving ZigZag report at \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{port});
     lg.printStep("Root: {s}", .{cfg.root_dir});
@@ -70,27 +70,25 @@ pub fn execServe(cfg: ServeConfig) !void {
     }
 
     while (true) {
-        const conn = server.accept() catch continue;
+        const conn = server.accept(rt.io()) catch continue;
         handleConn(conn, cfg) catch {};
     }
 }
 
-fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
-    defer conn.stream.close();
+fn handleConn(conn: std.Io.net.Stream, cfg: ServeConfig) !void {
+    defer conn.close(rt.io());
 
-    var buf: [4096]u8 = undefined;
-    var total: usize = 0;
-    while (total < buf.len - 1) {
-        const n = try conn.stream.read(buf[total..]);
-        if (n == 0) return;
-        total += n;
-        if (std.mem.indexOf(u8, buf[0..total], "\r\n\r\n") != null) break;
-        if (std.mem.indexOf(u8, buf[0..total], "\n\n") != null) break;
-    }
+    var read_buf: [4096]u8 = undefined;
+    var stream_reader = conn.reader(rt.io(), &read_buf);
+    const reader = &stream_reader.interface;
 
-    const line_end = std.mem.indexOf(u8, buf[0..total], "\r\n") orelse
-        std.mem.indexOf(u8, buf[0..total], "\n") orelse return;
-    const first_line = buf[0..line_end];
+    var write_buf: [64 * 1024]u8 = undefined;
+    var stream_writer = conn.writer(rt.io(), &write_buf);
+    const writer = &stream_writer.interface;
+
+    // Ignore the remaining headers.
+    const first_line_raw = reader.takeDelimiterInclusive('\n') catch return;
+    const first_line = std.mem.trimEnd(u8, first_line_raw, "\r\n");
     if (!std.mem.startsWith(u8, first_line, "GET ")) return;
     const path_end = std.mem.indexOfPos(u8, first_line, 4, " ") orelse first_line.len;
     const req_path_raw = first_line[4..path_end];
@@ -105,7 +103,8 @@ fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
 
     // Security: reject path traversal
     if (!isPathSafe(req_path)) {
-        try conn.stream.writeAll("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+        try writer.writeAll("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");
+        try writer.flush();
         return;
     }
 
@@ -113,13 +112,15 @@ fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
     defer cfg.allocator.free(file_path);
 
     const file = std.Io.Dir.cwd().openFile(rt.io(), file_path, .{}) catch {
-        try conn.stream.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+        try writer.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+        try writer.flush();
         return;
     };
-    defer file.close();
+    defer file.close(rt.io());
 
-    const file_size = file.getEndPos() catch {
-        try conn.stream.writeAll("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+    const file_size = if (file.stat(rt.io())) |st| st.size else |_| {
+        try writer.writeAll("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n");
+        try writer.flush();
         return;
     };
 
@@ -130,14 +131,15 @@ fn handleConn(conn: std.net.Server.Connection, cfg: ServeConfig) !void {
         "HTTP/1.1 200 OK\r\nContent-Type: {s}\r\nContent-Length: {d}\r\nCache-Control: no-cache\r\n\r\n",
         .{ mime, file_size },
     );
-    try conn.stream.writeAll(hdr);
+    try writer.writeAll(hdr);
 
     var io_buf: [64 * 1024]u8 = undefined;
     while (true) {
-        const n = try file.read(&io_buf);
+        const n = try file.readStreaming(rt.io(), &.{io_buf[0..]});
         if (n == 0) break;
-        try conn.stream.writeAll(io_buf[0..n]);
+        try writer.writeAll(io_buf[0..n]);
     }
+    try writer.flush();
 }
 
 fn openBrowser(allocator: std.mem.Allocator, port: u16) void {
@@ -156,9 +158,7 @@ fn openBrowserThread(allocator: std.mem.Allocator, url: []u8) void {
         .windows => &.{ "cmd", "/C", "start", "", url },
         else => &.{ "xdg-open", url },
     };
-    var child = std.process.Child.init(argv, allocator);
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Ignore;
-    _ = child.spawnAndWait() catch {};
+    const result = std.process.run(allocator, rt.io(), .{ .argv = argv }) catch return;
+    allocator.free(result.stdout);
+    allocator.free(result.stderr);
 }
