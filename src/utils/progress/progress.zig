@@ -114,7 +114,7 @@ pub const ProgressBar = struct {
             }
 
             frame += 1;
-            std.Thread.sleep(100 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(100 * std.time.ns_per_ms), .monotonic) catch {};
         }
     }
 };

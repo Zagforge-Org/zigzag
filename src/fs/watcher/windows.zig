@@ -287,7 +287,7 @@ pub const Watcher = struct {
         const wait_ms: u64 = if (timeout_ms < 0) std.math.maxInt(u64) else @intCast(timeout_ms);
         const start = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
         while (true) {
-            std.Thread.sleep(5 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(5 * std.time.ns_per_ms), .monotonic) catch {};
             try self.drainFiltered(out);
             if (out.items.len > before) break;
             if (@as(u64, @intCast(std.Io.Timestamp.now(rt.io(), .real).toMilliseconds() - start)) >= wait_ms) break;

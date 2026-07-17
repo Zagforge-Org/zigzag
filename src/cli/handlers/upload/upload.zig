@@ -277,7 +277,7 @@ pub fn performUpload(
                 timed_out = true;
                 break;
             }
-            std.Thread.sleep(10 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .monotonic) catch {};
         }
 
         if (timed_out) {
