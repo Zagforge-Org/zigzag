@@ -5,6 +5,9 @@ const rt = @import("../../../runtime.zig");
 /// Created via Logger.init(); must be deinitialized with Logger.deinit().
 pub const Logger = struct {
     file: std.Io.File,
+    /// Current append offset. 0.16.0's File has no seek; we position writes
+    /// explicitly with writePositionalAll and advance this cursor.
+    pos: u64,
 
     /// Opens (or creates) `<output_dir>/zigzag.log` in append mode.
     pub fn init(output_dir: []const u8, allocator: std.mem.Allocator) !Logger {
@@ -12,8 +15,8 @@ pub const Logger = struct {
         const log_path = try std.fs.path.join(allocator, &.{ output_dir, "zigzag.log" });
         defer allocator.free(log_path);
         const f = try std.Io.Dir.cwd().createFile(rt.io(), log_path, .{ .truncate = false });
-        try f.seekFromEnd(0);
-        return .{ .file = f };
+        const end = (try f.stat(rt.io())).size;
+        return .{ .file = f, .pos = end };
     }
 
     pub fn deinit(self: *Logger) void {
@@ -21,7 +24,7 @@ pub const Logger = struct {
     }
 
     /// Writes a timestamped line to the log file.
-    pub fn log(self: Logger, comptime fmt: []const u8, args: anytype) void {
+    pub fn log(self: *Logger, comptime fmt: []const u8, args: anytype) void {
         const ts_raw = std.time.timestamp();
         const ts: u64 = if (ts_raw > 0) @intCast(ts_raw) else 0;
         const es = std.time.epoch.EpochSeconds{ .secs = ts };
@@ -43,6 +46,7 @@ pub const Logger = struct {
                 ds.getSecondsIntoMinute(),
             } ++ args,
         ) catch return;
-        self.file.writeAll(msg) catch {};
+        self.file.writePositionalAll(rt.io(), msg, self.pos) catch return;
+        self.pos += msg.len;
     }
 };
