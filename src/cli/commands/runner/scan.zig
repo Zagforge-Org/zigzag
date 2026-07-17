@@ -64,7 +64,7 @@ pub fn scanPath(
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
-        .ignore_list = .{},
+        .ignore_list = .empty,
         .md = undefined,
         .md_mutex = undefined,
     };
