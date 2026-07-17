@@ -25,9 +25,18 @@ const win_ws2 = struct {
     extern "ws2_32" fn shutdown(s: std.posix.socket_t, how: c_int) callconv(.winapi) c_int;
 };
 
+/// Writes all b ytes to a stream. It no longer exposes
+/// a direct `writeAll`.
+fn streamWriteAll(stream: std.Io.net.Stream, bytes: []const u8) !void {
+    var buf: [4096]u8 = undefined;
+    var sw = stream.writer(rt.io(), &buf);
+    try sw.interface.writeAll(bytes);
+    try sw.interface.flush();
+}
+
 /// Read from a socket, bypassing ReadFile() on Windows.
 /// Drop-in for Stream.read(): returns bytes read, 0 on EOF, or an error.
-fn socketRecv(handle: std.posix.socket_t, buf: []u8) std.net.Stream.ReadError!usize {
+fn socketRecv(handle: std.posix.socket_t, buf: []u8) !usize {
     if (comptime builtin.os.tag == .windows) {
         if (buf.len == 0) return 0;
         const n = win_ws2.recv(handle, buf.ptr, @intCast(buf.len), 0);
@@ -40,20 +49,20 @@ fn socketRecv(handle: std.posix.socket_t, buf: []u8) std.net.Stream.ReadError!us
 /// Gracefully close a TCP connection to avoid RST on Windows.
 /// Without shutdown(SD_SEND) + drain, closesocket() sends RST if there is
 /// any unread data in the receive buffer — the browser sees ERR_CONNECTION_RESET.
-fn gracefulClose(stream: std.net.Stream) void {
+fn gracefulClose(stream: std.Io.net.Stream) void {
     if (comptime builtin.os.tag == .windows) {
-        _ = win_ws2.shutdown(stream.handle, 1); // SD_SEND = 1 → sends FIN
+        _ = win_ws2.shutdown(stream.socket.handle, 1); // SD_SEND = 1 -> sends FIN
         // Drain remaining receive-buffer data so closesocket() does not RST.
         var drain: [1024]u8 = undefined;
         const drain_ptr: [*]u8 = @ptrCast(&drain);
         var drained: usize = 0;
         while (drained < 64 * 1024) {
-            const n = win_ws2.recv(stream.handle, drain_ptr, @intCast(drain.len), 0);
+            const n = win_ws2.recv(stream.socket.handle, drain_ptr, @intCast(drain.len), 0);
             if (n <= 0) break; // 0 = peer closed, negative = error (e.g. WSAECONNRESET)
             drained += @intCast(n);
         }
     }
-    stream.close();
+    stream.close(rt.io());
 }
 
 /// SSE dev server for watch mode.
@@ -68,14 +77,14 @@ fn gracefulClose(stream: std.net.Stream) void {
 ///   event: reload — full page reload signal
 pub const SseServer = struct {
     allocator: std.mem.Allocator,
-    listener: std.net.Server,
+    listener: std.Io.net.Server,
     root_dir: []const u8, // directory to serve static files from
     default_page: []const u8, // filename returned for GET /
     bound_port: u16,
 
     // Shared state between the caller thread and the event loop.
     // All fields below are protected by mutex.
-    mu: std.Thread.Mutex = .{},
+    mu: std.Io.Mutex = .init,
     pending_payload: ?[]u8 = null, // next "report" broadcast queued by broadcast()
     pending_combined: ?[]u8 = null, // next "combined_update" broadcast queued by broadcastCombined()
     pending_reload: bool = false, // next "reload" event queued by broadcastReload()
@@ -91,15 +100,15 @@ pub const SseServer = struct {
     current_combined: ?[]u8 = null,
 
     accept_thread: ?std.Thread = null,
-    accept_queue: std.ArrayList(std.net.Server.Connection),
-    accept_mu: std.Thread.Mutex = .{},
+    accept_queue: std.ArrayList(std.Io.net.Stream),
+    accept_mu: std.Io.Mutex = .init,
 
     pub fn init(port: u16, root_dir: []const u8, default_page: []const u8, allocator: std.mem.Allocator) !*SseServer {
         const self = try allocator.create(SseServer);
         errdefer allocator.destroy(self);
 
-        const addr = try std.net.Address.parseIp("127.0.0.1", port);
-        const listener = try addr.listen(.{ .reuse_address = true });
+        const addr = try std.Io.net.IpAddress.parse("127.0.0.1", port);
+        const listener = try addr.listen(rt.io(), .{ .reuse_address = true });
 
         const owned_dir = try allocator.dupe(u8, root_dir);
         errdefer allocator.free(owned_dir);
@@ -129,8 +138,8 @@ pub const SseServer = struct {
     pub fn broadcast(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
 
-        self.mu.lock();
-        defer self.mu.unlock();
+        self.mu.lockUncancelable(rt.io());
+        defer self.mu.unlock(rt.io());
 
         if (self.pending_payload) |old| self.allocator.free(old);
         self.pending_payload = copy;
@@ -140,8 +149,8 @@ pub const SseServer = struct {
     pub fn broadcastCombined(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
 
-        self.mu.lock();
-        defer self.mu.unlock();
+        self.mu.lockUncancelable(rt.io());
+        defer self.mu.unlock(rt.io());
 
         if (self.pending_combined) |old| self.allocator.free(old);
         self.pending_combined = copy;
@@ -149,9 +158,9 @@ pub const SseServer = struct {
 
     /// Queue a "reload" SSE event (triggers location.reload() in the browser).
     pub fn broadcastReload(self: *SseServer) void {
-        self.mu.lock();
+        self.mu.lockUncancelable(rt.io());
         self.pending_reload = true;
-        self.mu.unlock();
+        self.mu.unlock(rt.io());
     }
 
     /// Open the dashboard URL in the system browser (fire-and-forget).
@@ -171,28 +180,28 @@ pub const SseServer = struct {
     }
 
     pub fn stop(self: *SseServer) void {
-        self.mu.lock();
+        self.mu.lockUncancelable(rt.io());
         self.stopped = true;
-        self.mu.unlock();
+        self.mu.unlock(rt.io());
     }
 
     pub fn deinit(self: *SseServer) void {
         {
-            self.mu.lock();
-            defer self.mu.unlock();
+            self.mu.lockUncancelable(rt.io());
+            defer self.mu.unlock(rt.io());
             self.stopped = true;
         }
 
-        self.listener.deinit();
+        self.listener.deinit(rt.io());
 
         if (self.accept_thread) |t| t.join();
 
         {
-            self.accept_mu.lock();
-            defer self.accept_mu.unlock();
+            self.accept_mu.lockUncancelable(rt.io());
+            defer self.accept_mu.unlock(rt.io());
 
             for (self.accept_queue.items) |conn|
-                conn.stream.close();
+                conn.close(rt.io());
 
             self.accept_queue.deinit(self.allocator);
         }
@@ -201,8 +210,8 @@ pub const SseServer = struct {
         self.allocator.free(self.default_page);
 
         {
-            self.mu.lock();
-            defer self.mu.unlock();
+            self.mu.lockUncancelable(rt.io());
+            defer self.mu.unlock(rt.io());
 
             if (self.pending_payload) |p| self.allocator.free(p);
             if (self.pending_combined) |p| self.allocator.free(p);
@@ -217,22 +226,22 @@ pub const SseServer = struct {
     fn acceptLoop(self: *SseServer) void {
         while (true) {
             {
-                self.mu.lock();
+                self.mu.lockUncancelable(rt.io());
                 const stopped = self.stopped;
-                self.mu.unlock();
+                self.mu.unlock(rt.io());
                 if (stopped) break;
             }
 
-            const conn = self.listener.accept() catch {
-                std.Thread.sleep(10 * std.time.ns_per_ms);
+            const conn = self.listener.accept(rt.io()) catch {
+                std.Io.sleep(rt.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
                 continue;
             };
 
-            self.accept_mu.lock();
+            self.accept_mu.lockUncancelable(rt.io());
             self.accept_queue.append(self.allocator, conn) catch {
-                conn.stream.close();
+                conn.close(rt.io());
             };
-            self.accept_mu.unlock();
+            self.accept_mu.unlock(rt.io());
         }
     }
 
@@ -240,17 +249,17 @@ pub const SseServer = struct {
     fn eventLoop(self: *SseServer) void {
         // Client registry: each entry is the raw stream for a connected SSE client.
         // Only accessed from this thread — no lock needed.
-        var clients: std.ArrayList(std.net.Stream) = .empty;
+        var clients: std.ArrayList(std.Io.net.Stream) = .empty;
         defer {
-            for (clients.items) |c| c.close();
+            for (clients.items) |c| c.close(rt.io());
             clients.deinit(self.allocator);
         }
 
         const t = std.Thread.spawn(.{}, acceptLoop, .{self}) catch null;
         if (t) |thread| {
-            self.mu.lock();
+            self.mu.lockUncancelable(rt.io());
             self.accept_thread = thread;
-            self.mu.unlock();
+            self.mu.unlock(rt.io());
         }
 
         var last_keepalive_ms = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
@@ -259,41 +268,41 @@ pub const SseServer = struct {
         while (true) {
             // Check stop flag
             {
-                self.mu.lock();
+                self.mu.lockUncancelable(rt.io());
                 const stopped = self.stopped;
-                self.mu.unlock();
+                self.mu.unlock(rt.io());
                 if (stopped) break;
             }
 
-            std.Thread.sleep(100 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
             // Drain the accept queue into a local list before releasing the lock.
             // handleNewConn does a blocking read, so we must not hold accept_mu
             // while calling it — otherwise acceptLoop stalls waiting for the lock.
-            var local_queue: std.ArrayList(std.net.Server.Connection) = .empty;
+            var local_queue: std.ArrayList(std.Io.net.Stream) = .empty;
             defer local_queue.deinit(self.allocator);
 
-            self.accept_mu.lock();
+            self.accept_mu.lockUncancelable(rt.io());
             for (self.accept_queue.items) |conn| {
                 local_queue.append(self.allocator, conn) catch {
-                    conn.stream.close();
+                    conn.close(rt.io());
                 };
             }
             self.accept_queue.clearRetainingCapacity();
-            self.accept_mu.unlock();
+            self.accept_mu.unlock(rt.io());
 
             for (local_queue.items) |conn| {
                 self.handleNewConn(conn, &clients);
             }
 
-            self.mu.lock();
+            self.mu.lockUncancelable(rt.io());
             const payload = self.pending_payload;
             self.pending_payload = null;
             const combined = self.pending_combined;
             self.pending_combined = null;
             const reload = self.pending_reload;
             self.pending_reload = false;
-            self.mu.unlock();
+            self.mu.unlock(rt.io());
 
             if (payload) |p| {
                 defer self.allocator.free(p);
@@ -328,20 +337,20 @@ pub const SseServer = struct {
     // Connection handling (called from event loop thread)
     fn handleNewConn(
         self: *SseServer,
-        conn: std.net.Server.Connection,
-        clients: *std.ArrayList(std.net.Stream),
+        conn: std.Io.net.Stream,
+        clients: *std.ArrayList(std.Io.net.Stream),
     ) void {
         // Read HTTP request headers (blocking, but almost instant — browser sends
         // all headers in one segment immediately after connect).
         var buf: [4096]u8 = undefined;
         var total: usize = 0;
         while (total < buf.len - 1) {
-            const n = socketRecv(conn.stream.handle, buf[total..]) catch {
-                gracefulClose(conn.stream);
+            const n = socketRecv(conn.socket.handle, buf[total..]) catch {
+                gracefulClose(conn);
                 return;
             };
             if (n == 0) {
-                gracefulClose(conn.stream);
+                gracefulClose(conn);
                 return;
             }
             total += n;
@@ -351,28 +360,28 @@ pub const SseServer = struct {
 
         const line_end = std.mem.indexOf(u8, buf[0..total], "\r\n") orelse
             std.mem.indexOf(u8, buf[0..total], "\n") orelse {
-            gracefulClose(conn.stream);
+            gracefulClose(conn);
             return;
         };
         const first_line = buf[0..line_end];
         if (!std.mem.startsWith(u8, first_line, "GET ")) {
-            gracefulClose(conn.stream);
+            gracefulClose(conn);
             return;
         }
         const path_end = std.mem.indexOfPos(u8, first_line, 4, " ") orelse first_line.len;
         const req_path = first_line[4..path_end];
 
         if (std.mem.eql(u8, req_path, "/__events")) {
-            self.upgradeSse(conn.stream, clients);
+            self.upgradeSse(conn, clients);
         } else {
-            serveStatic(self.allocator, self.root_dir, self.default_page, req_path, conn.stream);
+            serveStatic(self.allocator, self.root_dir, self.default_page, req_path, conn);
         }
     }
 
     fn upgradeSse(
         self: *SseServer,
-        stream: std.net.Stream,
-        clients: *std.ArrayList(std.net.Stream),
+        stream: std.Io.net.Stream,
+        clients: *std.ArrayList(std.Io.net.Stream),
     ) void {
         const headers =
             "HTTP/1.1 200 OK\r\n" ++
@@ -383,7 +392,7 @@ pub const SseServer = struct {
             "\r\n" ++
             // Instruct the browser to reconnect every 3 s on disconnect.
             "retry: 3000\n\n";
-        stream.writeAll(headers) catch {
+        streamWriteAll(stream, headers) catch {
             gracefulClose(stream);
             return;
         };
@@ -392,9 +401,9 @@ pub const SseServer = struct {
         // data without waiting for the next file-change event.
         if (self.current_combined) |p| {
             const ok = blk: {
-                stream.writeAll("event: combined_update\ndata: ") catch break :blk false;
-                stream.writeAll(p) catch break :blk false;
-                stream.writeAll("\n\n") catch break :blk false;
+                streamWriteAll(stream, "event: combined_update\ndata: ") catch break :blk false;
+                streamWriteAll(stream, p) catch break :blk false;
+                streamWriteAll(stream, "\n\n") catch break :blk false;
                 break :blk true;
             };
             if (!ok) {
@@ -407,9 +416,9 @@ pub const SseServer = struct {
         // the next file-change event.
         if (self.current_payload) |p| {
             const ok = blk: {
-                stream.writeAll("event: report\ndata: ") catch break :blk false;
-                stream.writeAll(p) catch break :blk false;
-                stream.writeAll("\n\n") catch break :blk false;
+                streamWriteAll(stream, "event: report\ndata: ") catch break :blk false;
+                streamWriteAll(stream, p) catch break :blk false;
+                streamWriteAll(stream, "\n\n") catch break :blk false;
                 break :blk true;
             };
             if (!ok) {
@@ -429,12 +438,12 @@ pub const SseServer = struct {
 
 /// Write multiple string parts to every live client.
 /// Removes clients whose writes fail (disconnected).
-fn writePartsToAll(clients: *std.ArrayList(std.net.Stream), parts: []const []const u8) void {
+fn writePartsToAll(clients: *std.ArrayList(std.Io.net.Stream), parts: []const []const u8) void {
     var i: usize = 0;
     while (i < clients.items.len) {
         const alive = blk: {
             for (parts) |part| {
-                clients.items[i].writeAll(part) catch break :blk false;
+                streamWriteAll(clients.items[i], part) catch break :blk false;
             }
             break :blk true;
         };
@@ -456,7 +465,7 @@ fn deriveMimeType(path: []const u8) []const u8 {
     return "application/octet-stream";
 }
 
-fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page: []const u8, req_path_raw: []const u8, stream: std.net.Stream) void {
+fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page: []const u8, req_path_raw: []const u8, stream: std.Io.net.Stream) void {
     defer gracefulClose(stream);
 
     // Strip leading slash and query string.
@@ -469,7 +478,7 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
 
     // Reject path traversal.
     if (req_path[0] == '/' or std.mem.indexOf(u8, req_path, "..") != null) {
-        stream.writeAll("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n") catch {};
+        streamWriteAll(stream, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     }
 
@@ -477,13 +486,13 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
     defer allocator.free(file_path);
 
     const file = std.Io.Dir.cwd().openFile(rt.io(), file_path, .{}) catch {
-        stream.writeAll("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n") catch {};
+        streamWriteAll(stream, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     };
-    defer file.close();
+    defer file.close(rt.io());
 
-    const file_size = file.getEndPos() catch {
-        stream.writeAll("HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n") catch {};
+    const file_size = if (file.stat(rt.io())) |st| st.size else |_| {
+        streamWriteAll(stream, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     };
 
@@ -494,13 +503,13 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
         "HTTP/1.1 200 OK\r\nContent-Type: {s}\r\nContent-Length: {d}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
         .{ mime, file_size },
     ) catch return;
-    stream.writeAll(hdr) catch return;
+    streamWriteAll(stream, hdr) catch return;
 
     var buf: [64 * 1024]u8 = undefined;
     while (true) {
-        const n = file.read(&buf) catch return;
+        const n = file.readStreaming(rt.io(), &.{buf[0..]}) catch return;
         if (n == 0) break;
-        stream.writeAll(buf[0..n]) catch return;
+        streamWriteAll(stream, buf[0..n]) catch return;
     }
 }
 
@@ -511,9 +520,7 @@ fn openBrowserThread(allocator: std.mem.Allocator, url: []u8) void {
         .windows => &.{ "cmd", "/C", "start", "", url },
         else => &.{ "xdg-open", url },
     };
-    var child = std.process.Child.init(argv, allocator);
-    child.stdin_behavior = .Ignore;
-    child.stdout_behavior = .Ignore;
-    child.stderr_behavior = .Ignore;
-    _ = child.spawnAndWait() catch {};
+    const result = std.process.run(allocator, rt.io(), .{ .argv = argv }) catch return;
+    allocator.free(result.stdout);
+    allocator.free(result.stderr);
 }
