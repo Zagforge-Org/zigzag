@@ -312,8 +312,8 @@ pub fn processFileJob(job: Job) anyerror!void {
             _ = stats.processed_files.fetchSub(1, .monotonic);
         }
 
-        entries_mutex.lock();
-        defer entries_mutex.unlock();
+        entries_mutex.lockUncancelable(rt.io());
+        defer entries_mutex.unlock(rt.io());
 
         const path_copy = try allocator.dupe(u8, path);
         const ext_copy = try allocator.dupe(u8, extension);
@@ -334,8 +334,8 @@ pub fn processFileJob(job: Job) anyerror!void {
     // =========================
     // Store result
     // =========================
-    entries_mutex.lock();
-    defer entries_mutex.unlock();
+    entries_mutex.lockUncancelable(rt.io());
+    defer entries_mutex.unlock(rt.io());
 
     const path_copy = try allocator.dupe(u8, path);
     const ext_copy = try allocator.dupe(u8, extension);

@@ -4,5 +4,5 @@ const std = @import("std");
 pub const FileContext = struct {
     ignore_list: std.ArrayList([]const u8),
     md: *std.Io.File,
-    md_mutex: *std.Thread.Mutex,
+    md_mutex: *std.Io.Mutex,
 };

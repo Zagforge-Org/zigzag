@@ -15,7 +15,7 @@ const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can
 /// hold a reference; the queue is only freed when the last holder releases it.
 const SharedQueue = struct {
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = .init,
     events: std.ArrayList(WatchEvent) = .empty,
     allocator: std.mem.Allocator,
     ref: std.atomic.Value(u32),
@@ -39,14 +39,14 @@ const SharedQueue = struct {
     }
 
     fn push(self: *SharedQueue, ev: WatchEvent) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
         self.events.append(self.allocator, ev) catch {};
     }
 
     fn drain(self: *SharedQueue, out: *std.ArrayList(WatchEvent)) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
         try out.appendSlice(self.allocator, self.events.items);
         self.events.clearRetainingCapacity();
     }

@@ -281,9 +281,9 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
                             if (path_copy) |p| changed_paths.append(allocator, p) catch allocator.free(p);
                             // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
                             if (sse_server) |srv| {
-                                state.entries_mutex.lock();
+                                state.entries_mutex.lockUncancelable(rt.io());
                                 const entry_opt = state.file_entries.get(event.path);
-                                state.entries_mutex.unlock();
+                                state.entries_mutex.unlock(rt.io());
                                 if (entry_opt) |entry| {
                                     const delta = report.buildFileDeltaPayload(allocator, &entry, .updated) catch null;
                                     if (delta) |d| {

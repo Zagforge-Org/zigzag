@@ -13,7 +13,7 @@ pub const Job = struct {
     stats: *ProcessStats,
     file_entries: *std.StringHashMap(JobEntry),
     binary_entries: *std.StringHashMap(BinaryEntry),
-    entries_mutex: *std.Thread.Mutex,
+    entries_mutex: *std.Io.Mutex,
     allocator: std.mem.Allocator,
     thread_allocator: std.mem.Allocator, // per-thread arena; reset after each job
 

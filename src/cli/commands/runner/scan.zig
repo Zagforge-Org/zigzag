@@ -130,7 +130,7 @@ pub fn scanPath(
         binary_entries.deinit();
     }
 
-    var entries_mutex = std.Thread.Mutex{};
+    var entries_mutex = @as(std.Io.Mutex, .init);
 
     var walker_ctx = WalkerCtx{
         .pool = pool,
