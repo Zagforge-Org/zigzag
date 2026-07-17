@@ -75,7 +75,7 @@ pub const ProgressBar = struct {
                 // Phase 1: spinner + counter (first ~1 second)
                 const spinner = spinners[frame % 10];
                 const line = std.fmt.bufPrint(&buf, "\r\x1B[2K{s} Scanning… {d} files", .{ spinner, total }) catch "\r\x1B[2K...";
-                stderr.writeAll(line) catch {};
+                stderr.writeStreamingAll(rt.io(), line) catch {};
             } else {
                 // Phase 2: rolling-estimate bar + counter (blue fill, dim empty, no brackets)
                 estimate = @max(estimate, total * 4 / 3);
@@ -110,7 +110,7 @@ pub const ProgressBar = struct {
                 bp += dim_off.len;
 
                 const line = std.fmt.bufPrint(&buf, "\r\x1B[2K{s} {d} files ({d} cached)", .{ bar[0..bp], total, cached }) catch "\r\x1B[2K...";
-                stderr.writeAll(line) catch {};
+                stderr.writeStreamingAll(rt.io(), line) catch {};
             }
 
             frame += 1;

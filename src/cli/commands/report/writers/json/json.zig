@@ -102,5 +102,5 @@ pub fn writeJsonReport(
 
     var json_file = try std.Io.Dir.cwd().createFile(rt.io(), json_path, .{ .truncate = true });
     defer json_file.close(rt.io());
-    try json_file.writeAll(aw.written());
+    try json_file.writeStreamingAll(rt.io(), aw.written());
 }

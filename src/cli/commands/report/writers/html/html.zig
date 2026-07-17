@@ -127,7 +127,7 @@ pub fn writeHtmlReport(
     // Write to disk
     var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
     defer html_file.close(rt.io());
-    try html_file.writeAll(aw.written());
+    try html_file.writeStreamingAll(rt.io(), aw.written());
 
 }
 
@@ -139,7 +139,7 @@ pub fn writeStampFile(html_path: []const u8, generated_at: []const u8, allocator
     defer allocator.free(stamp_path);
     var stamp_file = try std.Io.Dir.cwd().createFile(rt.io(), stamp_path, .{ .truncate = true });
     defer stamp_file.close(rt.io());
-    try stamp_file.writeAll(generated_at);
+    try stamp_file.writeStreamingAll(rt.io(), generated_at);
 }
 
 /// Stream source content to a sidecar JSON file: {"path":"content",...}.
@@ -518,5 +518,5 @@ pub fn writeCombinedHtmlReport(
 
     var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
     defer html_file.close(rt.io());
-    try html_file.writeAll(aw.written());
+    try html_file.writeStreamingAll(rt.io(), aw.written());
 }

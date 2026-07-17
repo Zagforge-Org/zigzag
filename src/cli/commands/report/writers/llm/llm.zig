@@ -352,7 +352,7 @@ pub fn writeLlmReport(
     // Write to disk
     var llm_file = try std.Io.Dir.cwd().createFile(rt.io(), llm_path, .{ .truncate = true });
     defer llm_file.close(rt.io());
-    try llm_file.writeAll(aw.written());
+    try llm_file.writeStreamingAll(rt.io(), aw.written());
 }
 
 /// Extracts lines [start_line..=end_line] (0-based) from content as a slice.

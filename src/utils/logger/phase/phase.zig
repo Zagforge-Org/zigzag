@@ -104,39 +104,39 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
     const cpu_name = cpu.getCpuName(&cpu_name_buf);
 
     // Header
-    stderr.writeAll("\n\x1b[1m\x1b[97m🚀 ZigZag — Report Generation Complete\x1b[0m\n\n") catch {};
+    stderr.writeStreamingAll(rt.io(), "\n\x1b[1m\x1b[97m🚀 ZigZag — Report Generation Complete\x1b[0m\n\n") catch {};
 
     // ── Summary ──
-    stderr.writeAll(sep) catch {};
-    stderr.writeAll("\x1b[1m Summary\x1b[0m\n") catch {};
-    stderr.writeAll(sep) catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
+    stderr.writeStreamingAll(rt.io(), "\x1b[1m Summary\x1b[0m\n") catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
 
     const cpu_s: []const u8 = if (cpu_count == 1) "" else "s";
-    stderr.writeAll(std.fmt.bufPrint(&buf, " Machine        : {s} {s} ({d} core{s})\n", .{
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " Machine        : {s} {s} ({d} core{s})\n", .{
         os_name, arch_name, cpu_count, cpu_s,
     }) catch return) catch {};
-    stderr.writeAll(std.fmt.bufPrint(&buf, " CPU            : {s}\n", .{cpu_name}) catch return) catch {};
-    stderr.writeAll(std.fmt.bufPrint(&buf, " ZigZag Version : {s}\n", .{options.version_string}) catch return) catch {};
-    stderr.writeAll(std.fmt.bufPrint(&buf, " Total Time     : {s}\n", .{fmt_utils.fmtElapsed(data.total_ns, &elapsed_buf)}) catch return) catch {};
-    stderr.writeAll("\n") catch {};
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " CPU            : {s}\n", .{cpu_name}) catch return) catch {};
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " ZigZag Version : {s}\n", .{options.version_string}) catch return) catch {};
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " Total Time     : {s}\n", .{fmt_utils.fmtElapsed(data.total_ns, &elapsed_buf)}) catch return) catch {};
+    stderr.writeStreamingAll(rt.io(), "\n") catch {};
 
     var files_buf: [32]u8 = undefined;
-    stderr.writeAll(std.fmt.bufPrint(&buf, " Files Scanned  : {s}\n", .{fmtThousands(data.files_total, &files_buf)}) catch return) catch {};
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " Files Scanned  : {s}\n", .{fmtThousands(data.files_total, &files_buf)}) catch return) catch {};
 
     const n_proj = data.path_names.len;
     const proj_word: []const u8 = if (n_proj == 1) "project" else "projects";
     const combined_suffix: []const u8 = if (data.has_combined) " + combined" else "";
-    stderr.writeAll(std.fmt.bufPrint(&buf, " Reports Built  : {d} {s}{s}\n", .{ n_proj, proj_word, combined_suffix }) catch return) catch {};
-    stderr.writeAll("\n") catch {};
+    stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " Reports Built  : {d} {s}{s}\n", .{ n_proj, proj_word, combined_suffix }) catch return) catch {};
+    stderr.writeStreamingAll(rt.io(), "\n") catch {};
 
     // ── Phase Breakdown ──
     const total_phase_ns = data.scan_ns + data.aggregate_ns +
         data.write_md_ns + data.write_json_ns +
         data.write_html_ns + data.write_llm_ns;
 
-    stderr.writeAll(sep) catch {};
-    stderr.writeAll("\x1b[1m Phase Breakdown\x1b[0m\n") catch {};
-    stderr.writeAll(sep) catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
+    stderr.writeStreamingAll(rt.io(), "\x1b[1m Phase Breakdown\x1b[0m\n") catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
 
     const row: PhaseRowCtx = .{ .stderr = stderr, .total_ns = total_phase_ns, .buf = &buf };
     if (data.scan_ns > 0) row.append("Scan", data.scan_ns);
@@ -145,26 +145,26 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
     if (data.write_json_ns > 0) row.append("Write JSON", data.write_json_ns);
     if (data.write_html_ns > 0) row.append("Write HTML", data.write_html_ns);
     if (data.write_llm_ns > 0) row.append("Write LLM", data.write_llm_ns);
-    stderr.writeAll("\n") catch {};
+    stderr.writeStreamingAll(rt.io(), "\n") catch {};
 
     // ── Generated Reports ──
     if (n_proj > 0) {
-        stderr.writeAll(sep) catch {};
-        stderr.writeAll("\x1b[1m Generated Reports\x1b[0m\n") catch {};
-        stderr.writeAll(sep) catch {};
+        stderr.writeStreamingAll(rt.io(), sep) catch {};
+        stderr.writeStreamingAll(rt.io(), "\x1b[1m Generated Reports\x1b[0m\n") catch {};
+        stderr.writeStreamingAll(rt.io(), sep) catch {};
         for (data.path_names) |name| {
-            stderr.writeAll(std.fmt.bufPrint(&buf, " \x1b[92m✔\x1b[0m  {s}\n", .{name}) catch continue) catch {};
+            stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " \x1b[92m✔\x1b[0m  {s}\n", .{name}) catch continue) catch {};
         }
         if (data.has_combined) {
-            stderr.writeAll(" \x1b[92m✔\x1b[0m  combined\n") catch {};
+            stderr.writeStreamingAll(rt.io(), " \x1b[92m✔\x1b[0m  combined\n") catch {};
         }
-        stderr.writeAll("\n") catch {};
+        stderr.writeStreamingAll(rt.io(), "\n") catch {};
     }
 
     // ── Highlights ──
-    stderr.writeAll(sep) catch {};
-    stderr.writeAll("\x1b[1m Highlights\x1b[0m\n") catch {};
-    stderr.writeAll(sep) catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
+    stderr.writeStreamingAll(rt.io(), "\x1b[1m Highlights\x1b[0m\n") catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
 
     const PhaseInfo = struct { name: []const u8, ns: u64 };
     const phases = [_]PhaseInfo{
@@ -186,20 +186,20 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
 
     if (total_phase_ns > 0) {
         const pct = max_ns * 100 / total_phase_ns;
-        stderr.writeAll(std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Largest workload  : {s} ({d}% of total)\n", .{ max_name, pct }) catch return) catch {};
+        stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Largest workload  : {s} ({d}% of total)\n", .{ max_name, pct }) catch return) catch {};
     }
     if (data.md_bytes > 0) {
         var ctx_buf: [32]u8 = undefined;
-        stderr.writeAll(std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Markdown output   : {s} generated\n", .{fmt_utils.fmtBytes(&ctx_buf, data.md_bytes, false)}) catch return) catch {};
+        stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Markdown output   : {s} generated\n", .{fmt_utils.fmtBytes(&ctx_buf, data.md_bytes, false)}) catch return) catch {};
     }
     if (min_name.len > 0) {
-        stderr.writeAll(std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Fastest step      : {s} ({s})\n", .{ min_name, fmt_utils.fmtElapsed(min_ns, &elapsed_buf) }) catch return) catch {};
+        stderr.writeStreamingAll(rt.io(), std.fmt.bufPrint(&buf, " \x1b[90m•\x1b[0m Fastest step      : {s} ({s})\n", .{ min_name, fmt_utils.fmtElapsed(min_ns, &elapsed_buf) }) catch return) catch {};
     }
-    stderr.writeAll("\n") catch {};
+    stderr.writeStreamingAll(rt.io(), "\n") catch {};
 
     // Footer
-    stderr.writeAll(sep) catch {};
-    stderr.writeAll(" \x1b[92m✅ All paths processed successfully\x1b[0m\n") catch {};
+    stderr.writeStreamingAll(rt.io(), sep) catch {};
+    stderr.writeStreamingAll(rt.io(), " \x1b[92m✅ All paths processed successfully\x1b[0m\n") catch {};
 }
 
 const PhaseRowCtx = struct {
@@ -215,7 +215,7 @@ const PhaseRowCtx = struct {
             std.fmt.bufPrint(self.buf, " {s:<16} : {s:<12} (<1%)\n", .{ name, dur }) catch return
         else
             std.fmt.bufPrint(self.buf, " {s:<16} : {s:<12} ({d}%)\n", .{ name, dur, pct }) catch return;
-        self.stderr.writeAll(line) catch {};
+        self.stderr.writeStreamingAll(rt.io(), line) catch {};
     }
 };
 

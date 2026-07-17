@@ -40,7 +40,7 @@ pub const ChunkWriter = struct {
 
     /// Write raw bytes to current chunk. Does NOT trigger rotation.
     pub fn writeRaw(self: *ChunkWriter, content: []const u8) !void {
-        try self.file.writeAll(content);
+        try self.file.writeStreamingAll(rt.io(), content);
         self.current_bytes += content.len;
     }
 
@@ -170,7 +170,7 @@ pub const ChunkWriter = struct {
         try ws.endArray();
         try ws.endObject();
 
-        try mf.writeAll(aw.written());
+        try mf.writeStreamingAll(rt.io(), aw.written());
     }
 };
 
