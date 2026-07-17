@@ -25,7 +25,7 @@ pub fn writeJsonReport(
     try ws.objectField("version");
     try ws.write(cfg.version);
     try ws.objectField("generated_at_ns");
-    try ws.write(std.time.nanoTimestamp());
+    try ws.write(std.Io.Timestamp.now(rt.io(), .real).nanoseconds);
     try ws.objectField("scanned_paths");
     try ws.beginArray();
     try ws.write(root_path);

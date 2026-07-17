@@ -23,7 +23,7 @@ pub const Logger = struct {
 
     /// Writes a timestamped line to the log file.
     pub fn log(self: *Logger, comptime fmt: []const u8, args: anytype) void {
-        const ts_raw = std.time.timestamp();
+        const ts_raw = std.Io.Timestamp.now(rt.io(), .real).toSeconds();
         const ts: u64 = if (ts_raw > 0) @intCast(ts_raw) else 0;
         const es = std.time.epoch.EpochSeconds{ .secs = ts };
         const ed = es.getEpochDay();

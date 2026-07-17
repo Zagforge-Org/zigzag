@@ -46,7 +46,7 @@ pub fn writePathReports(
     }
 
     // Aggregate — timer starts after content sidecar.
-    const t_agg = std.time.nanoTimestamp();
+    const t_agg = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
     if (verbose) lg.printPhaseStart("Aggregating...", .{});
     var report_data = report.ReportData.init(allocator, &result.file_entries, &result.binary_entries, cfg.timezone_offset) catch |err| {
         if (verbose) lg.printPhaseDone(nsElapsed(t_agg), "", .{});
@@ -57,7 +57,7 @@ pub fn writePathReports(
     if (verbose) lg.printPhaseDone(nsElapsed(t_agg), "", .{});
 
     // write-md
-    const t_md = std.time.nanoTimestamp();
+    const t_md = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
     if (verbose) lg.printPhaseStart("Writing report...", .{});
     report.writeReport(&report_data, &result.file_entries, md_path, result.root_path, cfg, allocator) catch |err| {
         if (verbose) lg.printPhaseDone(nsElapsed(t_md), "", .{});
@@ -75,7 +75,7 @@ pub fn writePathReports(
     if (cfg.json_output) {
         const json_path = try report.deriveJsonPath(allocator, md_path);
         defer allocator.free(json_path);
-        const t_json = std.time.nanoTimestamp();
+        const t_json = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (verbose) lg.printPhaseStart("Writing JSON...", .{});
         report.writeJsonReport(&report_data, json_path, result.root_path, cfg, allocator) catch |err| {
             if (verbose) lg.printPhaseDone(nsElapsed(t_json), "", .{});
@@ -94,7 +94,7 @@ pub fn writePathReports(
     if (cfg.html_output) {
         const html_path = try report.deriveHtmlPath(allocator, md_path);
         defer allocator.free(html_path);
-        const t_html = std.time.nanoTimestamp();
+        const t_html = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (verbose) lg.printPhaseStart("Writing HTML...", .{});
         report.writeHtmlReport(&report_data, html_path, result.root_path, cfg, allocator) catch |err| {
             if (verbose) lg.printPhaseDone(nsElapsed(t_html), "", .{});
@@ -113,7 +113,7 @@ pub fn writePathReports(
     if (cfg.llm_report) {
         const llm_path = try report.deriveLlmPath(allocator, md_path);
         defer allocator.free(llm_path);
-        const t_llm = std.time.nanoTimestamp();
+        const t_llm = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (verbose) lg.printPhaseStart("Writing LLM report...", .{});
         report.writeLlmReport(&report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
             if (verbose) lg.printPhaseDone(nsElapsed(t_llm), "", .{});

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const fmt_utils = @import("../fmt/fmt.zig");
 const ProcessStats = @import("../../cli/commands/stats/stats.zig").ProcessStats;
 
@@ -24,7 +25,7 @@ pub const ProgressBar = struct {
     /// Spawn render thread if TTY. Safe to call unconditionally.
     pub fn start(self: *Self) !void {
         if (!self.is_tty) return;
-        self.start_ns = std.time.nanoTimestamp();
+        self.start_ns = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         self.thread = try std.Thread.spawn(.{}, renderLoop, .{self});
     }
 
@@ -39,7 +40,7 @@ pub const ProgressBar = struct {
         if (!self.is_tty) return;
         const sv = self.stats.getSummary();
         const elapsed_ns: u64 = blk: {
-            const delta = std.time.nanoTimestamp() - self.start_ns;
+            const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - self.start_ns;
             break :blk @intCast(@max(0, delta));
         };
         writeSuccessLine(sv.total, sv.cached, elapsed_ns);

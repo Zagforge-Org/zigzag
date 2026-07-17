@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const State = @import("state.zig").State;
 const reporter = @import("reporter.zig");
 const Config = @import("../config/config.zig").Config;
@@ -17,7 +18,7 @@ const ScanResult = @import("../runner/scan.zig").ScanResult;
 const upload_mod = @import("../../handlers/upload/upload.zig");
 
 inline fn nsElapsed(start: i128) u64 {
-    const delta = std.time.nanoTimestamp() - start;
+    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
     return @intCast(@max(0, delta));
 }
 
@@ -42,7 +43,7 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
     }
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.time.nanoTimestamp();
+        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
         var stats = ProcessStats.init();
         var pb = ProgressBar.init(&stats); // pb must not be moved after this line

@@ -73,7 +73,7 @@ pub const Watcher = struct {
             .seen_inodes = std.AutoHashMap(u64, void).init(allocator),
             .allocator = allocator,
             .skip_dirs = skip_dirs,
-            .last_mtime_scan = std.time.nanoTimestamp(),
+            .last_mtime_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds,
         };
     }
 
@@ -201,7 +201,7 @@ pub const Watcher = struct {
         // directories, advancing a cursor. For small projects (< MTIME_BATCH_SIZE
         // dirs), all directories are scanned every cycle. For large projects,
         // the full sweep is spread across multiple cycles.
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (now - self.last_mtime_scan >= MTIME_POLL_INTERVAL_NS) {
             self.last_mtime_scan = now;
             const total_dirs = self.dir_fds.items.len;

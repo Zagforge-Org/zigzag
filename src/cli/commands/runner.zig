@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
 const upload_mod = @import("../handlers/upload/upload.zig");
@@ -32,7 +33,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
 
     if (logger) |l| l.log("zigzag started — processing {d} path(s)", .{cfg.paths.items.len});
 
-    const t_exec_start = std.time.nanoTimestamp();
+    const t_exec_start = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
 
     var pool = Pool{};
     try pool.init(.{
@@ -66,7 +67,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     var path_name_count: usize = 0;
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.time.nanoTimestamp();
+        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
         const scan_or_err = scan_mod.scanPath(cfg, cache, path, &pool, allocator, logger);
         const result: ScanResult = blk: {

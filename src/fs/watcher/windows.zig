@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const windows = std.os.windows;
 const watch_api = @import("../../platform/windows/watch.zig");
 
@@ -284,12 +285,12 @@ pub const Watcher = struct {
 
         // Wait up to timeout_ms for events (or indefinitely if -1)
         const wait_ms: u64 = if (timeout_ms < 0) std.math.maxInt(u64) else @intCast(timeout_ms);
-        const start = std.time.milliTimestamp();
+        const start = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
         while (true) {
             std.Thread.sleep(5 * std.time.ns_per_ms);
             try self.drainFiltered(out);
             if (out.items.len > before) break;
-            if (@as(u64, @intCast(std.time.milliTimestamp() - start)) >= wait_ms) break;
+            if (@as(u64, @intCast(std.Io.Timestamp.now(rt.io(), .real).toMilliseconds() - start)) >= wait_ms) break;
         }
         return out.items.len - before;
     }

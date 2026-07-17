@@ -17,7 +17,7 @@ const Logger = lg.Logger;
 
 /// Nanoseconds elapsed since `start` (from nanoTimestamp). Clamped to 0.
 pub inline fn nsElapsed(start: i128) u64 {
-    const delta = std.time.nanoTimestamp() - start;
+    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
     return @intCast(@max(0, delta));
 }
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const Config = @import("../../commands/config/config.zig").Config;
 const ScanResult = @import("../../commands/runner/scan.zig").ScanResult;
 const GitInfo = @import("./git_info.zig").GitInfo;
@@ -81,7 +82,7 @@ fn uploadResult(
     allocator: std.mem.Allocator,
 ) !void {
     // generated_at in ISO-8601 UTC
-    const ts_secs: u64 = @intCast(@divFloor(std.time.nanoTimestamp(), std.time.ns_per_s));
+    const ts_secs: u64 = @intCast(@divFloor(std.Io.Timestamp.now(rt.io(), .real).nanoseconds, std.time.ns_per_s));
     const epoch = std.time.epoch.EpochSeconds{ .secs = ts_secs };
     const yd = epoch.getEpochDay().calculateYearDay();
     const md = yd.calculateMonthDay();
@@ -269,10 +270,10 @@ pub fn performUpload(
             continue;
         };
 
-        const deadline: i128 = std.time.nanoTimestamp() + UPLOAD_TIMEOUT_NS;
+        const deadline: i128 = std.Io.Timestamp.now(rt.io(), .real).nanoseconds + UPLOAD_TIMEOUT_NS;
         var timed_out = false;
         while (!task.completed.load(.acquire)) {
-            if (std.time.nanoTimestamp() > deadline) {
+            if (std.Io.Timestamp.now(rt.io(), .real).nanoseconds > deadline) {
                 timed_out = true;
                 break;
             }

@@ -253,7 +253,7 @@ pub const SseServer = struct {
             self.mu.unlock();
         }
 
-        var last_keepalive_ms = std.time.milliTimestamp();
+        var last_keepalive_ms = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
         const KEEPALIVE_MS: i64 = 15_000;
 
         while (true) {
@@ -317,7 +317,7 @@ pub const SseServer = struct {
                 writePartsToAll(&clients, &.{"event: reload\ndata: {}\n\n"});
             }
 
-            const now_ms = std.time.milliTimestamp();
+            const now_ms = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
             if (now_ms - last_keepalive_ms >= KEEPALIVE_MS) {
                 writePartsToAll(&clients, &.{": keep-alive\n\n"});
                 last_keepalive_ms = now_ms;
