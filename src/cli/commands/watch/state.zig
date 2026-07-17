@@ -51,7 +51,7 @@ pub const State = struct {
             .binary_entries = std.StringHashMap(BinaryEntry).init(allocator),
             .entries_mutex = .init,
             .file_ctx = .{
-                .ignore_list = .{},
+                .ignore_list = .empty,
                 .md = undefined,
                 .md_mutex = undefined,
             },
