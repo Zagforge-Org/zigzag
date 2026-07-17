@@ -16,7 +16,7 @@ pub const CacheImpl = struct {
         const cwd = std.Io.Dir.cwd();
 
         // Create .cache directory
-        cwd.makeDir(cache_dir) catch |err| {
+        cwd.createDir(rt.io(), cache_dir, .default_dir) catch |err| {
             switch (err) {
                 error.PathAlreadyExists => {},
                 else => return err,

@@ -13,13 +13,13 @@ pub fn handleInit(allocator: std.mem.Allocator, dir: std.Io.Dir) anyerror!void {
         .exclusive = true,
     }) catch |err| switch (err) {
         error.PathAlreadyExists => {
-            const content = try dir.readFileAlloc(allocator, DEFAULT_CONF_FILENAME, 1 << 20);
+            const content = try dir.readFileAlloc(rt.io(), DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
             defer allocator.free(content);
             if (FileConf.isEmpty(content)) {
                 const f = try dir.createFile(rt.io(), DEFAULT_CONF_FILENAME, .{});
-                defer f.close();
+                defer f.close(rt.io());
                 var buf: [1024]u8 = undefined;
-                var w = f.writer(&buf);
+                var w = f.writer(rt.io(), &buf);
                 try w.interface.writeAll(FileConf.default());
                 try w.interface.flush();
                 return;
@@ -29,10 +29,10 @@ pub fn handleInit(allocator: std.mem.Allocator, dir: std.Io.Dir) anyerror!void {
         },
         else => return err,
     };
-    defer file.close();
+    defer file.close(rt.io());
 
     var buf: [1024]u8 = undefined;
-    var w = file.writer(&buf);
+    var w = file.writer(rt.io(), &buf);
     try w.interface.writeAll(FileConf.default());
     try w.interface.flush();
     lg.printSuccess("Created {s}", .{DEFAULT_CONF_FILENAME});

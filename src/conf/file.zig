@@ -83,14 +83,10 @@ pub const FileConf = struct {
     /// loadFromPathEmpty loads a FileConf from a JSON file at the given path.
     /// Returns null if the file does not exist or is empty.
     pub fn loadFromPathEmpty(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.Io.Dir.cwd().openFile(rt.io(), path, .{}) catch |err| switch (err) {
+        const content = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };
-
-        defer file.close();
-
-        const content = try file.readToEndAlloc(allocator, END_ALLOC_SIZE);
         defer allocator.free(content);
 
         const slice = if (std.mem.indexOfNone(u8, content, &std.ascii.whitespace) == null)
@@ -115,14 +111,10 @@ pub const FileConf = struct {
     /// Returns null if the file doesn't exist, or parses the file contents.
     /// If the file is empty (only whitespace), parses the default JSON instead.
     pub fn loadFromPath(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const file = std.Io.Dir.cwd().openFile(rt.io(), path, .{}) catch |err| switch (err) {
+        const content = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };
-
-        defer file.close();
-
-        const content = try file.readToEndAlloc(allocator, END_ALLOC_SIZE);
         defer allocator.free(content);
 
         const slice = if (std.mem.indexOfNone(u8, content, &std.ascii.whitespace) == null)
