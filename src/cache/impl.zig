@@ -115,16 +115,12 @@ pub const CacheImpl = struct {
         const cache_index_path = try std.fmt.allocPrint(self.allocator, "{s}/index", .{self.cache_dir});
         defer self.allocator.free(cache_index_path);
 
-        const file = std.Io.Dir.cwd().openFile(rt.io(), cache_index_path, .{}) catch |err| {
+        const data = std.Io.Dir.cwd().readFileAlloc(rt.io(), cache_index_path, self.allocator, .unlimited) catch |err| {
             if (err == error.FileNotFound) return;
             return err;
         };
-        defer file.close(rt.io());
-
-        const index_size = (try file.stat(rt.io())).size;
-        if (index_size == 0) return;
-        const data = try file.readToEndAlloc(self.allocator, index_size);
         defer self.allocator.free(data);
+        if (data.len == 0) return;
 
         var lines = std.mem.splitSequence(u8, data, "\n");
         while (lines.next()) |line| {
@@ -243,13 +239,7 @@ pub const CacheImpl = struct {
         defer self.allocator.free(cached_path);
 
         // Open the file safely, returning early if it doesn't exist or fails to read.
-        const cached_file = std.Io.Dir.cwd().openFile(rt.io(), cached_path, .{}) catch |err| {
-            std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
-            return err;
-        };
-        defer cached_file.close(rt.io());
-        const cached_file_size = (try cached_file.stat(rt.io())).size;
-        const content = cached_file.readToEndAlloc(self.allocator, cached_file_size) catch |err| {
+        const content = std.Io.Dir.cwd().readFileAlloc(rt.io(), cached_path, self.allocator, .unlimited) catch |err| {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
         };
