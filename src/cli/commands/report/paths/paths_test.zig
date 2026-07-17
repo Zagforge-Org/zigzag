@@ -162,7 +162,7 @@ test "resolveOutputPath returns path under configured output_dir" {
 
     try std.testing.expect(std.mem.indexOf(u8, result, "src") != null);
     try std.testing.expect(std.mem.endsWith(u8, result, "report.md"));
-    tmp.dir.access("src", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "src", .{}) catch |err| {
         std.debug.print("Expected 'src' dir to exist in tmp, got: {s}\n", .{@errorName(err)});
         return err;
     };

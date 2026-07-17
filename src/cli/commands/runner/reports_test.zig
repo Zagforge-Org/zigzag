@@ -43,7 +43,7 @@ test "writePathReports creates markdown report file" {
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ tmp_path, basename });
     defer alloc.free(report_path);
 
-    const stat = try std.Io.Dir.cwd().statFile(report_path);
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, report_path);
     try std.testing.expect(stat.kind == .file);
 }
 
@@ -57,22 +57,22 @@ test "writePathReports with scanned files produces non-empty report" {
     std.crypto.random.bytes(std.mem.asBytes(&rand_scan));
     var scan_name_buf: [32]u8 = undefined;
     const scan_name = try std.fmt.bufPrint(&scan_name_buf, "zztest_scan_{x}", .{rand_scan});
-    try std.Io.Dir.cwd().makeDir(scan_name);
-    defer std.Io.Dir.cwd().deleteTree(scan_name) catch {};
+    try std.Io.Dir.cwd().makeDir(std.testing.io, scan_name);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, scan_name) catch {};
 
     var rand_out: u64 = undefined;
     std.crypto.random.bytes(std.mem.asBytes(&rand_out));
     var out_name_buf: [32]u8 = undefined;
     const out_name = try std.fmt.bufPrint(&out_name_buf, "zztest_out_{x}", .{rand_out});
-    try std.Io.Dir.cwd().makeDir(out_name);
-    defer std.Io.Dir.cwd().deleteTree(out_name) catch {};
+    try std.Io.Dir.cwd().makeDir(std.testing.io, out_name);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, out_name) catch {};
 
     var scan_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const scan_path = scan_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, scan_name, &scan_path_buf)];
     var out_path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const out_path = out_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, out_name, &out_path_buf)];
 
-    var scan_dir = try std.Io.Dir.cwd().openDir(scan_name, .{});
+    var scan_dir = try std.Io.Dir.cwd().openDir(std.testing.io, scan_name, .{});
     defer scan_dir.close();
     try scan_dir.writeFile(.{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
 
@@ -94,7 +94,7 @@ test "writePathReports with scanned files produces non-empty report" {
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ out_path, basename });
     defer alloc.free(report_path);
 
-    const content = try std.Io.Dir.cwd().readFileAlloc(alloc, report_path, 1024 * 1024);
+    const content = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, report_path, alloc, .limited(1024 * 1024));
     defer alloc.free(content);
 
     try std.testing.expect(content.len > 0);

@@ -38,7 +38,7 @@ test "scanPath returns NotADirectory for a file path" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const f = try tmp.dir.createFile("not_a_dir.txt", .{});
+    const f = try tmp.dir.createFile(std.testing.io, "not_a_dir.txt", .{});
     f.close();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -85,13 +85,13 @@ test "scanPath picks up source files in directory" {
     std.crypto.random.bytes(std.mem.asBytes(&rand_int));
     var dir_name_buf: [32]u8 = undefined;
     const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
-    try std.Io.Dir.cwd().makeDir(dir_name);
-    defer std.Io.Dir.cwd().deleteTree(dir_name) catch {};
+    try std.Io.Dir.cwd().makeDir(std.testing.io, dir_name);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_name) catch {};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const dir_path = path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, dir_name, &path_buf)];
 
-    var tmp_dir = try std.Io.Dir.cwd().openDir(dir_name, .{});
+    var tmp_dir = try std.Io.Dir.cwd().openDir(std.testing.io, dir_name, .{});
     defer tmp_dir.close();
     try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
     try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });

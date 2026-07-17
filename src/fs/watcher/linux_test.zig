@@ -11,8 +11,8 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     // Create a subdirectory that will be skipped
-    try tmp.dir.makeDir("skip_me");
-    try tmp.dir.makeDir("keep_me");
+    try tmp.dir.makeDir(std.testing.io, "skip_me");
+    try tmp.dir.makeDir(std.testing.io, "keep_me");
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -23,12 +23,12 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
 
     // Write inside the skipped subdir and the non-skipped subdir
     {
-        const f = try tmp.dir.createFile("skip_me/hidden.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "skip_me/hidden.txt", .{});
         try f.writeAll("should not appear");
         f.close();
     }
     {
-        const f = try tmp.dir.createFile("keep_me/visible.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "keep_me/visible.txt", .{});
         try f.writeAll("should appear");
         f.close();
     }
@@ -69,7 +69,7 @@ test "Watcher.poll emits modified event on CLOSE_WRITE" {
 
     // Create file before watching so its creation doesn't pollute events
     {
-        const f = try tmp.dir.createFile("existing.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
         f.close();
     }
 
@@ -79,7 +79,7 @@ test "Watcher.poll emits modified event on CLOSE_WRITE" {
 
     // Open, write, close — triggers IN_CLOSE_WRITE → .modified
     {
-        const f = try tmp.dir.openFile("existing.txt", .{ .mode = .write_only });
+        const f = try tmp.dir.openFile(std.testing.io, "existing.txt", .{ .mode = .write_only });
         try f.writeAll("new content");
         f.close();
     }
@@ -109,7 +109,7 @@ test "Watcher.poll emits deleted event on file removal" {
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("to_delete.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "to_delete.txt", .{});
         f.close();
     }
 
@@ -117,7 +117,7 @@ test "Watcher.poll emits deleted event on file removal" {
     defer w.deinit();
     try w.watchDir(path);
 
-    try tmp.dir.deleteFile("to_delete.txt");
+    try tmp.dir.deleteFile(std.testing.io, "to_delete.txt");
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {

@@ -33,13 +33,13 @@ test "ChunkWriter: single chunk no manifest" {
     // chunk 1 exists
     const chunk1 = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm.md" });
     defer std.testing.allocator.free(chunk1);
-    const stat1 = try std.Io.Dir.cwd().statFile(chunk1);
+    const stat1 = try std.Io.Dir.cwd().statFile(std.testing.io, chunk1);
     try std.testing.expect(stat1.size > 0);
 
     // no manifest
     const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm.manifest.json" });
     defer std.testing.allocator.free(manifest_path);
-    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(manifest_path));
+    try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(std.testing.io, manifest_path));
 
     try std.testing.expectEqual(@as(u32, 1), cw.chunk_index);
 }
@@ -68,13 +68,13 @@ test "ChunkWriter: multi-chunk rotation and manifest" {
     defer std.testing.allocator.free(chunk1);
     const chunk2 = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm-2.md" });
     defer std.testing.allocator.free(chunk2);
-    _ = try std.Io.Dir.cwd().statFile(chunk1);
-    _ = try std.Io.Dir.cwd().statFile(chunk2);
+    _ = try std.Io.Dir.cwd().statFile(std.testing.io, chunk1);
+    _ = try std.Io.Dir.cwd().statFile(std.testing.io, chunk2);
 
     // manifest exists
     const manifest_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm.manifest.json" });
     defer std.testing.allocator.free(manifest_path);
-    _ = try std.Io.Dir.cwd().statFile(manifest_path);
+    _ = try std.Io.Dir.cwd().statFile(std.testing.io, manifest_path);
 
     try std.testing.expectEqual(@as(u32, 2), cw.chunk_index);
     try std.testing.expectEqual(@as(usize, 2), cw.chunk_metas.items.len);

@@ -38,8 +38,8 @@ test "addSkipDir suppresses events from skipped subdirectory" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir("skip_me");
-    try tmp.dir.makeDir("keep_me");
+    try tmp.dir.makeDir(std.testing.io, "skip_me");
+    try tmp.dir.makeDir(std.testing.io, "keep_me");
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -48,12 +48,12 @@ test "addSkipDir suppresses events from skipped subdirectory" {
     try w.watchDir(path);
 
     {
-        const f = try tmp.dir.createFile("skip_me/hidden.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "skip_me/hidden.txt", .{});
         try f.writeAll("should not appear");
         f.close();
     }
     {
-        const f = try tmp.dir.createFile("keep_me/visible.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "keep_me/visible.txt", .{});
         try f.writeAll("should appear");
         f.close();
     }
@@ -90,7 +90,7 @@ test "poll emits created event on new file" {
     try w.watchDir(path);
 
     {
-        const f = try tmp.dir.createFile("new.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "new.txt", .{});
         try f.writeAll("hello");
         f.close();
     }
@@ -112,7 +112,7 @@ test "poll emits deleted event on file removal" {
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("to_delete.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "to_delete.txt", .{});
         f.close();
     }
 
@@ -120,7 +120,7 @@ test "poll emits deleted event on file removal" {
     defer w.deinit();
     try w.watchDir(path);
 
-    try tmp.dir.deleteFile("to_delete.txt");
+    try tmp.dir.deleteFile(std.testing.io, "to_delete.txt");
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer freeEvents(alloc, &events);
@@ -147,7 +147,7 @@ test "mtime fallback detects in-place file modification" {
 
     // Create file BEFORE watching so the snapshot records its mtime.
     {
-        const f = try tmp.dir.createFile("existing.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
         try f.writeAll("original");
         f.close();
     }
@@ -161,7 +161,7 @@ test "mtime fallback detects in-place file modification" {
 
     // Modify the file in-place.
     {
-        const f = try tmp.dir.createFile("existing.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
         try f.writeAll("modified content that is different");
         f.close();
     }
@@ -186,9 +186,9 @@ test "mtime fallback detects in-place modification in subdirectory" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir("nested");
+    try tmp.dir.makeDir(std.testing.io, "nested");
     {
-        const f = try tmp.dir.createFile("nested/config.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "nested/config.txt", .{});
         try f.writeAll("v1");
         f.close();
     }
@@ -200,7 +200,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
     std.Thread.sleep(50 * std.time.ns_per_ms);
 
     {
-        const f = try tmp.dir.createFile("nested/config.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "nested/config.txt", .{});
         try f.writeAll("v2 changed");
         f.close();
     }
@@ -226,9 +226,9 @@ test "mtime scan advances round-robin cursor" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir("dir_a");
-    try tmp.dir.makeDir("dir_b");
-    try tmp.dir.makeDir("dir_c");
+    try tmp.dir.makeDir(std.testing.io, "dir_a");
+    try tmp.dir.makeDir(std.testing.io, "dir_b");
+    try tmp.dir.makeDir(std.testing.io, "dir_c");
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -259,7 +259,7 @@ test "poll returns 0 events when no files changed" {
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("stable.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "stable.txt", .{});
         try f.writeAll("unchanged");
         f.close();
     }
@@ -313,14 +313,14 @@ test "poll detects file created in subdirectory" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir("subdir");
+    try tmp.dir.makeDir(std.testing.io, "subdir");
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
 
     {
-        const f = try tmp.dir.createFile("subdir/deep.txt", .{});
+        const f = try tmp.dir.createFile(std.testing.io, "subdir/deep.txt", .{});
         try f.writeAll("deep file");
         f.close();
     }

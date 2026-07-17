@@ -40,7 +40,7 @@ test "writeAllReports creates markdown file" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.md", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.md", .{}) catch |err| {
         std.debug.print("Expected report.md to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -67,7 +67,7 @@ test "writeAllReports creates JSON file when json_output is true" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.json", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.json", .{}) catch |err| {
         std.debug.print("Expected report.json to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -94,7 +94,7 @@ test "writeAllReports creates HTML file when html_output is true" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.html", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.html", .{}) catch |err| {
         std.debug.print("Expected report.html to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -129,7 +129,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
     try std.testing.expect(std.mem.indexOf(u8, content, "src/main.zig") != null);
 }
