@@ -180,8 +180,14 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
     var min_ns: u64 = std.math.maxInt(u64);
     var min_name: []const u8 = "";
     for (phases) |p| {
-        if (p.ns > max_ns) { max_ns = p.ns; max_name = p.name; }
-        if (p.ns > 0 and p.ns < min_ns) { min_ns = p.ns; min_name = p.name; }
+        if (p.ns > max_ns) {
+            max_ns = p.ns;
+            max_name = p.name;
+        }
+        if (p.ns > 0 and p.ns < min_ns) {
+            min_ns = p.ns;
+            min_name = p.name;
+        }
     }
 
     if (total_phase_ns > 0) {

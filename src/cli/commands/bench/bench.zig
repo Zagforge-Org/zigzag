@@ -116,4 +116,3 @@ fn appendRow(buf: []u8, name: []const u8, phase_ns: u64, total_ns: u64, ctx: []c
     const written = try std.fmt.bufPrint(buf, "  {s:<16} {s:>10}   {s:<24} {d:>7}%\n", .{ name, dur, ctx, pct });
     return written.len;
 }
-

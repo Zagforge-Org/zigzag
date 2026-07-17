@@ -128,7 +128,6 @@ pub fn writeHtmlReport(
     var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
     defer html_file.close(rt.io());
     try html_file.writeStreamingAll(rt.io(), aw.written());
-
 }
 
 /// Write the watch-mode stamp sidecar: a tiny file containing only the generated_at

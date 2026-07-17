@@ -27,7 +27,7 @@ pub const FileConf = struct {
 
     /// Returns the default zig.conf.json content as a static string.
     pub fn default() []const u8 {
-        return 
+        return
         \\{
         \\  "paths": [],
         \\  "ignores": [],

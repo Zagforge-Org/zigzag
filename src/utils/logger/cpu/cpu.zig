@@ -55,7 +55,9 @@ fn getCpuNameWindows(buf: []u8) []const u8 {
     if (advapi32.RegOpenKeyExA(
         HKEY_LOCAL_MACHINE,
         "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
-        0, KEY_READ, &hkey,
+        0,
+        KEY_READ,
+        &hkey,
     ) != 0) return "unknown";
     defer _ = advapi32.RegCloseKey(hkey);
 

@@ -23,9 +23,9 @@ test "colorCode BrightYellow returns correct escape" {
 
 test "colorCode all variants return non-empty strings" {
     const all = [_]colors.Color{
-        .Black, .Red, .Green, .Yellow, .Blue, .Magenta, .Cyan, .White,
-        .BrightBlack, .BrightRed, .BrightGreen, .BrightYellow,
-        .BrightBlue, .BrightMagenta, .BrightCyan, .BrightWhite, .Reset,
+        .Black,       .Red,       .Green,       .Yellow,       .Blue,       .Magenta,       .Cyan,       .White,
+        .BrightBlack, .BrightRed, .BrightGreen, .BrightYellow, .BrightBlue, .BrightMagenta, .BrightCyan, .BrightWhite,
+        .Reset,
     };
     for (all) |c| {
         try std.testing.expect(colors.colorCode(c).len > 0);

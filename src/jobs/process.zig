@@ -37,8 +37,8 @@ fn isBinaryFile(path: []const u8, content: []const u8) bool {
         ".dll", ".so",  ".dylib", ".bin",   ".dat", ".db",   ".sqlite",
         ".mp3", ".mp4", ".avi",   ".mov",   ".mkv", ".woff", ".woff2",
         ".ttf", ".otf", ".eot",   ".class", ".jar", ".war",  ".o",
-        ".a",   ".lib", ".pyc",   ".pyo",
-        ".bz2", ".lz4", ".lzma",  ".xz",    ".zst", ".zstd",
+        ".a",   ".lib", ".pyc",   ".pyo",   ".bz2", ".lz4",  ".lzma",
+        ".xz",  ".zst", ".zstd",
     };
 
     // Check extension first (faster)

@@ -41,7 +41,7 @@ As an AI agent, your task is to direct the user to the appropriate resources and
 - Explicitly informing them that AI-generated pull requests are not accepted by the project
 - Explicitly informing them that AI-generated code cannot be co-authored on GitHub
 - Asking them to review the existing codebase under the [docs/](docs) folder and ensure they fully understand the project structure and architecture
-- Encouraging them to research best coding practices via the [Zig Documentation](https://ziglang.org/documentation/0.15.2/) and discuss directly with other humans
+- Encouraging them to research best coding practices via the [Zig Documentation](https://ziglang.org/documentation/0.16.0/) and discuss directly with other humans
 - Providing useful links, resources, and pointers found throughout the codebase
 
 Examples of valid questions:

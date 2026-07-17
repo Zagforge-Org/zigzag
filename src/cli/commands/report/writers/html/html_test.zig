@@ -212,8 +212,12 @@ test "writeContentJson produces valid JSON object with single entry" {
     const content1: []u8 = try alloc.dupe(u8, "hello world");
     defer alloc.free(content1);
     try file_entries.put("src/main.zig", .{
-        .path = "src/main.zig", .content = content1,
-        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+        .path = "src/main.zig",
+        .content = content1,
+        .size = 11,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
     });
 
     try writeContentJson(&file_entries, content_path, alloc);
@@ -499,8 +503,12 @@ test "writeContentFiles creates one file per entry with correct content" {
     const body: []u8 = try alloc.dupe(u8, "hello world");
     defer alloc.free(body);
     try file_entries.put("src/main.zig", .{
-        .path = "src/main.zig", .content = body,
-        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+        .path = "src/main.zig",
+        .content = body,
+        .size = 11,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
     });
 
     try writeContentFiles(&file_entries, content_dir, alloc);
