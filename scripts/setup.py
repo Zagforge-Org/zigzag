@@ -314,6 +314,9 @@ def init():
         with tarfile.open(fileobj=io.BytesIO(resp.read()), mode="r:gz") as tar:
             for member_name, dest in extract.items():
                 f = tar.extractfile(tar.getmember(member_name))
+                if f is None:
+                    print("extracted file was not properly read.")
+                    sys.exit(1)
                 dest.write_bytes(f.read())
     print("  tree-sitter-swift sources downloaded.")
     run(
