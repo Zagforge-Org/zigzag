@@ -96,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
                     lg.printError("bench requires at least one path (--paths or zig.conf.json)", .{});
                     return;
                 }
-                try bench.execBench(&typedCfg, allocator);
+                try bench.execBench(rt.io(), &typedCfg, allocator);
                 return;
             }
 

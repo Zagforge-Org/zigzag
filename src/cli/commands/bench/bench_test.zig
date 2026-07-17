@@ -18,10 +18,10 @@ test "printTable does not panic with populated BenchResult" {
         .html_bytes = 2_202_009,
         .llm_bytes = 0,
     };
-    bench.printTable(&result);
+    bench.printTable(std.testing.io, &result);
 }
 
 test "printTable with all-zero BenchResult does not panic" {
     var result: bench.BenchResult = .{};
-    bench.printTable(&result);
+    bench.printTable(std.testing.io, &result);
 }
