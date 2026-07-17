@@ -5,8 +5,6 @@ const rt = @import("../../../runtime.zig");
 /// Created via Logger.init(); must be deinitialized with Logger.deinit().
 pub const Logger = struct {
     file: std.Io.File,
-    /// Current append offset. 0.16.0's File has no seek; we position writes
-    /// explicitly with writePositionalAll and advance this cursor.
     pos: u64,
 
     /// Opens (or creates) `<output_dir>/zigzag.log` in append mode.
