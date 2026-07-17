@@ -6,14 +6,19 @@ const posix = std.posix;
 /// Significantly faster than standard blocking probe and avoids OS-specific `SO_REUSEADDR` inconsistencies.
 /// May return false on extremely congested systems where a local handshake takes longer than 10ms.
 pub fn isPortListening(port: u16) bool {
-    const addr = std.net.Address.parseIp("127.0.0.1", port) catch return false;
+    // Directly build port and address from network byte order.
+    const addr: posix.sockaddr.in = .{
+        .family = posix.AF.INET,
+        .port = std.mem.nativeToBig(u16, port),
+        .addr = std.mem.nativeToBig(u32, 0x7f000001),
+    };
 
     // Create non-blocking socket
-    const socket = posix.socket(addr.any.family, posix.SOCK.STREAM | posix.SOCK.NONBLOCK, 0) catch return false;
+    const socket = posix.socket(posix.AF.INET, posix.SOCK.STREAM | posix.SOCK.NONBLOCK, 0) catch return false;
     defer posix.close(socket);
 
     // Start connection attempt
-    posix.connect(socket, &addr.any, addr.getOsSockLen()) catch |err| {
+    posix.connect(socket, @ptrCast(&addr), @sizeOf(posix.sockaddr.in)) catch |err| {
         if (err == error.ConnectionRefused) return false;
         if (err != error.WouldBlock) return false;
     };
