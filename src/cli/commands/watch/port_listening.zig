@@ -1,41 +1,54 @@
 const std = @import("std");
-const posix = std.posix;
+const builtin = @import("builtin");
+const rt = @import("../../../runtime.zig");
 
-/// Returns true if TCP listener is actively accepting connections on the given port.
-/// This performs non-blocking connection probe with 10ms timeout.
-/// Significantly faster than standard blocking probe and avoids OS-specific `SO_REUSEADDR` inconsistencies.
-/// May return false on extremely congested systems where a local handshake takes longer than 10ms.
+/// Returns true if a TCP listener is actively listening to connections on a given port.
+/// A successful connect means something is listening whereas a refused connection
+/// means the port is free.
+///
+/// On Windows probing with raw Winsock rather than `std.Io.net.connect` is the latter
+/// that maps a refused connection to `error.Unexpected`, and, in debug/test builds, dumps a
+/// noisy NSTATUS stack trace before returning. A direct `connect` reports refusal
+/// quetly.
 pub fn isPortListening(port: u16) bool {
-    const addr = std.net.Address.parseIp("127.0.0.1", port) catch return false;
+    if (comptime builtin.os.tag == .windows) {
+        const ws2 = struct {
+            const SOCKET = usize;
+            const INVALID_SOCKET: SOCKET = ~@as(SOCKET, 0);
+            const SOCKET_ERROR: c_int = -1;
+            const AF_INET: c_int = 2;
+            const SOCK_STREAM: c_int = 1;
+            const IPPROTO_TCP: c_int = 6;
 
-    // Create non-blocking socket
-    const socket = posix.socket(addr.any.family, posix.SOCK.STREAM | posix.SOCK.NONBLOCK, 0) catch return false;
-    defer posix.close(socket);
+            const sockaddr_in = extern struct {
+                family: u16 = @intCast(AF_INET),
+                port: u16,
+                addr: u32,
+                zero: [8]u8 = [_]u8{0} ** 8,
+            };
 
-    // Start connection attempt
-    posix.connect(socket, &addr.any, addr.getOsSockLen()) catch |err| {
-        if (err == error.ConnectionRefused) return false;
-        if (err != error.WouldBlock) return false;
-    };
+            extern "ws2_32" fn WSAStartup(wVersionRequested: u16, lpWSAData: *anyopaque) callconv(.winapi) c_int;
+            extern "ws2_32" fn socket(af: c_int, socktype: c_int, protocol: c_int) callconv(.winapi) SOCKET;
+            extern "ws2_32" fn connect(s: SOCKET, name: *const sockaddr_in, namelen: c_int) callconv(.winapi) c_int;
+            extern "ws2_32" fn closesocket(s: SOCKET) callconv(.winapi) c_int;
+        };
 
-    // Use poll to wait for socket to become writable
-    var poll_fds = [1]posix.pollfd{.{
-        .fd = socket,
-        .events = posix.POLL.OUT,
-        .revents = 0,
-    }};
+        var wsadata: [512]u8 align(@alignOf(usize)) = undefined;
+        if (ws2.WSAStartup(0x0202, &wsadata) != 0) return false;
 
-    // Poll every 10ms
-    const ready_count = posix.poll(&poll_fds, 10) catch return false;
+        const sock = ws2.socket(ws2.AF_INET, ws2.SOCK_STREAM, ws2.IPPROTO_TCP);
+        if (sock == ws2.INVALID_SOCKET) return false;
+        defer _ = ws2.closesocket(sock);
 
-    if (ready_count > 0) {
-        var socket_err: i32 = 0;
-        // The new signature takes: (fd, level, optname, []u8)
-        // It returns !void, as the length is now handled by the slice itself.
-        posix.getsockopt(socket, posix.SOL.SOCKET, posix.SO.ERROR, std.mem.asBytes(&socket_err)) catch return false;
-
-        return socket_err == 0;
+        const sa = ws2.sockaddr_in{
+            .port = std.mem.nativeToBig(u16, port),
+            .addr = std.mem.nativeToBig(u32, 0x7f000001), // 127.0.0.1
+        };
+        return ws2.connect(sock, &sa, @sizeOf(ws2.sockaddr_in)) != ws2.SOCKET_ERROR;
     }
 
-    return false;
+    const addr = std.Io.net.IpAddress.parse("127.0.0.1", port) catch return false;
+    var stream = addr.connect(rt.io(), .{ .mode = .stream }) catch return false;
+    stream.close(rt.io());
+    return true;
 }

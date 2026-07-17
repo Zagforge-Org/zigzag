@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const builtin = @import("builtin");
 
 /// Returns the CPU model name into `buf`. Falls back to "unknown" on error.
@@ -12,10 +13,10 @@ pub fn getCpuName(buf: []u8) []const u8 {
 }
 
 fn getCpuNameLinux(buf: []u8) []const u8 {
-    const f = std.fs.openFileAbsolute("/proc/cpuinfo", .{}) catch return "unknown";
-    defer f.close();
+    const f = std.Io.Dir.openFileAbsolute(rt.io(), "/proc/cpuinfo", .{}) catch return "unknown";
+    defer f.close(rt.io());
     var tmp: [8192]u8 = undefined;
-    const n = f.read(&tmp) catch return "unknown";
+    const n = f.readStreaming(rt.io(), &.{tmp[0..]}) catch return "unknown";
     const needle = "model name\t: ";
     const idx = std.mem.indexOf(u8, tmp[0..n], needle) orelse return "unknown";
     const start = idx + needle.len;
@@ -54,7 +55,9 @@ fn getCpuNameWindows(buf: []u8) []const u8 {
     if (advapi32.RegOpenKeyExA(
         HKEY_LOCAL_MACHINE,
         "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
-        0, KEY_READ, &hkey,
+        0,
+        KEY_READ,
+        &hkey,
     ) != 0) return "unknown";
     defer _ = advapi32.RegCloseKey(hkey);
 

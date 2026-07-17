@@ -11,7 +11,7 @@ test "writeReport creates file with header, TOC and file entries" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
@@ -46,7 +46,7 @@ test "writeReport creates file with header, TOC and file entries" {
 
     try writeReport(&data, &file_entries, md_path, "src", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "# Code Report for: `src`") != null);
@@ -66,7 +66,7 @@ test "writeReport handles empty entries map" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
@@ -84,7 +84,7 @@ test "writeReport handles empty entries map" {
 
     try writeReport(&data, &file_entries, md_path, "empty_dir", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "# Code Report for: `empty_dir`") != null);
@@ -98,7 +98,7 @@ test "writeReport overwrites existing file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
@@ -124,7 +124,7 @@ test "writeReport overwrites existing file" {
     defer data2.deinit();
     try writeReport(&data2, &file_entries2, md_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "second.zig") != null);

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const api = @import("../../../platform/windows/api.zig");
 const windows = std.os.windows;
 const FileError = @import("../common.zig").FileError;
@@ -11,8 +12,8 @@ pub const WinMMap = struct {
     const Self = @This();
 
     pub fn open(path: []const u8) !Self {
-        var file = try std.fs.cwd().openFile(path, .{});
-        errdefer file.close();
+        var file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
+        errdefer file.close(rt.io());
 
         const size = try file.getEndPos();
         if (size == 0) return Self{ .data = &[_]u8{}, .mapping = null };

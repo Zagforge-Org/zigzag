@@ -10,7 +10,7 @@ test "writeLlmReport creates report with correct structure" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
 
     var cfg = Config.default(alloc);
@@ -40,7 +40,7 @@ test "writeLlmReport creates report with correct structure" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "# LLM Context: src") != null);
@@ -57,7 +57,7 @@ test "writeLlmReport omits boilerplate files" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
 
     var cfg = Config.default(alloc);
@@ -87,7 +87,7 @@ test "writeLlmReport omits boilerplate files" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "package-lock.json") == null);
@@ -99,7 +99,7 @@ test "writeLlmReport includes llm_description when set" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
 
     var cfg = Config.default(alloc);
@@ -122,7 +122,7 @@ test "writeLlmReport includes llm_description when set" {
 
     try writeLlmReport(&data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "## Project Description") != null);
@@ -134,7 +134,7 @@ test "writeLlmReport emits AST chunks for Python files" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
 
     var cfg = Config.default(alloc);
@@ -172,7 +172,7 @@ test "writeLlmReport emits AST chunks for Python files" {
 
     try writeLlmReport(&data, 0, llm_path, "src", &cfg, 0, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, llm_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     // AST chunks appear in output

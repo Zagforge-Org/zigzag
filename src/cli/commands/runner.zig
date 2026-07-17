@@ -1,7 +1,7 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
-const upload_mod = @import("../handlers/upload/upload.zig");
 const Config = @import("config/config.zig").Config;
 const CacheImpl = @import("../../cache/impl.zig").CacheImpl;
 const Pool = @import("../../workers/pool.zig").Pool;
@@ -32,7 +32,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
 
     if (logger) |l| l.log("zigzag started — processing {d} path(s)", .{cfg.paths.items.len});
 
-    const t_exec_start = std.time.nanoTimestamp();
+    const t_exec_start = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
 
     var pool = Pool{};
     try pool.init(.{
@@ -45,7 +45,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     // to stderr between printPhaseStart and printPhaseDone, causing the cursor-up
     // rewrite (\x1B[1A) to overwrite a worker line instead of the scan line.
     // On non-TTY (piped/redirected), both calls emit clean text lines.
-    const is_tty = std.posix.isatty(std.fs.File.stderr().handle);
+    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
     if (!is_tty) lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
 
     // Always collect timing data for the final summary (or for the external bench caller).
@@ -66,7 +66,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     var path_name_count: usize = 0;
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.time.nanoTimestamp();
+        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
         const scan_or_err = scan_mod.scanPath(cfg, cache, path, &pool, allocator, logger);
         const result: ScanResult = blk: {
@@ -136,13 +136,6 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
         reports_mod.writeCombinedReports(all_results.items, failed_paths, cfg, allocator, logger) catch |err| {
             lg.printError("Combined report error: {s}", .{@errorName(err)});
             if (logger) |l| l.log("ERROR writing combined report: {s}", .{@errorName(err)});
-        };
-    }
-
-    // Upload snapshot to Zagforge if --upload was passed.
-    if (cfg.upload) {
-        upload_mod.performUpload(all_results.items, cfg, allocator) catch |err| {
-            lg.printError("Upload error: {s}", .{@errorName(err)});
         };
     }
 

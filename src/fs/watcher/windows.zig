@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const windows = std.os.windows;
 const watch_api = @import("../../platform/windows/watch.zig");
 
@@ -14,7 +15,7 @@ const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can
 /// hold a reference; the queue is only freed when the last holder releases it.
 const SharedQueue = struct {
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = .init,
     events: std.ArrayList(WatchEvent) = .empty,
     allocator: std.mem.Allocator,
     ref: std.atomic.Value(u32),
@@ -38,14 +39,14 @@ const SharedQueue = struct {
     }
 
     fn push(self: *SharedQueue, ev: WatchEvent) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
         self.events.append(self.allocator, ev) catch {};
     }
 
     fn drain(self: *SharedQueue, out: *std.ArrayList(WatchEvent)) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(rt.io());
+        defer self.mutex.unlock(rt.io());
         try out.appendSlice(self.allocator, self.events.items);
         self.events.clearRetainingCapacity();
     }
@@ -75,9 +76,9 @@ fn watchThread(ctx: *WatchCtx) void {
     const dir_handle = watch_api.CreateFileW(
         @ptrCast(&path_w_buf),
         watch_api.FILE_LIST_DIRECTORY,
-        windows.FILE_SHARE_READ | windows.FILE_SHARE_WRITE | windows.FILE_SHARE_DELETE,
+        watch_api.FILE_SHARE_READ | watch_api.FILE_SHARE_WRITE | watch_api.FILE_SHARE_DELETE,
         null,
-        windows.OPEN_EXISTING,
+        watch_api.OPEN_EXISTING,
         watch_api.FILE_FLAG_BACKUP_SEMANTICS | watch_api.FILE_FLAG_OVERLAPPED,
         null,
     );
@@ -85,7 +86,7 @@ fn watchThread(ctx: *WatchCtx) void {
     defer _ = windows.CloseHandle(dir_handle);
 
     // Manual-reset event for overlapped I/O completion; starts unsignaled.
-    const io_event = watch_api.CreateEventW(null, windows.TRUE, windows.FALSE, null) orelse return;
+    const io_event = watch_api.CreateEventW(null, windows.BOOL.TRUE, windows.BOOL.FALSE, null) orelse return;
     defer _ = windows.CloseHandle(io_event);
 
     var overlapped: watch_api.OVERLAPPED = .{ .hEvent = io_event };
@@ -108,7 +109,7 @@ fn watchThread(ctx: *WatchCtx) void {
             dir_handle,
             &buf,
             buf.len,
-            windows.TRUE,
+            windows.BOOL.TRUE,
             NOTIFY_FILTER,
             null, // lpBytesReturned must be null for overlapped
             &overlapped,
@@ -117,14 +118,14 @@ fn watchThread(ctx: *WatchCtx) void {
 
         // With FILE_FLAG_OVERLAPPED the call returns FALSE + ERROR_IO_PENDING
         // when submitted successfully.  Any other error is fatal.
-        if (queued == windows.FALSE and watch_api.GetLastError() != watch_api.ERROR_IO_PENDING) break;
+        if (queued == windows.BOOL.FALSE and watch_api.GetLastError() != watch_api.ERROR_IO_PENDING) break;
 
-        const wait = watch_api.WaitForMultipleObjects(2, &handles, windows.FALSE, watch_api.INFINITE);
+        const wait = watch_api.WaitForMultipleObjects(2, &handles, windows.BOOL.FALSE, watch_api.INFINITE);
 
         if (wait == watch_api.WAIT_OBJECT_0) {
             // I/O completed — retrieve the byte count.
             var bytes_returned: u32 = 0;
-            if (watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_returned, windows.FALSE) == windows.FALSE) continue;
+            if (watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_returned, windows.BOOL.FALSE) == windows.BOOL.FALSE) continue;
             if (bytes_returned == 0) continue;
 
             // Process FILE_NOTIFY_INFORMATION records.
@@ -167,7 +168,7 @@ fn watchThread(ctx: *WatchCtx) void {
             _ = watch_api.CancelIo(dir_handle);
             var bytes_dummy: u32 = 0;
             // Wait for cancellation to complete before closing handles in defer.
-            _ = watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_dummy, windows.TRUE);
+            _ = watch_api.GetOverlappedResult(dir_handle, &overlapped, &bytes_dummy, windows.BOOL.TRUE);
             break;
         }
     }
@@ -257,7 +258,7 @@ pub const Watcher = struct {
         errdefer self.allocator.free(path_copy);
 
         // Manual-reset event, initially not signaled; closed by deinit() after join().
-        const stop_event = watch_api.CreateEventW(null, windows.TRUE, windows.FALSE, null) orelse
+        const stop_event = watch_api.CreateEventW(null, windows.BOOL.TRUE, windows.BOOL.FALSE, null) orelse
             return error.OutOfResources;
         errdefer _ = windows.CloseHandle(stop_event);
 
@@ -284,12 +285,12 @@ pub const Watcher = struct {
 
         // Wait up to timeout_ms for events (or indefinitely if -1)
         const wait_ms: u64 = if (timeout_ms < 0) std.math.maxInt(u64) else @intCast(timeout_ms);
-        const start = std.time.milliTimestamp();
+        const start = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
         while (true) {
-            std.Thread.sleep(5 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(5 * std.time.ns_per_ms), .awake) catch {};
             try self.drainFiltered(out);
             if (out.items.len > before) break;
-            if (@as(u64, @intCast(std.time.milliTimestamp() - start)) >= wait_ms) break;
+            if (@as(u64, @intCast(std.Io.Timestamp.now(rt.io(), .real).toMilliseconds() - start)) >= wait_ms) break;
         }
         return out.items.len - before;
     }

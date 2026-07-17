@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
 const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
 const api = @import("../platform/windows/api.zig");
@@ -43,30 +44,26 @@ pub const MappedFile = struct {
 
 /// Check if a path is a file
 pub fn isFile(path: []const u8) !bool {
-    const stat = try std.fs.cwd().statFile(path);
+    const stat = try std.Io.Dir.cwd().statFile(rt.io(), path, .{});
     return stat.kind == .file;
 }
 
 /// Get the size of a file
 pub fn getFileSize(path: []const u8) !u64 {
-    const stat = try std.fs.cwd().statFile(path);
+    const stat = try std.Io.Dir.cwd().statFile(rt.io(), path, .{});
     if (stat.kind != .file) return FileError.NotAFile;
     return stat.size;
 }
 
 /// Read a file into memory
 pub fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
-
-    const file_size = (try file.stat()).size;
-    return try file.readToEndAlloc(allocator, file_size);
+    return try std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .unlimited);
 }
 
 /// Read a file in chunk
 pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *FileContext) !void {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+    const file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
+    defer file.close(rt.io());
 
     var buffer: [CHUNK_SIZE]u8 = undefined;
 

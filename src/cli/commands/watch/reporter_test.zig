@@ -14,9 +14,9 @@ fn makeState(
     state.md_path = md_path;
     state.file_entries = std.StringHashMap(JobEntry).init(alloc);
     state.binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
-    state.entries_mutex = .{};
+    state.entries_mutex = .init;
     state.allocator = alloc;
-    state.file_ctx = .{ .ignore_list = .{}, .md = undefined, .md_mutex = undefined };
+    state.file_ctx = .{ .ignore_list = .empty, .md = undefined, .md_mutex = undefined };
     return state;
 }
 
@@ -26,7 +26,7 @@ test "writeAllReports creates markdown file" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -40,7 +40,7 @@ test "writeAllReports creates markdown file" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.md", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.md", .{}) catch |err| {
         std.debug.print("Expected report.md to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -52,7 +52,7 @@ test "writeAllReports creates JSON file when json_output is true" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -67,7 +67,7 @@ test "writeAllReports creates JSON file when json_output is true" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.json", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.json", .{}) catch |err| {
         std.debug.print("Expected report.json to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -79,7 +79,7 @@ test "writeAllReports creates HTML file when html_output is true" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -94,7 +94,7 @@ test "writeAllReports creates HTML file when html_output is true" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    tmp.dir.access("report.html", .{}) catch |err| {
+    tmp.dir.access(std.testing.io, "report.html", .{}) catch |err| {
         std.debug.print("Expected report.html to exist, got: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -106,7 +106,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -129,7 +129,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
 
     writeAllReports(&state, &cfg, null, &.{}, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.md", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
     try std.testing.expect(std.mem.indexOf(u8, content, "src/main.zig") != null);
 }

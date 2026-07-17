@@ -1,14 +1,15 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const colors = @import("../../colors/colors.zig");
 
 pub fn stderrWrite(buf: []u8, comptime fmt: []const u8, args: anytype) void {
     const msg = std.fmt.bufPrint(buf, fmt, args) catch return;
-    std.fs.File.stderr().writeAll(msg) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), msg) catch {};
 }
 
 /// Dim horizontal rule — same width as the ProgressBar separator.
 pub fn printSeparator() void {
-    std.fs.File.stderr().writeAll("\x1b[90m" ++ "─" ** 36 ++ "\x1b[0m\n") catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), "\x1b[90m" ++ "─" ** 36 ++ "\x1b[0m\n") catch {};
 }
 
 pub fn printStep(comptime fmt: []const u8, args: anytype) void {
@@ -18,7 +19,7 @@ pub fn printStep(comptime fmt: []const u8, args: anytype) void {
         colors.colorCode(.BrightCyan), colors.colorCode(.Reset),
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt ++ "\n", args) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 pub fn printSuccess(comptime fmt: []const u8, args: anytype) void {
@@ -28,7 +29,7 @@ pub fn printSuccess(comptime fmt: []const u8, args: anytype) void {
         colors.colorCode(.BrightGreen), colors.colorCode(.Reset),
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt ++ "\n", args) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 pub fn printError(comptime fmt: []const u8, args: anytype) void {
@@ -38,7 +39,7 @@ pub fn printError(comptime fmt: []const u8, args: anytype) void {
         colors.colorCode(.BrightRed), colors.colorCode(.Reset),
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt ++ "\n", args) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 pub fn printWarn(comptime fmt: []const u8, args: anytype) void {
@@ -48,5 +49,5 @@ pub fn printWarn(comptime fmt: []const u8, args: anytype) void {
         colors.colorCode(.BrightYellow), colors.colorCode(.Reset),
     }) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], fmt ++ "\n", args) catch return).len;
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }

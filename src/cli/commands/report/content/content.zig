@@ -93,10 +93,10 @@ pub fn condenseContent(
     const total = real_lines;
     const omitted = total - (head + tail);
 
-    var out: std.ArrayList(u8) = .empty;
-    defer out.deinit(allocator);
+    var out: std.Io.Writer.Allocating = .init(allocator);
+    defer out.deinit();
 
-    const writer = out.writer(allocator);
+    const writer = &out.writer;
 
     for (condensed.items[0..head]) |line| {
         try writer.writeAll(line);
@@ -115,5 +115,5 @@ pub fn condenseContent(
         try writer.writeByte('\n');
     }
 
-    return out.toOwnedSlice(allocator);
+    return out.toOwnedSlice();
 }

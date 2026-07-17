@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const Config = @import("../config/config.zig").Config;
 const CacheImpl = @import("../../../cache/impl.zig").CacheImpl;
 const runner = @import("../runner.zig");
@@ -100,7 +101,7 @@ pub fn printTable(result: *const runner.BenchResult) void {
     pos += (std.fmt.bufPrint(buf[pos..], "{s}\n", .{sep}) catch return).len;
     pos += (std.fmt.bufPrint(buf[pos..], "  {s:<16} {s:>10}\n\n", .{ "total", total_dur }) catch return).len;
 
-    std.fs.File.stderr().writeAll(buf[0..pos]) catch {};
+    std.Io.File.stderr().writeStreamingAll(rt.io(), buf[0..pos]) catch {};
 }
 
 /// Appends one table row into `buf`. Returns bytes written, or NoSpaceLeft.
@@ -115,4 +116,3 @@ fn appendRow(buf: []u8, name: []const u8, phase_ns: u64, total_ns: u64, ctx: []c
     const written = try std.fmt.bufPrint(buf, "  {s:<16} {s:>10}   {s:<24} {d:>7}%\n", .{ name, dur, ctx, pct });
     return written.len;
 }
-

@@ -11,7 +11,7 @@ test "writeJsonReport creates file with summary stats" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const json_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.json" });
     defer alloc.free(json_path);
 
@@ -28,7 +28,7 @@ test "writeJsonReport creates file with summary stats" {
 
     try writeJsonReport(&data, json_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.json", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "\"source_files\"") != null);
@@ -43,7 +43,7 @@ test "writeJsonReport includes language stats" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const json_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.json" });
     defer alloc.free(json_path);
 
@@ -64,7 +64,7 @@ test "writeJsonReport includes language stats" {
 
     try writeJsonReport(&data, json_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.json", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "\"languages\"") != null);
@@ -78,7 +78,7 @@ test "writeJsonReport files array is sorted by path" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const json_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.json" });
     defer alloc.free(json_path);
 
@@ -98,7 +98,7 @@ test "writeJsonReport files array is sorted by path" {
 
     try writeJsonReport(&data, json_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.json", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     const pos_a = std.mem.indexOf(u8, content, "a_first.zig").?;
@@ -112,7 +112,7 @@ test "writeJsonReport meta includes scanned path and version" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const json_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.json" });
     defer alloc.free(json_path);
 
@@ -129,7 +129,7 @@ test "writeJsonReport meta includes scanned path and version" {
 
     try writeJsonReport(&data, json_path, "my/project", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.json", 1 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "my/project") != null);

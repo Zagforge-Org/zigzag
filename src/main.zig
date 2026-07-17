@@ -10,17 +10,18 @@ const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo
 const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
 const cli_flags = @import("./cli/flags.zig");
+const rt = @import("./runtime.zig");
 
-pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    rt.setIo(init.io);
+    rt.setEnviron(init.environ_map);
+    const allocator = init.gpa;
 
     // Create list to hold command-line arguments
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
 
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = try init.minimal.args.iterateAllocator(allocator);
     defer args.deinit();
 
     _ = args.skip(); // skip program name
@@ -36,7 +37,7 @@ pub fn main() !void {
                 lg.printWarn("'init' takes no arguments (unexpected: {s})", .{extra});
                 return;
             }
-            try initHandler(allocator, std.fs.cwd());
+            try initHandler(allocator, std.Io.Dir.cwd());
             return;
         }
 
@@ -156,13 +157,6 @@ pub fn main() !void {
                 }) catch |err| {
                     lg.printError("serve error: {s}", .{@errorName(err)});
                 };
-                return;
-            }
-
-            // Warn when --upload is set but no scan will run
-            if (typedCfg.upload and !is_run_command) {
-                lg.printWarn("--upload has no effect without the 'run' subcommand", .{});
-                lg.printWarn("Usage: zigzag run --upload", .{});
                 return;
             }
 

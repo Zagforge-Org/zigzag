@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -22,7 +23,7 @@ pub fn writeHtmlReport(
         return error.MissingTemplateMarker;
 
     // --- Build report JSON (metadata + stats, no content) ---
-    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    var json_aw: std.Io.Writer.Allocating = .init(allocator);
     defer json_aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
@@ -117,17 +118,16 @@ pub fn writeHtmlReport(
     defer allocator.free(json_safe);
 
     // Assemble: template_prefix + report_json + rest_of_template
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     try aw.writer.writeAll(dashboard_template[0..split_pos]);
     try aw.writer.writeAll(json_safe);
     try aw.writer.writeAll(dashboard_template[split_pos + marker.len ..]);
 
     // Write to disk
-    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
-    defer html_file.close();
-    try html_file.writeAll(aw.written());
-
+    var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
+    defer html_file.close(rt.io());
+    try html_file.writeStreamingAll(rt.io(), aw.written());
 }
 
 /// Write the watch-mode stamp sidecar: a tiny file containing only the generated_at
@@ -136,9 +136,9 @@ pub fn writeHtmlReport(
 pub fn writeStampFile(html_path: []const u8, generated_at: []const u8, allocator: std.mem.Allocator) !void {
     const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
     defer allocator.free(stamp_path);
-    var stamp_file = try std.fs.cwd().createFile(stamp_path, .{ .truncate = true });
-    defer stamp_file.close();
-    try stamp_file.writeAll(generated_at);
+    var stamp_file = try std.Io.Dir.cwd().createFile(rt.io(), stamp_path, .{ .truncate = true });
+    defer stamp_file.close(rt.io());
+    try stamp_file.writeStreamingAll(rt.io(), generated_at);
 }
 
 /// Stream source content to a sidecar JSON file: {"path":"content",...}.
@@ -150,33 +150,33 @@ pub fn writeContentJson(
     content_path: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
-    defer file.close();
+    var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
+    defer file.close(rt.io());
 
-    try file.writeAll("{");
+    try file.writeStreamingAll(rt.io(), "{");
     var first = true;
     var it = file_entries.iterator();
     while (it.next()) |kv| {
-        if (!first) try file.writeAll(",");
+        if (!first) try file.writeStreamingAll(rt.io(), ",");
         first = false;
 
         // Encode key as JSON string using a small allocating writer
-        var key_aw: std.io.Writer.Allocating = .init(allocator);
+        var key_aw: std.Io.Writer.Allocating = .init(allocator);
         defer key_aw.deinit();
         var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
         try kws.write(kv.key_ptr.*);
-        try file.writeAll(key_aw.written());
+        try file.writeStreamingAll(rt.io(), key_aw.written());
 
-        try file.writeAll(":");
+        try file.writeStreamingAll(rt.io(), ":");
 
         // Encode value as JSON string using a small allocating writer
-        var val_aw: std.io.Writer.Allocating = .init(allocator);
+        var val_aw: std.Io.Writer.Allocating = .init(allocator);
         defer val_aw.deinit();
         var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
         try vws.write(kv.value_ptr.content);
-        try file.writeAll(val_aw.written());
+        try file.writeStreamingAll(rt.io(), val_aw.written());
     }
-    try file.writeAll("}");
+    try file.writeStreamingAll(rt.io(), "}");
 }
 
 /// Per-path entry for the combined content writer.
@@ -193,37 +193,37 @@ pub fn writeCombinedContentJson(
     content_path: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    var file = try std.fs.cwd().createFile(content_path, .{ .truncate = true });
-    defer file.close();
+    var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
+    defer file.close(rt.io());
 
-    try file.writeAll("{");
+    try file.writeStreamingAll(rt.io(), "{");
     var first = true;
     for (paths) |p| {
         var it = p.file_entries.iterator();
         while (it.next()) |kv| {
-            if (!first) try file.writeAll(",");
+            if (!first) try file.writeStreamingAll(rt.io(), ",");
             first = false;
 
             // Key: "{root_path}:{path}"
             const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
             defer allocator.free(combined_key);
 
-            var key_aw: std.io.Writer.Allocating = .init(allocator);
+            var key_aw: std.Io.Writer.Allocating = .init(allocator);
             defer key_aw.deinit();
             var kws: std.json.Stringify = .{ .writer = &key_aw.writer, .options = .{} };
             try kws.write(combined_key);
-            try file.writeAll(key_aw.written());
+            try file.writeStreamingAll(rt.io(), key_aw.written());
 
-            try file.writeAll(":");
+            try file.writeStreamingAll(rt.io(), ":");
 
-            var val_aw: std.io.Writer.Allocating = .init(allocator);
+            var val_aw: std.Io.Writer.Allocating = .init(allocator);
             defer val_aw.deinit();
             var vws: std.json.Stringify = .{ .writer = &val_aw.writer, .options = .{} };
             try vws.write(kv.value_ptr.content);
-            try file.writeAll(val_aw.written());
+            try file.writeStreamingAll(rt.io(), val_aw.written());
         }
     }
-    try file.writeAll("}");
+    try file.writeStreamingAll(rt.io(), "}");
 }
 
 /// FNV-1a 32-bit hash — identical algorithm to fnv1a32() in content.ts.
@@ -243,7 +243,7 @@ pub fn writeContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), content_dir);
     var it = file_entries.iterator();
     while (it.next()) |kv| {
         const hash = fnv1a32Hash(kv.key_ptr.*);
@@ -251,9 +251,9 @@ pub fn writeContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(kv.value_ptr.content);
+        var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
+        defer f.close(rt.io());
+        try f.writeStreamingAll(rt.io(), kv.value_ptr.content);
     }
 }
 
@@ -266,7 +266,7 @@ pub fn writeChangedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), content_dir);
     for (changed_paths) |path| {
         const entry = file_entries.get(path) orelse continue;
         const hash = fnv1a32Hash(path);
@@ -274,9 +274,9 @@ pub fn writeChangedContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(entry.content);
+        var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
+        defer f.close(rt.io());
+        try f.writeStreamingAll(rt.io(), entry.content);
     }
 }
 
@@ -287,7 +287,7 @@ pub fn writeCombinedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), content_dir);
     for (paths) |p| {
         var it = p.file_entries.iterator();
         while (it.next()) |kv| {
@@ -298,9 +298,9 @@ pub fn writeCombinedContentFiles(
             const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
             const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
             defer allocator.free(fname);
-            var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
-            defer f.close();
-            try f.writeAll(kv.value_ptr.content);
+            var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
+            defer f.close(rt.io());
+            try f.writeStreamingAll(rt.io(), kv.value_ptr.content);
         }
     }
 }
@@ -315,7 +315,7 @@ pub fn writeCombinedChangedContentFiles(
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
-    try std.fs.cwd().makePath(content_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), content_dir);
     for (changed_file_paths) |changed_path| {
         // Find which CombinedContentPath owns this file by root_path prefix match
         var owning_path: ?CombinedContentPath = null;
@@ -337,9 +337,9 @@ pub fn writeCombinedChangedContentFiles(
         const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{hash});
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
-        var f = try std.fs.cwd().createFile(fname, .{ .truncate = true });
-        defer f.close();
-        try f.writeAll(entry.content);
+        var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
+        defer f.close(rt.io());
+        try f.writeStreamingAll(rt.io(), entry.content);
     }
 }
 
@@ -380,7 +380,7 @@ pub fn writeCombinedHtmlReport(
         "unknown";
 
     // --- Build combined JSON ---
-    var json_aw: std.io.Writer.Allocating = .init(allocator);
+    var json_aw: std.Io.Writer.Allocating = .init(allocator);
     defer json_aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &json_aw.writer, .options = .{} };
@@ -509,13 +509,13 @@ pub fn writeCombinedHtmlReport(
     const json_safe = try std.mem.replaceOwned(u8, allocator, json_raw, "</script>", "<\\/script>");
     defer allocator.free(json_safe);
 
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     try aw.writer.writeAll(combined_dashboard_template[0..split_pos]);
     try aw.writer.writeAll(json_safe);
     try aw.writer.writeAll(combined_dashboard_template[split_pos + marker.len ..]);
 
-    var html_file = try std.fs.cwd().createFile(html_path, .{ .truncate = true });
-    defer html_file.close();
-    try html_file.writeAll(aw.written());
+    var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
+    defer html_file.close(rt.io());
+    try html_file.writeStreamingAll(rt.io(), aw.written());
 }

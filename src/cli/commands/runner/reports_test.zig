@@ -22,7 +22,7 @@ test "writePathReports creates markdown report file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -43,7 +43,7 @@ test "writePathReports creates markdown report file" {
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ tmp_path, basename });
     defer alloc.free(report_path);
 
-    const stat = try std.fs.cwd().statFile(report_path);
+    const stat = try std.Io.Dir.cwd().statFile(std.testing.io, report_path, .{});
     try std.testing.expect(stat.kind == .file);
 }
 
@@ -54,27 +54,27 @@ test "writePathReports with scanned files produces non-empty report" {
     // doesn't filter out the test files. Use separate scan and output dirs so
     // the output path isn't a parent of the scanned files.
     var rand_scan: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_scan));
+    rand_scan = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var scan_name_buf: [32]u8 = undefined;
     const scan_name = try std.fmt.bufPrint(&scan_name_buf, "zztest_scan_{x}", .{rand_scan});
-    try std.fs.cwd().makeDir(scan_name);
-    defer std.fs.cwd().deleteTree(scan_name) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, scan_name, .default_dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, scan_name) catch {};
 
     var rand_out: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_out));
+    rand_out = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var out_name_buf: [32]u8 = undefined;
     const out_name = try std.fmt.bufPrint(&out_name_buf, "zztest_out_{x}", .{rand_out});
-    try std.fs.cwd().makeDir(out_name);
-    defer std.fs.cwd().deleteTree(out_name) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, out_name, .default_dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, out_name) catch {};
 
     var scan_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const scan_path = try std.fs.cwd().realpath(scan_name, &scan_path_buf);
+    const scan_path = scan_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, scan_name, &scan_path_buf)];
     var out_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const out_path = try std.fs.cwd().realpath(out_name, &out_path_buf);
+    const out_path = out_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, out_name, &out_path_buf)];
 
-    var scan_dir = try std.fs.cwd().openDir(scan_name, .{});
-    defer scan_dir.close();
-    try scan_dir.writeFile(.{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
+    var scan_dir = try std.Io.Dir.cwd().openDir(std.testing.io, scan_name, .{});
+    defer scan_dir.close(std.testing.io);
+    try scan_dir.writeFile(std.testing.io, .{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -94,7 +94,7 @@ test "writePathReports with scanned files produces non-empty report" {
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ out_path, basename });
     defer alloc.free(report_path);
 
-    const content = try std.fs.cwd().readFileAlloc(alloc, report_path, 1024 * 1024);
+    const content = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, report_path, alloc, .limited(1024 * 1024));
     defer alloc.free(content);
 
     try std.testing.expect(content.len > 0);

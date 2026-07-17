@@ -52,13 +52,13 @@ test "condenseContent collapses consecutive blank lines" {
 }
 
 test "condenseContent truncates long files with correct omitted count" {
-    var buf: [4096]u8 = undefined;
-    var fbs = std.io.fixedBufferStream(&buf);
-    const w = fbs.writer();
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    const w = &aw.writer;
     for (0..100) |i| {
         try w.print("line {d}\n", .{i});
     }
-    const content = fbs.getWritten();
+    const content = aw.written();
     const result = try condenseContent(std.testing.allocator, content, ".md", 90);
     defer std.testing.allocator.free(result);
     try std.testing.expect(std.mem.indexOf(u8, result, "// [20 lines omitted]") != null);

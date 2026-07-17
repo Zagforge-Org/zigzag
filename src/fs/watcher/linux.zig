@@ -1,8 +1,59 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const linux = std.os.linux;
 const posix = std.posix;
 
 const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
+
+// Write local shims call the raw `std.os.linux` syscalls and reproduce
+// errno-to-error mapping the old `std.posix` helpers used.
+// Call sites are unchanged behavior.
+
+const INotifyInitError = error{
+    ProcessFdQuotaExceeded,
+    SystemFdQuotaExceeded,
+    SystemResources,
+} || posix.UnexpectedError;
+
+fn inotifyInit1(flags: u32) INotifyInitError!i32 {
+    const rc = linux.inotify_init1(flags);
+    return switch (posix.errno(rc)) {
+        .SUCCESS => @intCast(rc),
+        .INVAL => unreachable,
+        .MFILE => error.ProcessFdQuotaExceeded,
+        .NFILE => error.SystemFdQuotaExceeded,
+        .NOMEM => error.SystemResources,
+        else => |err| posix.unexpectedErrno(err),
+    };
+}
+
+const INotifyAddWatchError = error{
+    AccessDenied,
+    NameTooLong,
+    FileNotFound,
+    SystemResources,
+    UserResourceLimitReached,
+    NotDir,
+    WatchAlreadyExists,
+} || posix.UnexpectedError;
+
+fn inotifyAddWatchZ(inotify_fd: i32, pathname: [*:0]const u8, mask: u32) INotifyAddWatchError!i32 {
+    const rc = linux.inotify_add_watch(inotify_fd, pathname, mask);
+    return switch (posix.errno(rc)) {
+        .SUCCESS => @intCast(rc),
+        .ACCES => error.AccessDenied,
+        .BADF => unreachable,
+        .FAULT => unreachable,
+        .INVAL => unreachable,
+        .NAMETOOLONG => error.NameTooLong,
+        .NOENT => error.FileNotFound,
+        .NOMEM => error.SystemResources,
+        .NOSPC => error.UserResourceLimitReached,
+        .NOTDIR => error.NotDir,
+        .EXIST => error.WatchAlreadyExists,
+        else => |err| posix.unexpectedErrno(err),
+    };
+}
 
 pub const WatchEventKind = enum { modified, created, deleted };
 pub const WatchEvent = struct {
@@ -43,8 +94,8 @@ pub const Watcher = struct {
         linux.IN.MOVED_FROM | linux.IN.MOVED_TO | linux.IN.DELETE_SELF;
 
     pub fn init(allocator: std.mem.Allocator) !Watcher {
-        const fd = try posix.inotify_init1(linux.IN.CLOEXEC);
-        errdefer posix.close(fd);
+        const fd = try inotifyInit1(linux.IN.CLOEXEC);
+        errdefer _ = linux.close(fd);
 
         var skip_dirs: std.ArrayList([]const u8) = .empty;
         errdefer {
@@ -68,7 +119,7 @@ pub const Watcher = struct {
         var it = self.wd_map.valueIterator();
         while (it.next()) |v| self.allocator.free(v.*);
         self.wd_map.deinit();
-        posix.close(self.ifd);
+        _ = linux.close(self.ifd);
         for (self.skip_dirs.items) |d| self.allocator.free(d);
         self.skip_dirs.deinit(self.allocator);
     }
@@ -107,7 +158,7 @@ pub const Watcher = struct {
         const path_z = try self.allocator.dupeZ(u8, path);
         defer self.allocator.free(path_z);
 
-        const wd = posix.inotify_add_watch(self.ifd, path_z, WATCH_MASK) catch |err| switch (err) {
+        const wd = inotifyAddWatchZ(self.ifd, path_z, WATCH_MASK) catch |err| switch (err) {
             error.FileNotFound, error.NotDir => return,
             error.SystemResources => {
                 std.log.warn("inotify watch limit reached; increase fs.inotify.max_user_watches (e.g. sudo sysctl fs.inotify.max_user_watches=524288)", .{});
@@ -127,10 +178,10 @@ pub const Watcher = struct {
         }
         gop.value_ptr.* = try self.allocator.dupe(u8, path);
 
-        var dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
-        defer dir.close();
+        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
+        defer dir.close(rt.io());
         var it = dir.iterate();
-        while (try it.next()) |entry| {
+        while (try it.next(rt.io())) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(self.allocator, &.{ path, entry.name });
             defer self.allocator.free(sub);

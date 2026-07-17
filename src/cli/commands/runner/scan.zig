@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const Config = @import("../config/config.zig").Config;
@@ -16,7 +17,7 @@ const Logger = lg.Logger;
 
 /// Nanoseconds elapsed since `start` (from nanoTimestamp). Clamped to 0.
 pub inline fn nsElapsed(start: i128) u64 {
-    const delta = std.time.nanoTimestamp() - start;
+    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
     return @intCast(@max(0, delta));
 }
 
@@ -53,17 +54,17 @@ pub fn scanPath(
     allocator: std.mem.Allocator,
     logger: ?*Logger,
 ) !ScanResult {
-    var dir = std.fs.cwd().openDir(path, .{}) catch {
+    var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch {
         return error.NotADirectory;
     };
-    defer dir.close();
+    defer dir.close(rt.io());
 
     const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
     const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
-        .ignore_list = .{},
+        .ignore_list = .empty,
         .md = undefined,
         .md_mutex = undefined,
     };
@@ -129,7 +130,7 @@ pub fn scanPath(
         binary_entries.deinit();
     }
 
-    var entries_mutex = std.Thread.Mutex{};
+    var entries_mutex = @as(std.Io.Mutex, .init);
 
     var walker_ctx = WalkerCtx{
         .pool = pool,

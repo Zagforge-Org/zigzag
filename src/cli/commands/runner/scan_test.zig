@@ -9,12 +9,12 @@ const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 // ── nsElapsed ─────────────────────────────────────────────────────────────────
 
 test "nsElapsed clamps future timestamp to 0" {
-    const future = std.time.nanoTimestamp() + 1_000_000_000_000;
+    const future = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds + 1_000_000_000_000;
     try std.testing.expectEqual(@as(u64, 0), scan.nsElapsed(future));
 }
 
 test "nsElapsed returns positive for past timestamp" {
-    const past = std.time.nanoTimestamp() - 1_000_000;
+    const past = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds - 1_000_000;
     try std.testing.expect(scan.nsElapsed(past) > 0);
 }
 
@@ -38,11 +38,11 @@ test "scanPath returns NotADirectory for a file path" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const f = try tmp.dir.createFile("not_a_dir.txt", .{});
-    f.close();
+    const f = try tmp.dir.createFile(std.testing.io, "not_a_dir.txt", .{});
+    f.close(std.testing.io);
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const file_path = try tmp.dir.realpath("not_a_dir.txt", &path_buf);
+    const file_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, "not_a_dir.txt", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -60,7 +60,7 @@ test "scanPath on empty directory returns zero entries" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try tmp.dir.realpath(".", &path_buf);
+    const dir_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -82,19 +82,19 @@ test "scanPath picks up source files in directory" {
     // doesn't filter out the test files. This matches the zztest_* pattern
     // used elsewhere in this codebase (e.g. conf/file_test.zig).
     var rand_int: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_int));
+    rand_int = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var dir_name_buf: [32]u8 = undefined;
     const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
-    try std.fs.cwd().makeDir(dir_name);
-    defer std.fs.cwd().deleteTree(dir_name) catch {};
+    try std.Io.Dir.cwd().createDir(std.testing.io, dir_name, .default_dir);
+    defer std.Io.Dir.cwd().deleteTree(std.testing.io, dir_name) catch {};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try std.fs.cwd().realpath(dir_name, &path_buf);
+    const dir_path = path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, dir_name, &path_buf)];
 
-    var tmp_dir = try std.fs.cwd().openDir(dir_name, .{});
-    defer tmp_dir.close();
-    try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
-    try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });
+    var tmp_dir = try std.Io.Dir.cwd().openDir(std.testing.io, dir_name, .{});
+    defer tmp_dir.close(std.testing.io);
+    try tmp_dir.writeFile(std.testing.io, .{ .sub_path = "main.zig", .data = "const x = 1;\n" });
+    try tmp_dir.writeFile(std.testing.io, .{ .sub_path = "readme.md", .data = "# Hello\n" });
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../runtime.zig");
 const JobEntry = @import("../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../jobs/entry.zig").BinaryEntry;
 
@@ -31,7 +32,7 @@ pub const ReportData = struct {
         timezone_offset: ?i64,
     ) !ReportData {
         // --- Timestamp ---
-        const now = std.time.timestamp();
+        const now = std.Io.Timestamp.now(rt.io(), .real).toSeconds();
         const local_now = if (timezone_offset) |offset| now + offset else now;
         const epoch_seconds = std.time.epoch.EpochSeconds{ .secs = @intCast(local_now) };
         const day_seconds = epoch_seconds.getDaySeconds();

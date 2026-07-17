@@ -13,7 +13,7 @@ test "handleInit creates file with default content" {
     try handleInit(allocator, tmp_dir.dir);
 
     // Verify file was created with valid default JSON
-    const content = try tmp_dir.dir.readFileAlloc(allocator, DEFAULT_CONF_FILENAME, 1 << 20);
+    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
     defer allocator.free(content);
 
     try testing.expect(content.len > 0);
@@ -38,15 +38,15 @@ test "handleInit does not overwrite existing file" {
 
     // Create the file with custom content first
     {
-        const f = try tmp_dir.dir.createFile(DEFAULT_CONF_FILENAME, .{});
-        defer f.close();
-        try f.writeAll("{\"watch\": true}");
+        const f = try tmp_dir.dir.createFile(std.testing.io, DEFAULT_CONF_FILENAME, .{});
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, "{\"watch\": true}");
     }
 
     // handleInit should not overwrite
     try handleInit(allocator, tmp_dir.dir);
 
-    const content = try tmp_dir.dir.readFileAlloc(allocator, DEFAULT_CONF_FILENAME, 1 << 20);
+    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
     defer allocator.free(content);
 
     try testing.expectEqualStrings("{\"watch\": true}", content);

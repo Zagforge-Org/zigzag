@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const posix = std.posix;
 const c = std.c;
 
@@ -9,6 +10,40 @@ pub const WatchEvent = struct {
 };
 
 const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
+
+fn kqueue() !posix.fd_t {
+    const rc = c.kqueue();
+    if (rc < 0) return error.KqueueInit;
+    return rc;
+}
+
+fn kevent(
+    kq: posix.fd_t,
+    changelist: []const posix.Kevent,
+    eventlist: []posix.Kevent,
+    timeout: ?*const posix.timespec,
+) !usize {
+    const rc = c.kevent(
+        kq,
+        changelist.ptr,
+        @intCast(changelist.len),
+        eventlist.ptr,
+        @intCast(eventlist.len),
+        timeout,
+    );
+    if (rc < 0) return error.Kevent;
+    return @intCast(rc);
+}
+
+fn fstat(fd: posix.fd_t) !c.Stat {
+    var st: c.Stat = undefined;
+    if (c.fstat(fd, &st) < 0) return error.Fstat;
+    return st;
+}
+
+fn close(fd: posix.fd_t) void {
+    _ = c.close(fd);
+}
 
 /// Per-directory state: open fd + current file snapshot (name -> mtime)
 const DirState = struct {
@@ -66,13 +101,13 @@ pub const Watcher = struct {
             try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
         }
         return .{
-            .kq = try posix.kqueue(),
+            .kq = try kqueue(),
             .dir_states = std.AutoHashMap(posix.fd_t, *DirState).init(allocator),
             .dir_fds = std.ArrayList(posix.fd_t).empty,
             .seen_inodes = std.AutoHashMap(u64, void).init(allocator),
             .allocator = allocator,
             .skip_dirs = skip_dirs,
-            .last_mtime_scan = std.time.nanoTimestamp(),
+            .last_mtime_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds,
         };
     }
 
@@ -81,12 +116,12 @@ pub const Watcher = struct {
         while (it.next()) |entry| {
             entry.value_ptr.*.deinit(self.allocator);
             self.allocator.destroy(entry.value_ptr.*);
-            posix.close(entry.key_ptr.*);
+            close(entry.key_ptr.*);
         }
         self.dir_states.deinit();
         self.dir_fds.deinit(self.allocator);
         self.seen_inodes.deinit();
-        posix.close(self.kq);
+        close(self.kq);
         for (self.skip_dirs.items) |d| self.allocator.free(d);
         self.skip_dirs.deinit(self.allocator);
     }
@@ -116,18 +151,18 @@ pub const Watcher = struct {
 
     fn watchDirRecursive(self: *Watcher, path: []const u8) !void {
         if (self.shouldSkipPath(path)) return;
-        const dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
-        const fd = dir.fd;
+        const dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
+        const fd = dir.handle;
 
         // Deduplicate by inode: "apps" and "./apps" are the same physical directory.
         // Without this, multiple watchDir() calls for overlapping paths (e.g. "apps" + ".")
         // create redundant kqueue watches producing duplicate events.
-        const stat = posix.fstat(fd) catch {
-            posix.close(fd);
+        const stat = fstat(fd) catch {
+            close(fd);
             return;
         };
         if ((try self.seen_inodes.getOrPut(@intCast(stat.ino))).found_existing) {
-            posix.close(fd);
+            close(fd);
             return;
         }
 
@@ -141,8 +176,8 @@ pub const Watcher = struct {
             .data = 0,
             .udata = 0,
         };
-        _ = posix.kevent(self.kq, &.{kev}, &.{}, null) catch {
-            posix.close(fd);
+        _ = kevent(self.kq, &.{kev}, &.{}, null) catch {
+            close(fd);
             return;
         };
 
@@ -157,7 +192,7 @@ pub const Watcher = struct {
 
         // Recurse into subdirectories
         var it = dir.iterate();
-        while (try it.next()) |entry| {
+        while (try it.next(rt.io())) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(self.allocator, &.{ path, entry.name });
             defer self.allocator.free(sub);
@@ -184,7 +219,7 @@ pub const Watcher = struct {
             break :blk &ts_storage;
         } else null;
 
-        const n = posix.kevent(self.kq, &.{}, &events, ts_ptr) catch return 0;
+        const n = kevent(self.kq, &.{}, &events, ts_ptr) catch return 0;
         const before = out.items.len;
 
         // Process kqueue events (create/delete/rename)
@@ -200,7 +235,7 @@ pub const Watcher = struct {
         // directories, advancing a cursor. For small projects (< MTIME_BATCH_SIZE
         // dirs), all directories are scanned every cycle. For large projects,
         // the full sweep is spread across multiple cycles.
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (now - self.last_mtime_scan >= MTIME_POLL_INTERVAL_NS) {
             self.last_mtime_scan = now;
             const total_dirs = self.dir_fds.items.len;
@@ -272,13 +307,13 @@ pub const Watcher = struct {
 };
 
 fn buildSnapshot(allocator: std.mem.Allocator, path: []const u8, files: *std.StringHashMap(i128)) !void {
-    var dir = std.fs.cwd().openDir(path, .{ .iterate = true }) catch return;
-    defer dir.close();
+    var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
+    defer dir.close(rt.io());
     var it = dir.iterate();
-    while (try it.next()) |entry| {
+    while (try it.next(rt.io())) |entry| {
         if (entry.kind != .file) continue;
-        const stat = dir.statFile(entry.name) catch continue;
+        const stat = dir.statFile(rt.io(), entry.name, .{}) catch continue;
         const key = try allocator.dupe(u8, entry.name);
-        try files.put(key, stat.mtime);
+        try files.put(key, stat.mtime.nanoseconds);
     }
 }

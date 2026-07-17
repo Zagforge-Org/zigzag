@@ -25,14 +25,10 @@ test {
     _ = @import("./cli/handlers/flags/skip_cache_test.zig");
     _ = @import("./cli/handlers/flags/small_test.zig");
     _ = @import("./cli/handlers/flags/timezone_test.zig");
-    _ = @import("./cli/handlers/flags/upload_test.zig");
     _ = @import("./cli/handlers/flags/watch_test.zig");
     // handler tests — display/
     _ = @import("./cli/handlers/display/help_test.zig");
     _ = @import("./cli/handlers/display/version_test.zig");
-    // handler tests — upload/
-    _ = @import("./cli/handlers/upload/upload_test.zig");
-    _ = @import("./cli/handlers/upload/git_info_test.zig");
     // handler tests — init/ (previously undiscovered — adds 2 tests)
     _ = @import("./cli/handlers/init/init_test.zig");
     _ = @import("./cli/commands/config/config.zig");

@@ -54,7 +54,7 @@ Or right-click the binary in Finder → **Open** → **Open** to approve it once
 
 ### Prerequisites (building from source)
 
-- Zig 0.15.2
+- Zig 0.16.0
 
 ### Building from Source
 
@@ -382,7 +382,7 @@ Pass `--json` (or set `"json_output": true`) to generate a machine-readable JSON
 ```json
 {
   "meta": {
-    "version": "0.16.0",
+    "version": "0.19.0",
     "generated_at_ns": 1738245534000000000,
     "scanned_paths": ["./src"]
   },

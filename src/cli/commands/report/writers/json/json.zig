@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -12,7 +13,7 @@ pub fn writeJsonReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
 
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{ .whitespace = .indent_2 } };
@@ -24,7 +25,7 @@ pub fn writeJsonReport(
     try ws.objectField("version");
     try ws.write(cfg.version);
     try ws.objectField("generated_at_ns");
-    try ws.write(std.time.nanoTimestamp());
+    try ws.write(std.Io.Timestamp.now(rt.io(), .real).nanoseconds);
     try ws.objectField("scanned_paths");
     try ws.beginArray();
     try ws.write(root_path);
@@ -99,7 +100,7 @@ pub fn writeJsonReport(
 
     try ws.endObject();
 
-    var json_file = try std.fs.cwd().createFile(json_path, .{ .truncate = true });
-    defer json_file.close();
-    try json_file.writeAll(aw.written());
+    var json_file = try std.Io.Dir.cwd().createFile(rt.io(), json_path, .{ .truncate = true });
+    defer json_file.close(rt.io());
+    try json_file.writeStreamingAll(rt.io(), aw.written());
 }

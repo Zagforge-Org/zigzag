@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 const Job = @import("job.zig").Job;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
@@ -36,8 +37,8 @@ fn isBinaryFile(path: []const u8, content: []const u8) bool {
         ".dll", ".so",  ".dylib", ".bin",   ".dat", ".db",   ".sqlite",
         ".mp3", ".mp4", ".avi",   ".mov",   ".mkv", ".woff", ".woff2",
         ".ttf", ".otf", ".eot",   ".class", ".jar", ".war",  ".o",
-        ".a",   ".lib", ".pyc",   ".pyo",
-        ".bz2", ".lz4", ".lzma",  ".xz",    ".zst", ".zstd",
+        ".a",   ".lib", ".pyc",   ".pyo",   ".bz2", ".lz4",  ".lzma",
+        ".xz",  ".zst", ".zstd",
     };
 
     // Check extension first (faster)
@@ -156,7 +157,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const allocator = job.allocator;
 
     // Check if file still exists
-    const stat = std.fs.cwd().statFile(path) catch |err| {
+    const stat = std.Io.Dir.cwd().statFile(rt.io(), path, .{}) catch |err| {
         if (err == error.FileNotFound) {
             std.log.debug(
                 "File not found (may have been moved/deleted): {s}",
@@ -182,7 +183,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         return;
     }
 
-    const mtime_seconds: u64 = @intCast(@divFloor(mtime, std.time.ns_per_s));
+    const mtime_seconds: u64 = @intCast(mtime.toSeconds());
     var hash: ?[32]u8 = null;
     var content: []u8 = undefined;
     // Tracks whether the file was counted in cached_files (true) or processed_files (false).
@@ -311,15 +312,15 @@ pub fn processFileJob(job: Job) anyerror!void {
             _ = stats.processed_files.fetchSub(1, .monotonic);
         }
 
-        entries_mutex.lock();
-        defer entries_mutex.unlock();
+        entries_mutex.lockUncancelable(rt.io());
+        defer entries_mutex.unlock(rt.io());
 
         const path_copy = try allocator.dupe(u8, path);
         const ext_copy = try allocator.dupe(u8, extension);
         try binary_entries.put(path_copy, .{
             .path = path_copy,
             .size = size,
-            .mtime = mtime,
+            .mtime = mtime.nanoseconds,
             .extension = ext_copy,
         });
         return;
@@ -333,8 +334,8 @@ pub fn processFileJob(job: Job) anyerror!void {
     // =========================
     // Store result
     // =========================
-    entries_mutex.lock();
-    defer entries_mutex.unlock();
+    entries_mutex.lockUncancelable(rt.io());
+    defer entries_mutex.unlock(rt.io());
 
     const path_copy = try allocator.dupe(u8, path);
     const ext_copy = try allocator.dupe(u8, extension);
@@ -343,7 +344,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         .path = path_copy,
         .content = content,
         .size = size,
-        .mtime = mtime,
+        .mtime = mtime.nanoseconds,
         .extension = ext_copy,
         .line_count = line_count,
     });

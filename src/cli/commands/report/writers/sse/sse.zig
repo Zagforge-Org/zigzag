@@ -15,7 +15,7 @@ pub fn buildSsePayload(
     allocator: std.mem.Allocator,
 ) ![]u8 {
     // Build report JSON (same structure as __ZIGZAG_DATA__)
-    var report_aw: std.io.Writer.Allocating = .init(allocator);
+    var report_aw: std.Io.Writer.Allocating = .init(allocator);
     defer report_aw.deinit();
     var ws: std.json.Stringify = .{ .writer = &report_aw.writer, .options = .{} };
     try ws.beginObject();
@@ -104,7 +104,7 @@ pub fn buildSsePayload(
 
     // Wrap into {"report":<report_json>}
     // Content is served separately via report-content.json (Phase 1 sidecar).
-    var out: std.io.Writer.Allocating = .init(allocator);
+    var out: std.Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
     try out.writer.writeAll("{\"report\":");
     try out.writer.writeAll(report_aw.written());
@@ -125,7 +125,7 @@ pub fn buildFileDeltaPayload(
     kind: DeltaKind,
 ) ![]u8 {
     _ = kind; // both map to "file_update"
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{} };
     try ws.beginObject();
@@ -174,7 +174,7 @@ pub fn buildCombinedSsePayload(
     else
         "unknown";
 
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{} };
     try ws.beginObject();
@@ -304,7 +304,7 @@ pub fn buildCombinedSsePayload(
 /// Build a delete event payload: {"type":"file_delete","path":"..."}.
 /// Caller must free.
 pub fn buildFileDeletePayload(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    var aw: std.io.Writer.Allocating = .init(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
     defer aw.deinit();
     var ws: std.json.Stringify = .{ .writer = &aw.writer, .options = .{} };
     try ws.beginObject();

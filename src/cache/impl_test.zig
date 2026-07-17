@@ -2,13 +2,13 @@ const std = @import("std");
 const CacheImpl = @import("./impl.zig").CacheImpl;
 
 /// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
-fn mtimeSeconds(dir: std.fs.Dir, name: []const u8) !u64 {
-    const s = try dir.statFile(name);
-    return @intCast(@divFloor(s.mtime, std.time.ns_per_s));
+fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
+    const s = try dir.statFile(std.testing.io, name, .{});
+    return @intCast(s.mtime.toSeconds());
 }
 
-fn fileSize(dir: std.fs.Dir, name: []const u8) !usize {
-    const s = try dir.statFile(name);
+fn fileSize(dir: std.Io.Dir, name: []const u8) !usize {
+    const s = try dir.statFile(std.testing.io, name, .{});
     return s.size;
 }
 
@@ -20,13 +20,13 @@ test "validateCache does not invalidate an unmodified file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     // Create real source file
     {
-        const f = try tmp.dir.createFile("file.zig", .{});
-        defer f.close();
-        try f.writeAll("const x = 1;\n");
+        const f = try tmp.dir.createFile(std.testing.io, "file.zig", .{});
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, "const x = 1;\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "file.zig" });
@@ -64,12 +64,12 @@ test "cache survives a full init/saveToDisk/deinit/init round-trip" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("hello.zig", .{});
-        defer f.close();
-        try f.writeAll("// hello\n");
+        const f = try tmp.dir.createFile(std.testing.io, "hello.zig", .{});
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, "// hello\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "hello.zig" });
@@ -109,12 +109,12 @@ test "validateCache evicts entries for deleted files" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("gone.zig", .{});
-        defer f.close();
-        try f.writeAll("// temp\n");
+        const f = try tmp.dir.createFile(std.testing.io, "gone.zig", .{});
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, "// temp\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "gone.zig" });
@@ -134,7 +134,7 @@ test "validateCache evicts entries for deleted files" {
     }
 
     // Delete the file
-    try tmp.dir.deleteFile("gone.zig");
+    try tmp.dir.deleteFile(std.testing.io, "gone.zig");
 
     // Session 2 — validateCache should evict the stale entry
     {
@@ -153,12 +153,12 @@ test "validateCache evicts entries whose mtime changed" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("changing.zig", .{});
-        defer f.close();
-        try f.writeAll("v1\n");
+        const f = try tmp.dir.createFile(std.testing.io, "changing.zig", .{});
+        defer f.close(std.testing.io);
+        try f.writeStreamingAll(std.testing.io, "v1\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "changing.zig" });
@@ -196,7 +196,7 @@ test "isCached returns false for unknown path" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
@@ -217,13 +217,13 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
 
-    try tmp.dir.makeDir(".cache");
-    try tmp.dir.makeDir(".cache/files");
+    try tmp.dir.createDir(std.testing.io, ".cache", .default_dir);
+    try tmp.dir.createDir(std.testing.io, ".cache/files", .default_dir);
 
     // Write a cache index larger than 10 MiB.
     // Each entry uses a ~1000-char unique path so ~10,500 entries ≈ 11 MiB.
@@ -231,8 +231,8 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     defer alloc.free(index_path);
 
     {
-        const index_file = try std.fs.cwd().createFile(index_path, .{});
-        defer index_file.close();
+        const index_file = try std.Io.Dir.cwd().createFile(std.testing.io, index_path, .{});
+        defer index_file.close(std.testing.io);
 
         // Use two 200-char path segments (each < NAME_MAX=255) to make long unique paths.
         // Each line ≈ 485 bytes → 23,000 lines ≈ 11 MiB.
@@ -243,7 +243,7 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
         var i: usize = 0;
         while (i < 23_000) : (i += 1) {
             const line = std.fmt.bufPrint(&line_buf, "/tmp/{s}/{s}/file_{d:0>5}.zig|1234567890|100|{s}\n", .{ seg, seg, i, fake_hash }) catch unreachable;
-            try index_file.writeAll(line);
+            try index_file.writeStreamingAll(std.testing.io, line);
         }
     }
 

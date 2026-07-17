@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const fmt_utils = @import("../fmt/fmt.zig");
 const ProcessStats = @import("../../cli/commands/stats/stats.zig").ProcessStats;
 
@@ -17,14 +18,14 @@ pub const ProgressBar = struct {
     pub fn init(stats: *const ProcessStats) Self {
         return .{
             .stats = stats,
-            .is_tty = std.posix.isatty(std.fs.File.stderr().handle),
+            .is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false),
         };
     }
 
     /// Spawn render thread if TTY. Safe to call unconditionally.
     pub fn start(self: *Self) !void {
         if (!self.is_tty) return;
-        self.start_ns = std.time.nanoTimestamp();
+        self.start_ns = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         self.thread = try std.Thread.spawn(.{}, renderLoop, .{self});
     }
 
@@ -39,11 +40,11 @@ pub const ProgressBar = struct {
         if (!self.is_tty) return;
         const sv = self.stats.getSummary();
         const elapsed_ns: u64 = blk: {
-            const delta = std.time.nanoTimestamp() - self.start_ns;
+            const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - self.start_ns;
             break :blk @intCast(@max(0, delta));
         };
         writeSuccessLine(sv.total, sv.cached, elapsed_ns);
-        std.fs.File.stderr().writeAll(sep) catch {};
+        std.Io.File.stderr().writeStreamingAll(rt.io(), sep) catch {};
     }
 
     fn writeSuccessLine(total: usize, cached: usize, elapsed_ns: u64) void {
@@ -56,13 +57,13 @@ pub const ProgressBar = struct {
             "\r\x1B[2K\x1b[92m✓\x1b[0m Scanned \x1b[97m{d}\x1b[0m {s} \x1b[90m({d} cached)  {s}\x1b[0m\n",
             .{ total, file_word, cached, elapsed },
         ) catch return;
-        std.fs.File.stderr().writeAll(line) catch {};
+        std.Io.File.stderr().writeStreamingAll(rt.io(), line) catch {};
     }
 
     fn renderLoop(pb: *Self) void {
         var frame: usize = 0;
         var estimate: usize = 1; // starts at 1 to prevent div-by-zero when total=0
-        const stderr = std.fs.File.stderr();
+        const stderr = std.Io.File.stderr();
 
         while (!pb.done.load(.acquire)) {
             const sv = pb.stats.getSummary();
@@ -74,7 +75,7 @@ pub const ProgressBar = struct {
                 // Phase 1: spinner + counter (first ~1 second)
                 const spinner = spinners[frame % 10];
                 const line = std.fmt.bufPrint(&buf, "\r\x1B[2K{s} Scanning… {d} files", .{ spinner, total }) catch "\r\x1B[2K...";
-                stderr.writeAll(line) catch {};
+                stderr.writeStreamingAll(rt.io(), line) catch {};
             } else {
                 // Phase 2: rolling-estimate bar + counter (blue fill, dim empty, no brackets)
                 estimate = @max(estimate, total * 4 / 3);
@@ -109,11 +110,11 @@ pub const ProgressBar = struct {
                 bp += dim_off.len;
 
                 const line = std.fmt.bufPrint(&buf, "\r\x1B[2K{s} {d} files ({d} cached)", .{ bar[0..bp], total, cached }) catch "\r\x1B[2K...";
-                stderr.writeAll(line) catch {};
+                stderr.writeStreamingAll(rt.io(), line) catch {};
             }
 
             frame += 1;
-            std.Thread.sleep(100 * std.time.ns_per_ms);
+            std.Io.sleep(rt.io(), .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
         }
     }
 };

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const State = @import("state.zig").State;
 const reporter = @import("reporter.zig");
 const Config = @import("../config/config.zig").Config;
@@ -13,11 +14,9 @@ const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
 const ProgressBar = lg.ProgressBar;
 const ProcessStats = @import("../stats.zig").ProcessStats;
-const ScanResult = @import("../runner/scan.zig").ScanResult;
-const upload_mod = @import("../../handlers/upload/upload.zig");
 
 inline fn nsElapsed(start: i128) u64 {
-    const delta = std.time.nanoTimestamp() - start;
+    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
     return @intCast(@max(0, delta));
 }
 
@@ -32,7 +31,7 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
 
     // Scan phase progress is suppressed on TTY (same rationale as runner.zig: worker
     // thread output between printPhaseStart and printPhaseDone corrupts cursor-up rewrite).
-    const is_tty = std.posix.isatty(std.fs.File.stderr().handle);
+    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
 
     // Scan all configured paths for initial state.
     var states: std.ArrayList(*State) = .empty;
@@ -42,7 +41,7 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
     }
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.time.nanoTimestamp();
+        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
         if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
         var stats = ProcessStats.init();
         var pb = ProgressBar.init(&stats); // pb must not be moved after this line
@@ -168,25 +167,6 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
         }
     }
 
-    // Upload initial snapshot once if --upload was requested.
-    // Never repeated during the watch loop — use `zigzag run --upload` for one-shot uploads.
-    if (cfg.upload) {
-        lg.printStep("Uploading initial snapshot...", .{});
-        const results = try allocator.alloc(ScanResult, states.items.len);
-        defer allocator.free(results);
-        for (states.items, 0..) |state, i| {
-            results[i] = .{
-                .root_path = state.root_path,
-                .file_entries = state.file_entries,
-                .binary_entries = state.binary_entries,
-                .stats = ProcessStats.init(),
-            };
-        }
-        upload_mod.performUpload(results, cfg, allocator) catch |err| {
-            lg.printError("Upload failed: {s}", .{@errorName(err)});
-        };
-    }
-
     // Set up OS-level filesystem watcher
     var watcher = try Watcher.init(allocator);
     defer watcher.deinit();
@@ -280,9 +260,9 @@ pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator)
                             if (path_copy) |p| changed_paths.append(allocator, p) catch allocator.free(p);
                             // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
                             if (sse_server) |srv| {
-                                state.entries_mutex.lock();
+                                state.entries_mutex.lockUncancelable(rt.io());
                                 const entry_opt = state.file_entries.get(event.path);
-                                state.entries_mutex.unlock();
+                                state.entries_mutex.unlock(rt.io());
                                 if (entry_opt) |entry| {
                                     const delta = report.buildFileDeltaPayload(allocator, &entry, .updated) catch null;
                                     if (delta) |d| {

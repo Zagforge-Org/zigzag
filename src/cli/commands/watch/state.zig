@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../../jobs/process.zig").processFileJob;
@@ -22,7 +23,7 @@ pub const State = struct {
     md_path: []const u8,
     file_entries: std.StringHashMap(JobEntry),
     binary_entries: std.StringHashMap(BinaryEntry),
-    entries_mutex: std.Thread.Mutex,
+    entries_mutex: std.Io.Mutex,
     file_ctx: FileContext,
     allocator: std.mem.Allocator,
 
@@ -35,8 +36,8 @@ pub const State = struct {
         pool: *Pool,
         allocator: std.mem.Allocator,
     ) !*State {
-        var dir = std.fs.cwd().openDir(path, .{}) catch return error.NotADirectory;
-        dir.close();
+        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch return error.NotADirectory;
+        dir.close(rt.io());
 
         const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
         const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
@@ -48,9 +49,9 @@ pub const State = struct {
             .md_path = md_path,
             .file_entries = std.StringHashMap(JobEntry).init(allocator),
             .binary_entries = std.StringHashMap(BinaryEntry).init(allocator),
-            .entries_mutex = .{},
+            .entries_mutex = .init,
             .file_ctx = .{
-                .ignore_list = .{},
+                .ignore_list = .empty,
                 .md = undefined,
                 .md_mutex = undefined,
             },
@@ -135,8 +136,8 @@ pub const State = struct {
     /// Called after an inotify queue overflow to recover from lost events.
     pub fn rescan(self: *State, cache: ?*CacheImpl, pool: *Pool) !void {
         {
-            self.entries_mutex.lock();
-            defer self.entries_mutex.unlock();
+            self.entries_mutex.lockUncancelable(rt.io());
+            defer self.entries_mutex.unlock(rt.io());
             var it = self.file_entries.iterator();
             while (it.next()) |entry| freeJobEntry(entry.value_ptr.*, self.allocator);
             self.file_entries.clearRetainingCapacity();
@@ -190,8 +191,8 @@ pub const State = struct {
 
     /// Remove a deleted file's entry from the in-memory map.
     pub fn removeFile(self: *State, file_path: []const u8) void {
-        self.entries_mutex.lock();
-        defer self.entries_mutex.unlock();
+        self.entries_mutex.lockUncancelable(rt.io());
+        defer self.entries_mutex.unlock(rt.io());
         if (self.file_entries.fetchRemove(file_path)) |kv| freeJobEntry(kv.value, self.allocator);
         if (self.binary_entries.fetchRemove(file_path)) |kv| freeBinaryEntry(kv.value, self.allocator);
     }

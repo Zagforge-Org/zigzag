@@ -8,10 +8,10 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try tmp.dir.realpath(".", &path_buf);
+    const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.makeDir("skip_me");
-    try tmp.dir.makeDir("keep_me");
+    try tmp.dir.createDir(std.testing.io, "skip_me", .default_dir);
+    try tmp.dir.createDir(std.testing.io, "keep_me", .default_dir);
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
@@ -19,20 +19,20 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     try w.addSkipDir("skip_me");
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     {
-        const f = try tmp.dir.createFile("skip_me\\hidden.txt", .{});
-        try f.writeAll("should not appear");
-        f.close();
+        const f = try tmp.dir.createFile(std.testing.io, "skip_me\\hidden.txt", .{});
+        try f.writeStreamingAll(std.testing.io, "should not appear");
+        f.close(std.testing.io);
     }
     {
-        const f = try tmp.dir.createFile("keep_me\\visible.txt", .{});
-        try f.writeAll("should appear");
-        f.close();
+        const f = try tmp.dir.createFile(std.testing.io, "keep_me\\visible.txt", .{});
+        try f.writeStreamingAll(std.testing.io, "should appear");
+        f.close(std.testing.io);
     }
 
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {
@@ -65,29 +65,29 @@ test "Watcher.poll emits modified event on file write" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try tmp.dir.realpath(".", &path_buf);
+    const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     // Create file before watching so its creation doesn't pollute events
     {
-        const f = try tmp.dir.createFile("existing.txt", .{});
-        f.close();
+        const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     // Open, write, close — background thread picks up ReadDirectoryChangesW event
     {
-        const f = try tmp.dir.openFile("existing.txt", .{ .mode = .write_only });
-        try f.writeAll("new content");
-        f.close();
+        const f = try tmp.dir.openFile(std.testing.io, "existing.txt", .{ .mode = .write_only });
+        try f.writeStreamingAll(std.testing.io, "new content");
+        f.close(std.testing.io);
     }
 
     // Give the background thread time to receive and enqueue the event
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {
@@ -111,23 +111,23 @@ test "Watcher.poll emits deleted event on file removal" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const path = try tmp.dir.realpath(".", &path_buf);
+    const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
-        const f = try tmp.dir.createFile("to_delete.txt", .{});
-        f.close();
+        const f = try tmp.dir.createFile(std.testing.io, "to_delete.txt", .{});
+        f.close(std.testing.io);
     }
 
     var w = try Watcher.init(alloc);
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
-    try tmp.dir.deleteFile("to_delete.txt");
+    try tmp.dir.deleteFile(std.testing.io, "to_delete.txt");
 
     // Give the background thread time to receive and enqueue the event
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {

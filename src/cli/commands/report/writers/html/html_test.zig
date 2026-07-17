@@ -19,7 +19,7 @@ test "writeHtmlReport creates file with expected HTML structure" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -36,7 +36,7 @@ test "writeHtmlReport creates file with expected HTML structure" {
 
     try writeHtmlReport(&data, html_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "<!doctype html>") != null);
@@ -50,7 +50,7 @@ test "writeHtmlReport includes summary stats in embedded JSON" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -76,7 +76,7 @@ test "writeHtmlReport includes summary stats in embedded JSON" {
 
     try writeHtmlReport(&data, html_path, "src", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "\"source_files\"") != null);
@@ -89,7 +89,7 @@ test "writeHtmlReport includes file entry path in embedded JSON" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -115,7 +115,7 @@ test "writeHtmlReport includes file entry path in embedded JSON" {
 
     try writeHtmlReport(&data, html_path, "src", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "src/utils.zig") != null);
@@ -127,7 +127,7 @@ test "writeHtmlReport includes binary entry in embedded JSON" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -151,7 +151,7 @@ test "writeHtmlReport includes binary entry in embedded JSON" {
 
     try writeHtmlReport(&data, html_path, "assets", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "assets/logo.png") != null);
@@ -163,7 +163,7 @@ test "writeHtmlReport sanitizes </script> in content" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -189,7 +189,7 @@ test "writeHtmlReport sanitizes </script> in content" {
 
     try writeHtmlReport(&data, html_path, ".", &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     // The raw </script> from file content must be escaped as <\/script>
@@ -201,7 +201,7 @@ test "writeContentJson produces valid JSON object with single entry" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
     defer alloc.free(content_path);
@@ -212,13 +212,17 @@ test "writeContentJson produces valid JSON object with single entry" {
     const content1: []u8 = try alloc.dupe(u8, "hello world");
     defer alloc.free(content1);
     try file_entries.put("src/main.zig", .{
-        .path = "src/main.zig", .content = content1,
-        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+        .path = "src/main.zig",
+        .content = content1,
+        .size = 11,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
     });
 
     try writeContentJson(&file_entries, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     try std.testing.expect(std.mem.indexOf(u8, written, "src/main.zig") != null);
@@ -232,7 +236,7 @@ test "writeContentJson produces valid parseable JSON with multiple entries" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
     defer alloc.free(content_path);
@@ -249,7 +253,7 @@ test "writeContentJson produces valid parseable JSON with multiple entries" {
 
     try writeContentJson(&file_entries, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, alloc, written, .{});
@@ -263,7 +267,7 @@ test "writeContentJson escapes special characters in content" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
     defer alloc.free(content_path);
@@ -278,7 +282,7 @@ test "writeContentJson escapes special characters in content" {
 
     try writeContentJson(&file_entries, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     // Must parse as valid JSON
@@ -293,7 +297,7 @@ test "writeContentJson produces empty object for empty map" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "content.json" });
     defer alloc.free(content_path);
@@ -303,7 +307,7 @@ test "writeContentJson produces empty object for empty map" {
 
     try writeContentJson(&file_entries, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
     try std.testing.expectEqualStrings("{}", written);
 }
@@ -313,7 +317,7 @@ test "writeCombinedContentJson uses root_path:path as key to avoid collisions" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "combined-content.json" });
     defer alloc.free(content_path);
@@ -337,7 +341,7 @@ test "writeCombinedContentJson uses root_path:path as key to avoid collisions" {
     };
     try writeCombinedContentJson(&paths, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     // Both keys must be present — no collision
@@ -352,7 +356,7 @@ test "writeCombinedContentJson produces valid JSON with two paths" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const out_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const out_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(out_path);
     const content_path = try std.fs.path.join(alloc, &.{ out_path, "combined-content.json" });
     defer alloc.free(content_path);
@@ -375,7 +379,7 @@ test "writeCombinedContentJson produces valid JSON with two paths" {
     };
     try writeCombinedContentJson(&paths, content_path, alloc);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, content_path, 1024 * 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, alloc, written, .{});
@@ -390,7 +394,7 @@ test "writeCombinedHtmlReport creates file with combined:true in JSON" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -418,7 +422,7 @@ test "writeCombinedHtmlReport creates file with combined:true in JSON" {
     };
     try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "<!doctype html>") != null);
@@ -433,7 +437,7 @@ test "writeCombinedHtmlReport includes root_path for each path section" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -454,7 +458,7 @@ test "writeCombinedHtmlReport includes root_path for each path section" {
     };
     try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "./myproject") != null);
@@ -467,7 +471,7 @@ test "writeCombinedHtmlReport with zero paths produces valid HTML" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const html_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.html" });
     defer alloc.free(html_path);
 
@@ -477,7 +481,7 @@ test "writeCombinedHtmlReport with zero paths produces valid HTML" {
     const paths: []const CombinedPathData = &.{};
     try writeCombinedHtmlReport(paths, html_path, 0, &cfg, alloc);
 
-    const content = try tmp.dir.readFileAlloc(alloc, "report.html", 4 << 20);
+    const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
 
     try std.testing.expect(std.mem.indexOf(u8, content, "\"path_count\":0") != null);
@@ -488,7 +492,7 @@ test "writeContentFiles creates one file per entry with correct content" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
     const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "content" });
     defer alloc.free(content_dir);
@@ -499,8 +503,12 @@ test "writeContentFiles creates one file per entry with correct content" {
     const body: []u8 = try alloc.dupe(u8, "hello world");
     defer alloc.free(body);
     try file_entries.put("src/main.zig", .{
-        .path = "src/main.zig", .content = body,
-        .size = 11, .mtime = 0, .extension = ".zig", .line_count = 1,
+        .path = "src/main.zig",
+        .content = body,
+        .size = 11,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 1,
     });
 
     try writeContentFiles(&file_entries, content_dir, alloc);
@@ -516,7 +524,7 @@ test "writeContentFiles creates one file per entry with correct content" {
     const fname = try std.fs.path.join(alloc, &.{ content_dir, hex });
     defer alloc.free(fname);
 
-    const written = try std.fs.cwd().readFileAlloc(alloc, fname, 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, fname, alloc, .limited(1024));
     defer alloc.free(written);
     try std.testing.expectEqualStrings("hello world", written);
 }
@@ -526,7 +534,7 @@ test "writeContentFiles creates directory and correct number of files" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
     const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "content2" });
     defer alloc.free(content_dir);
@@ -544,11 +552,11 @@ test "writeContentFiles creates directory and correct number of files" {
     try writeContentFiles(&file_entries, content_dir, alloc);
 
     // Verify directory exists and has 2 files
-    var dir = try std.fs.cwd().openDir(content_dir, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });
+    defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
-    while (try it.next()) |_| count += 1;
+    while (try it.next(std.testing.io)) |_| count += 1;
     try std.testing.expectEqual(@as(usize, 2), count);
 }
 
@@ -557,7 +565,7 @@ test "writeCombinedContentFiles uses combined key for hashing" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const tmp_path = try tmp.dir.realpathAlloc(alloc, ".");
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
     defer alloc.free(tmp_path);
     const content_dir = try std.fs.path.join(alloc, &.{ tmp_path, "combined-content" });
     defer alloc.free(content_dir);
@@ -581,11 +589,11 @@ test "writeCombinedContentFiles uses combined key for hashing" {
     try writeCombinedContentFiles(&paths, content_dir, alloc);
 
     // Two different combined keys should produce two different files
-    var dir = try std.fs.cwd().openDir(content_dir, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });
+    defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
-    while (try it.next()) |_| count += 1;
+    while (try it.next(std.testing.io)) |_| count += 1;
     try std.testing.expectEqual(@as(usize, 2), count);
 
     // Verify the content for "./backend:src/main.zig"
@@ -598,7 +606,7 @@ test "writeCombinedContentFiles uses combined key for hashing" {
     const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{h});
     const fname = try std.fs.path.join(alloc, &.{ content_dir, hex });
     defer alloc.free(fname);
-    const written = try std.fs.cwd().readFileAlloc(alloc, fname, 1024);
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, fname, alloc, .limited(1024));
     defer alloc.free(written);
     try std.testing.expectEqualStrings("backend content", written);
 }

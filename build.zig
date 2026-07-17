@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     // npm install only runs when node_modules is absent (bundle.py handles the check).
     const bundle = b.addSystemCommand(&.{ "python3", "src/templates/bundle.py" });
     bundle.addArgs(&.{});
-    _ = bundle.captureStdOut();
+    // _ = bundle.captureStdOut();
     const bundle_step = b.step("bundle", "Regenerate src/templates/dashboard.html");
     bundle_step.dependOn(&bundle.step);
 
@@ -41,9 +41,9 @@ pub fn build(b: *std.Build) void {
     mod.addCSourceFiles(.{
         .root = b.path("ast/vendor/tree-sitter/lib/src"),
         .files = &.{
-            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
-            "node.c",  "parser.c",             "query.c",   "stack.c",
-            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+            "alloc.c",   "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",    "parser.c",             "query.c",    "stack.c",
+            "subtree.c", "tree_cursor.c",        "tree.c",     "wasm_store.c",
         },
         .flags = &.{"-std=gnu99"},
     });
@@ -120,6 +120,9 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "options", .module = opts_mod },
             },
         }),
+        // The Zig 0.16.0 self-hosted x86 backend/linker cannot yet emit some
+        // relocations used here (R_X86_64_PC64), so build through LLVM.
+        .use_llvm = true,
     });
     exe.root_module.link_libc = true;
 
@@ -155,9 +158,9 @@ pub fn build(b: *std.Build) void {
     test_mod.addCSourceFiles(.{
         .root = b.path("ast/vendor/tree-sitter/lib/src"),
         .files = &.{
-            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
-            "node.c",  "parser.c",             "query.c",   "stack.c",
-            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+            "alloc.c",   "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",    "parser.c",             "query.c",    "stack.c",
+            "subtree.c", "tree_cursor.c",        "tree.c",     "wasm_store.c",
         },
         .flags = &.{"-std=gnu99"},
     });
@@ -224,6 +227,8 @@ pub fn build(b: *std.Build) void {
 
     const mod_tests = b.addTest(.{
         .root_module = test_mod,
+        // build via LLVM (temporary).
+        .use_llvm = true,
     });
     const run_mod_tests = b.addRunArtifact(mod_tests);
     test_step.dependOn(&run_mod_tests.step);
