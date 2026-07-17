@@ -18,7 +18,7 @@ pub const ProgressBar = struct {
     pub fn init(stats: *const ProcessStats) Self {
         return .{
             .stats = stats,
-            .is_tty = std.posix.isatty(std.Io.File.stderr().handle),
+            .is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false),
         };
     }
 

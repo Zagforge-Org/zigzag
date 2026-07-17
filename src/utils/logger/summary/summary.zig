@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const colors = @import("../../colors/colors.zig");
 
 /// Arguments for printSummary. Avoids a long parameter list and a dependency on ProcessStats.
@@ -15,7 +16,7 @@ pub const SummaryArgs = struct {
 /// Prints a colored summary block to stderr.
 pub fn printSummary(args: SummaryArgs) void {
     // On TTY the ProgressBar's success line already shows scanned count; skip the full block.
-    if (std.posix.isatty(std.Io.File.stderr().handle)) return;
+    if ((std.Io.File.stderr().isTty(rt.io()) catch false)) return;
     var buf: [4096]u8 = undefined;
     var pos: usize = 0;
     pos += (std.fmt.bufPrint(buf[pos..], "\n{s} ══ Summary: {s}{s}{s} ══{s}\n", .{

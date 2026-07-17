@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const builtin = @import("builtin");
 const colors = @import("../../colors/colors.zig");
 const fmt_utils = @import("../../fmt/fmt.zig");
@@ -24,7 +25,7 @@ pub fn printPhaseStart(comptime fmt: []const u8, args: anytype) void {
 }
 
 pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context_args: anytype) void {
-    const is_tty = std.posix.isatty(std.Io.File.stderr().handle);
+    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
     var buf: [4096]u8 = undefined;
     var elapsed_buf: [32]u8 = undefined;
     const elapsed = fmt_utils.fmtElapsed(elapsed_ns, &elapsed_buf);

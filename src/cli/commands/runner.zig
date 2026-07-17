@@ -46,7 +46,7 @@ pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator
     // to stderr between printPhaseStart and printPhaseDone, causing the cursor-up
     // rewrite (\x1B[1A) to overwrite a worker line instead of the scan line.
     // On non-TTY (piped/redirected), both calls emit clean text lines.
-    const is_tty = std.posix.isatty(std.Io.File.stderr().handle);
+    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
     if (!is_tty) lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
 
     // Always collect timing data for the final summary (or for the external bench caller).
