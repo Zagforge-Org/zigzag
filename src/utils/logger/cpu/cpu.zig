@@ -13,7 +13,7 @@ pub fn getCpuName(buf: []u8) []const u8 {
 }
 
 fn getCpuNameLinux(buf: []u8) []const u8 {
-    const f = std.Io.Dir.openFileAbsolute("/proc/cpuinfo", .{}) catch return "unknown";
+    const f = std.Io.Dir.openFileAbsolute(rt.io(), "/proc/cpuinfo", .{}) catch return "unknown";
     defer f.close(rt.io());
     var tmp: [8192]u8 = undefined;
     const n = f.read(&tmp) catch return "unknown";

@@ -171,7 +171,7 @@ pub const CacheImpl = struct {
         }
 
         // Atomic rename
-        try std.Io.Dir.cwd().rename(rt.io(), temp_path, cache_index_path);
+        try std.Io.Dir.cwd().rename(temp_path, std.Io.Dir.cwd(), cache_index_path, rt.io());
     }
 
     /// Generate a safe filename from a path (now includes hash for uniqueness)
@@ -350,17 +350,17 @@ pub const CacheImpl = struct {
         defer dir.close(rt.io());
 
         var dir_it = dir.iterate();
-        while (try dir_it.next()) |entry| {
+        while (try dir_it.next(rt.io())) |entry| {
             if (entry.kind == .directory) {
-                var subdir = try dir.openDir(entry.name, .{ .iterate = true });
+                var subdir = try dir.openDir(rt.io(), entry.name, .{ .iterate = true });
                 defer subdir.close(rt.io());
 
                 var subdir_it = subdir.iterate();
-                while (try subdir_it.next()) |subentry| {
-                    subdir.deleteFile(subentry.name) catch {};
+                while (try subdir_it.next(rt.io())) |subentry| {
+                    subdir.deleteFile(rt.io(), subentry.name) catch {};
                 }
             } else {
-                dir.deleteFile(entry.name) catch {};
+                dir.deleteFile(rt.io(), entry.name) catch {};
             }
         }
     }

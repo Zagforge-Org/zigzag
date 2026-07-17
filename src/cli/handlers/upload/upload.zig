@@ -19,7 +19,7 @@ pub fn resolveUploadUrl(allocator: std.mem.Allocator) ![]const u8 {
     const base = try allocator.dupe(u8, rt.getEnv("ZAGFORGE_API_URL") orelse DEFAULT_API_BASE);
     defer allocator.free(base);
     // Strip any trailing slash so concatenation is consistent.
-    const base_clean = std.mem.trimRight(u8, base, "/");
+    const base_clean = std.mem.trimEnd(u8, base, "/");
     return std.fmt.allocPrint(allocator, "{s}{s}", .{ base_clean, UPLOAD_PATH });
 }
 
