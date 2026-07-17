@@ -10,8 +10,10 @@ const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo
 const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
 const cli_flags = @import("./cli/flags.zig");
+const rt = @import("./runtime.zig");
 
 pub fn main(init: std.process.Init) !void {
+    rt.setIo(init.io);
     const allocator = init.gpa;
 
     // Create list to hold command-line arguments
@@ -34,7 +36,7 @@ pub fn main(init: std.process.Init) !void {
                 lg.printWarn("'init' takes no arguments (unexpected: {s})", .{extra});
                 return;
             }
-            try initHandler(allocator, std.fs.cwd());
+            try initHandler(allocator, std.Io.Dir.cwd());
             return;
         }
 
