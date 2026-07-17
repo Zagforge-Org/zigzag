@@ -20,7 +20,7 @@ test "validateCache does not invalidate an unmodified file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     // Create real source file
     {
@@ -64,7 +64,7 @@ test "cache survives a full init/saveToDisk/deinit/init round-trip" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
         const f = try tmp.dir.createFile("hello.zig", .{});
@@ -109,7 +109,7 @@ test "validateCache evicts entries for deleted files" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
         const f = try tmp.dir.createFile("gone.zig", .{});
@@ -153,7 +153,7 @@ test "validateCache evicts entries whose mtime changed" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     {
         const f = try tmp.dir.createFile("changing.zig", .{});
@@ -196,7 +196,7 @@ test "isCached returns false for unknown path" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
@@ -217,7 +217,7 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);

@@ -26,7 +26,7 @@ test "writeAllReports creates markdown file" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -52,7 +52,7 @@ test "writeAllReports creates JSON file when json_output is true" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -79,7 +79,7 @@ test "writeAllReports creates HTML file when html_output is true" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 
@@ -106,7 +106,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
 

@@ -22,7 +22,7 @@ test "writePathReports creates markdown report file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -68,9 +68,9 @@ test "writePathReports with scanned files produces non-empty report" {
     defer std.Io.Dir.cwd().deleteTree(out_name) catch {};
 
     var scan_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const scan_path = try std.Io.Dir.cwd().realpath(scan_name, &scan_path_buf);
+    const scan_path = scan_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, scan_name, &scan_path_buf)];
     var out_path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const out_path = try std.Io.Dir.cwd().realpath(out_name, &out_path_buf);
+    const out_path = out_path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, out_name, &out_path_buf)];
 
     var scan_dir = try std.Io.Dir.cwd().openDir(scan_name, .{});
     defer scan_dir.close();

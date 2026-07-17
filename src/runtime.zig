@@ -2,8 +2,11 @@
 //! In 0.16.0 every `Io.Dir / Io.File` operation takes `io: Io`.
 
 const std = @import("std");
+const builtin = @import("builtin");
 
-var instance: std.Io = undefined;
+// In test builds there is no `main` to call `setIo`, so default the global handle
+// to test runner's threaded Io.
+var instance: std.Io = if (builtin.is_test) std.testing.io else undefined;
 var env_map: ?*const std.process.Environ.Map = null;
 
 /// Called once before any filesystem/I/O work.

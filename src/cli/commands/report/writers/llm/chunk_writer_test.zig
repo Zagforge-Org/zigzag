@@ -18,7 +18,7 @@ test "ChunkWriter: single chunk no manifest" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const base_dir = try tmp.dir.realpathAlloc(std.testing.allocator, ".");
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(base_dir);
 
     const base_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm" });
@@ -48,7 +48,7 @@ test "ChunkWriter: multi-chunk rotation and manifest" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const base_dir = try tmp.dir.realpathAlloc(std.testing.allocator, ".");
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(base_dir);
 
     const base_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm" });
@@ -84,7 +84,7 @@ test "ChunkWriter: oversized file gets own chunk" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const base_dir = try tmp.dir.realpathAlloc(std.testing.allocator, ".");
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(base_dir);
 
     const base_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm" });
@@ -105,7 +105,7 @@ test "ChunkWriter: exact limit does not rotate" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    const base_dir = try tmp.dir.realpathAlloc(std.testing.allocator, ".");
+    const base_dir = try tmp.dir.realPathFileAlloc(std.testing.io, ".", std.testing.allocator);
     defer std.testing.allocator.free(base_dir);
 
     const base_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm" });

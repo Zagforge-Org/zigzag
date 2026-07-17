@@ -97,7 +97,7 @@ test "resolveCombinedHtmlPath returns combined.html in base output dir" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
     var cfg = @import("../../config/config.zig").Config.default(allocator);
@@ -116,7 +116,7 @@ test "resolveCombinedContentPath returns combined-content.json in base output di
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
     var cfg = @import("../../config/config.zig").Config.default(allocator);
@@ -149,7 +149,7 @@ test "resolveOutputPath returns path under configured output_dir" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    const tmp_abs = try tmp.dir.realpathAlloc(allocator, ".");
+    const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
     var cfg = @import("../../config/config.zig").Config.default(allocator);

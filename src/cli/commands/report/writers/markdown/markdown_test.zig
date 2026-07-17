@@ -11,7 +11,7 @@ test "writeReport creates file with header, TOC and file entries" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
@@ -66,7 +66,7 @@ test "writeReport handles empty entries map" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);
@@ -98,7 +98,7 @@ test "writeReport overwrites existing file" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const tmp_path = try tmp.dir.realpath(".", &path_buf);
+    const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     const md_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.md" });
     defer alloc.free(md_path);

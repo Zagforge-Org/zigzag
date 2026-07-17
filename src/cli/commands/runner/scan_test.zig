@@ -42,7 +42,7 @@ test "scanPath returns NotADirectory for a file path" {
     f.close();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const file_path = try tmp.dir.realpath("not_a_dir.txt", &path_buf);
+    const file_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, "not_a_dir.txt", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -60,7 +60,7 @@ test "scanPath on empty directory returns zero entries" {
     defer tmp.cleanup();
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try tmp.dir.realpath(".", &path_buf);
+    const dir_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();
@@ -89,7 +89,7 @@ test "scanPath picks up source files in directory" {
     defer std.Io.Dir.cwd().deleteTree(dir_name) catch {};
 
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const dir_path = try std.Io.Dir.cwd().realpath(dir_name, &path_buf);
+    const dir_path = path_buf[0..try std.Io.Dir.cwd().realPathFile(std.testing.io, dir_name, &path_buf)];
 
     var tmp_dir = try std.Io.Dir.cwd().openDir(dir_name, .{});
     defer tmp_dir.close();
