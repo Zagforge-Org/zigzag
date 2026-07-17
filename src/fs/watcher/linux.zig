@@ -129,7 +129,7 @@ pub const Watcher = struct {
         gop.value_ptr.* = try self.allocator.dupe(u8, path);
 
         var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
-        defer dir.close();
+        defer dir.close(rt.io());
         var it = dir.iterate();
         while (try it.next()) |entry| {
             if (entry.kind != .directory) continue;

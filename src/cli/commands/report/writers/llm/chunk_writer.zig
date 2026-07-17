@@ -62,7 +62,7 @@ pub const ChunkWriter = struct {
             .index = self.chunk_index,
         });
         // Open next chunk
-        self.file.close();
+        self.file.close(rt.io());
         self.chunk_index += 1;
         self.current_bytes = 0;
         self.current_chunk_files = .empty;
@@ -94,7 +94,7 @@ pub const ChunkWriter = struct {
             .files = owned_files,
             .index = self.chunk_index,
         });
-        self.file.close();
+        self.file.close(rt.io());
         self.finalized = true;
         // Write manifest only for multi-chunk
         if (self.chunk_index > 1) {
@@ -103,7 +103,7 @@ pub const ChunkWriter = struct {
     }
 
     pub fn deinit(self: *ChunkWriter) void {
-        if (!self.finalized) self.file.close();
+        if (!self.finalized) self.file.close(rt.io());
         for (self.chunk_metas.items) |meta| {
             self.allocator.free(meta.file_name);
             for (meta.files) |f| self.allocator.free(f);
@@ -118,7 +118,7 @@ pub const ChunkWriter = struct {
         const manifest_path = try std.mem.concat(self.allocator, u8, &.{ self.base_path, ".manifest.json" });
         defer self.allocator.free(manifest_path);
         const mf = try std.Io.Dir.cwd().createFile(rt.io(), manifest_path, .{});
-        defer mf.close();
+        defer mf.close(rt.io());
 
         // Build JSON using std.io.Writer.Allocating
         var aw: std.io.Writer.Allocating = .init(self.allocator);

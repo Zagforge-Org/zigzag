@@ -351,7 +351,7 @@ pub fn writeLlmReport(
 
     // Write to disk
     var llm_file = try std.Io.Dir.cwd().createFile(rt.io(), llm_path, .{ .truncate = true });
-    defer llm_file.close();
+    defer llm_file.close(rt.io());
     try llm_file.writeAll(aw.written());
 }
 

@@ -58,16 +58,16 @@ pub fn getFileSize(path: []const u8) !u64 {
 /// Read a file into memory
 pub fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     const file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
-    defer file.close();
+    defer file.close(rt.io());
 
-    const file_size = (try file.stat()).size;
+    const file_size = (try file.stat(rt.io())).size;
     return try file.readToEndAlloc(allocator, file_size);
 }
 
 /// Read a file in chunk
 pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *FileContext) !void {
     const file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
-    defer file.close();
+    defer file.close(rt.io());
 
     var buffer: [CHUNK_SIZE]u8 = undefined;
 

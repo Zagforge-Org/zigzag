@@ -64,7 +64,7 @@ pub fn writeReport(
     allocator: std.mem.Allocator,
 ) !void {
     var md_file = try std.Io.Dir.cwd().createFile(rt.io(), md_path, .{ .truncate = true });
-    defer md_file.close();
+    defer md_file.close(rt.io());
 
     // Header
     const header = try std.fmt.allocPrint(

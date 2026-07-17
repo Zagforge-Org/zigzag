@@ -74,7 +74,7 @@ pub const Walk = struct {
             return;
         };
         defer {
-            dir.close();
+            dir.close(rt.io());
             walker_ctx.dir_semaphore.post();
         }
 
@@ -117,7 +117,7 @@ pub const Walk = struct {
         ctx: ?*FileContext,
     ) !void {
         var dir = try std.Io.Dir.cwd().openDir(rt.io(), path, .{ .access_sub_paths = true, .iterate = true });
-        defer dir.close();
+        defer dir.close(rt.io());
 
         var it = dir.iterate();
         while (try it.next()) |entry| {

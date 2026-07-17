@@ -126,7 +126,7 @@ pub fn writeHtmlReport(
 
     // Write to disk
     var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
-    defer html_file.close();
+    defer html_file.close(rt.io());
     try html_file.writeAll(aw.written());
 
 }
@@ -138,7 +138,7 @@ pub fn writeStampFile(html_path: []const u8, generated_at: []const u8, allocator
     const stamp_path = try std.fmt.allocPrint(allocator, "{s}.stamp", .{html_path});
     defer allocator.free(stamp_path);
     var stamp_file = try std.Io.Dir.cwd().createFile(rt.io(), stamp_path, .{ .truncate = true });
-    defer stamp_file.close();
+    defer stamp_file.close(rt.io());
     try stamp_file.writeAll(generated_at);
 }
 
@@ -152,7 +152,7 @@ pub fn writeContentJson(
     allocator: std.mem.Allocator,
 ) !void {
     var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
-    defer file.close();
+    defer file.close(rt.io());
 
     try file.writeAll("{");
     var first = true;
@@ -195,7 +195,7 @@ pub fn writeCombinedContentJson(
     allocator: std.mem.Allocator,
 ) !void {
     var file = try std.Io.Dir.cwd().createFile(rt.io(), content_path, .{ .truncate = true });
-    defer file.close();
+    defer file.close(rt.io());
 
     try file.writeAll("{");
     var first = true;
@@ -253,7 +253,7 @@ pub fn writeContentFiles(
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
-        defer f.close();
+        defer f.close(rt.io());
         try f.writeAll(kv.value_ptr.content);
     }
 }
@@ -276,7 +276,7 @@ pub fn writeChangedContentFiles(
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
-        defer f.close();
+        defer f.close(rt.io());
         try f.writeAll(entry.content);
     }
 }
@@ -300,7 +300,7 @@ pub fn writeCombinedContentFiles(
             const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
             defer allocator.free(fname);
             var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
-            defer f.close();
+            defer f.close(rt.io());
             try f.writeAll(kv.value_ptr.content);
         }
     }
@@ -339,7 +339,7 @@ pub fn writeCombinedChangedContentFiles(
         const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
         defer allocator.free(fname);
         var f = try std.Io.Dir.cwd().createFile(rt.io(), fname, .{ .truncate = true });
-        defer f.close();
+        defer f.close(rt.io());
         try f.writeAll(entry.content);
     }
 }
@@ -517,6 +517,6 @@ pub fn writeCombinedHtmlReport(
     try aw.writer.writeAll(combined_dashboard_template[split_pos + marker.len ..]);
 
     var html_file = try std.Io.Dir.cwd().createFile(rt.io(), html_path, .{ .truncate = true });
-    defer html_file.close();
+    defer html_file.close(rt.io());
     try html_file.writeAll(aw.written());
 }

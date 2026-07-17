@@ -119,9 +119,9 @@ pub const CacheImpl = struct {
             if (err == error.FileNotFound) return;
             return err;
         };
-        defer file.close();
+        defer file.close(rt.io());
 
-        const index_size = (try file.stat()).size;
+        const index_size = (try file.stat(rt.io())).size;
         if (index_size == 0) return;
         const data = try file.readToEndAlloc(self.allocator, index_size);
         defer self.allocator.free(data);
@@ -160,7 +160,7 @@ pub const CacheImpl = struct {
         defer self.allocator.free(temp_path);
 
         var file = try std.Io.Dir.cwd().createFile(rt.io(), temp_path, .{ .truncate = true });
-        defer file.close();
+        defer file.close(rt.io());
 
         var it = self.memory_cache.iterator();
         while (it.next()) |entry| {
@@ -247,8 +247,8 @@ pub const CacheImpl = struct {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
         };
-        defer cached_file.close();
-        const cached_file_size = (try cached_file.stat()).size;
+        defer cached_file.close(rt.io());
+        const cached_file_size = (try cached_file.stat(rt.io())).size;
         const content = cached_file.readToEndAlloc(self.allocator, cached_file_size) catch |err| {
             std.log.err("Cache file exists in index but failed to read {s}: {}", .{ cached_path, err });
             return err;
@@ -310,7 +310,7 @@ pub const CacheImpl = struct {
             }
             return err;
         };
-        defer file.close();
+        defer file.close(rt.io());
 
         file.writeAll(content) catch |err| {
             std.log.err("Failed to write cache file {s}: {}", .{ cached_path, err });
@@ -357,13 +357,13 @@ pub const CacheImpl = struct {
 
         // Delete all cache files
         var dir = try std.Io.Dir.cwd().openDir(rt.io(), self.cache_dir, .{ .iterate = true });
-        defer dir.close();
+        defer dir.close(rt.io());
 
         var dir_it = dir.iterate();
         while (try dir_it.next()) |entry| {
             if (entry.kind == .directory) {
                 var subdir = try dir.openDir(entry.name, .{ .iterate = true });
-                defer subdir.close();
+                defer subdir.close(rt.io());
 
                 var subdir_it = subdir.iterate();
                 while (try subdir_it.next()) |subentry| {

@@ -55,7 +55,7 @@ pub const FileConf = struct {
     pub fn writeDefaultConfig(full_path: []const u8) !void {
         var buf: [1024]u8 = undefined;
         var file = try std.Io.Dir.cwd().createFile(rt.io(), full_path, .{});
-        defer file.close();
+        defer file.close(rt.io());
 
         var w = file.writer(&buf);
         try w.interface.writeAll(FileConf.default());

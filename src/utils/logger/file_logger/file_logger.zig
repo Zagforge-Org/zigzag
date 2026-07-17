@@ -17,7 +17,7 @@ pub const Logger = struct {
     }
 
     pub fn deinit(self: *Logger) void {
-        self.file.close();
+        self.file.close(rt.io());
     }
 
     /// Writes a timestamped line to the log file.

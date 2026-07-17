@@ -13,7 +13,7 @@ pub const WinMMap = struct {
 
     pub fn open(path: []const u8) !Self {
         var file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
-        errdefer file.close();
+        errdefer file.close(rt.io());
 
         const size = try file.getEndPos();
         if (size == 0) return Self{ .data = &[_]u8{}, .mapping = null };

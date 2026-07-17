@@ -274,7 +274,7 @@ pub const Watcher = struct {
 
 fn buildSnapshot(allocator: std.mem.Allocator, path: []const u8, files: *std.StringHashMap(i128)) !void {
     var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
-    defer dir.close();
+    defer dir.close(rt.io());
     var it = dir.iterate();
     while (try it.next()) |entry| {
         if (entry.kind != .file) continue;

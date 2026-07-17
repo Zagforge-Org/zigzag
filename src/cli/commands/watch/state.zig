@@ -37,7 +37,7 @@ pub const State = struct {
         allocator: std.mem.Allocator,
     ) !*State {
         var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch return error.NotADirectory;
-        dir.close();
+        dir.close(rt.io());
 
         const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
         const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
