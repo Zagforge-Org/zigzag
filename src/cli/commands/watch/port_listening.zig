@@ -27,10 +27,14 @@ pub fn isPortListening(port: u16) bool {
                 zero: [8]u8 = [_]u8{0} ** 8,
             };
 
+            extern "ws2_32" fn WSAStartup(wVersionRequested: u16, lpWSAData: *anyopaque) callconv(.winapi) c_int;
             extern "ws2_32" fn socket(af: c_int, socktype: c_int, protocol: c_int) callconv(.winapi) SOCKET;
             extern "ws2_32" fn connect(s: SOCKET, name: *const sockaddr_in, namelen: c_int) callconv(.winapi) c_int;
             extern "ws2_32" fn closesocket(s: SOCKET) callconv(.winapi) c_int;
         };
+
+        var wsadata: [512]u8 align(@alignOf(usize)) = undefined;
+        if (ws2.WSAStartup(0x0202, &wsadata) != 0) return false;
 
         const sock = ws2.socket(ws2.AF_INET, ws2.SOCK_STREAM, ws2.IPPROTO_TCP);
         if (sock == ws2.INVALID_SOCKET) return false;
