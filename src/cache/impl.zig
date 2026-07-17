@@ -76,7 +76,7 @@ pub const CacheImpl = struct {
                 },
             };
 
-            const mtime: u64 = @intCast(@divFloor(stat.mtime, std.time.ns_per_s));
+            const mtime: u64 = @intCast(@divFloor(stat.mtime.nanoseconds, std.time.ns_per_s));
             const size = stat.size;
 
             // Check if file has been modified
