@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../runtime.zig");
 const linux = std.os.linux;
 const posix = std.posix;
 
@@ -127,7 +128,7 @@ pub const Watcher = struct {
         }
         gop.value_ptr.* = try self.allocator.dupe(u8, path);
 
-        var dir = std.Io.Dir.cwd().openDir(path, .{ .iterate = true }) catch return;
+        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
         defer dir.close();
         var it = dir.iterate();
         while (try it.next()) |entry| {

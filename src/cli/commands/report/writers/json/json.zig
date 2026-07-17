@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -99,7 +100,7 @@ pub fn writeJsonReport(
 
     try ws.endObject();
 
-    var json_file = try std.Io.Dir.cwd().createFile(json_path, .{ .truncate = true });
+    var json_file = try std.Io.Dir.cwd().createFile(rt.io(), json_path, .{ .truncate = true });
     defer json_file.close();
     try json_file.writeAll(aw.written());
 }

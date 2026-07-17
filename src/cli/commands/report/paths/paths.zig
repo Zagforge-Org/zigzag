@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../runtime.zig");
 const Config = @import("../../config/config.zig").Config;
 
 /// Compute the output directory segment for a scanned path.
@@ -27,7 +28,7 @@ pub fn resolveOutputPath(
     const segment = computeOutputSegment(scanned_path);
     const output_dir = try std.fs.path.join(allocator, &.{ base_dir, segment });
     defer allocator.free(output_dir);
-    try std.Io.Dir.cwd().makePath(output_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), output_dir);
     return std.fs.path.join(allocator, &.{ output_dir, filename });
 }
 
@@ -66,7 +67,7 @@ pub fn resolveCombinedHtmlPath(
     cfg: *const Config,
 ) ![]u8 {
     const base_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-    try std.Io.Dir.cwd().makePath(base_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), base_dir);
     return std.fs.path.join(allocator, &.{ base_dir, "combined.html" });
 }
 
@@ -78,7 +79,7 @@ pub fn resolveCombinedContentPath(
     cfg: *const Config,
 ) ![]u8 {
     const base_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-    try std.Io.Dir.cwd().makePath(base_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), base_dir);
     return std.fs.path.join(allocator, &.{ base_dir, "combined-content.json" });
 }
 
@@ -99,7 +100,7 @@ pub fn resolveCombinedContentDir(
     cfg: *const Config,
 ) ![]u8 {
     const base_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-    try std.Io.Dir.cwd().makePath(base_dir);
+    try std.Io.Dir.cwd().createDirPath(rt.io(), base_dir);
     return std.fs.path.join(allocator, &.{ base_dir, "combined-content" });
 }
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const Config = @import("../config/config.zig").Config;
@@ -53,7 +54,7 @@ pub fn scanPath(
     allocator: std.mem.Allocator,
     logger: ?*Logger,
 ) !ScanResult {
-    var dir = std.Io.Dir.cwd().openDir(path, .{}) catch {
+    var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch {
         return error.NotADirectory;
     };
     defer dir.close();

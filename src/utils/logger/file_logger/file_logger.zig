@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 
 /// Writes timestamped plain-text log entries to a file inside the output dir.
 /// Created via Logger.init(); must be deinitialized with Logger.deinit().
@@ -7,10 +8,10 @@ pub const Logger = struct {
 
     /// Opens (or creates) `<output_dir>/zigzag.log` in append mode.
     pub fn init(output_dir: []const u8, allocator: std.mem.Allocator) !Logger {
-        std.Io.Dir.cwd().makePath(output_dir) catch {};
+        std.Io.Dir.cwd().createDirPath(rt.io(), output_dir) catch {};
         const log_path = try std.fs.path.join(allocator, &.{ output_dir, "zigzag.log" });
         defer allocator.free(log_path);
-        const f = try std.Io.Dir.cwd().createFile(log_path, .{ .truncate = false });
+        const f = try std.Io.Dir.cwd().createFile(rt.io(), log_path, .{ .truncate = false });
         try f.seekFromEnd(0);
         return .{ .file = f };
     }

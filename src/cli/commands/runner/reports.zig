@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const ScanResult = @import("./scan.zig").ScanResult;
 const nsElapsed = @import("./scan.zig").nsElapsed;
 const Config = @import("../config/config.zig").Config;
@@ -10,7 +11,7 @@ const BenchResult = @import("../bench.zig").BenchResult;
 
 /// File size in bytes, or 0 on error.
 fn fileSizeOf(path: []const u8) u64 {
-    const stat = std.Io.Dir.cwd().statFile(path) catch return 0;
+    const stat = std.Io.Dir.cwd().statFile(rt.io(), path, .{}) catch return 0;
     return stat.size;
 }
 

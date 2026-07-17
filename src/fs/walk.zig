@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../runtime.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
 const WalkerCtx = @import("../walker/context.zig").WalkerCtx;
@@ -68,7 +69,7 @@ pub const Walk = struct {
         walker_ctx: *WalkerCtx,
     ) !void {
         walker_ctx.dir_semaphore.wait(); // cap the number of simultaneously open dirs
-        var dir = std.Io.Dir.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true }) catch {
+        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .access_sub_paths = true, .iterate = true }) catch {
             walker_ctx.dir_semaphore.post();
             return;
         };
@@ -115,7 +116,7 @@ pub const Walk = struct {
         callback: TProcessWriter,
         ctx: ?*FileContext,
     ) !void {
-        var dir = try std.Io.Dir.cwd().openDir(path, .{ .access_sub_paths = true, .iterate = true });
+        var dir = try std.Io.Dir.cwd().openDir(rt.io(), path, .{ .access_sub_paths = true, .iterate = true });
         defer dir.close();
 
         var it = dir.iterate();

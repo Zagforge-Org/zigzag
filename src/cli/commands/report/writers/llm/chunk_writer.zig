@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../../runtime.zig");
 
 pub const ChunkMeta = struct {
     file_name: []const u8, // owned
@@ -22,7 +23,7 @@ pub const ChunkWriter = struct {
     pub fn init(base_path: []const u8, root_path: []const u8, chunk_limit: usize, allocator: std.mem.Allocator) !ChunkWriter {
         const path = try chunkFileName(base_path, 1, allocator);
         defer allocator.free(path);
-        const file = try std.Io.Dir.cwd().createFile(path, .{});
+        const file = try std.Io.Dir.cwd().createFile(rt.io(), path, .{});
         return ChunkWriter{
             .base_path = base_path,
             .root_path = root_path,
@@ -67,7 +68,7 @@ pub const ChunkWriter = struct {
         self.current_chunk_files = .empty;
         const next_path = try chunkFileName(self.base_path, self.chunk_index, self.allocator);
         defer self.allocator.free(next_path);
-        self.file = try std.Io.Dir.cwd().createFile(next_path, .{});
+        self.file = try std.Io.Dir.cwd().createFile(rt.io(), next_path, .{});
     }
 
     /// Write file content. Triggers rotation if content would overflow chunk (and chunk non-empty).
@@ -116,7 +117,7 @@ pub const ChunkWriter = struct {
     fn writeManifest(self: *ChunkWriter) !void {
         const manifest_path = try std.mem.concat(self.allocator, u8, &.{ self.base_path, ".manifest.json" });
         defer self.allocator.free(manifest_path);
-        const mf = try std.Io.Dir.cwd().createFile(manifest_path, .{});
+        const mf = try std.Io.Dir.cwd().createFile(rt.io(), manifest_path, .{});
         defer mf.close();
 
         // Build JSON using std.io.Writer.Allocating

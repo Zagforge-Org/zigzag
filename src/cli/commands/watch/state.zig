@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../../jobs/process.zig").processFileJob;
@@ -35,7 +36,7 @@ pub const State = struct {
         pool: *Pool,
         allocator: std.mem.Allocator,
     ) !*State {
-        var dir = std.Io.Dir.cwd().openDir(path, .{}) catch return error.NotADirectory;
+        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch return error.NotADirectory;
         dir.close();
 
         const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";

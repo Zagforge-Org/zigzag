@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -62,7 +63,7 @@ pub fn writeReport(
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    var md_file = try std.Io.Dir.cwd().createFile(md_path, .{ .truncate = true });
+    var md_file = try std.Io.Dir.cwd().createFile(rt.io(), md_path, .{ .truncate = true });
     defer md_file.close();
 
     // Header
