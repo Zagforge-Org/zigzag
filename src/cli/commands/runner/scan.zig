@@ -6,7 +6,7 @@ const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
 const Pool = @import("../../../workers/pool.zig").Pool;
 const WaitGroup = @import("../../../workers/wait_group.zig").WaitGroup;
-const CacheImpl = @import("../../../cache/impl.zig").CacheImpl;
+const Cache = @import("../../../cache/Cache.zig");
 const ProcessStats = @import("../stats.zig").ProcessStats;
 const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
@@ -48,7 +48,7 @@ pub const ScanResult = struct {
 /// Scan a single directory path and return collected entries. Caller owns the result.
 pub fn scanPath(
     cfg: *const Config,
-    cache: ?*CacheImpl,
+    cache: ?*Cache,
     path: []const u8,
     pool: *Pool,
     allocator: std.mem.Allocator,

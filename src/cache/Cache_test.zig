@@ -1,5 +1,5 @@
 const std = @import("std");
-const CacheImpl = @import("./impl.zig").CacheImpl;
+const Cache = @import("./Cache.zig");
 
 /// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
 fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
@@ -22,7 +22,6 @@ test "validateCache does not invalidate an unmodified file" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const tmp_path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    // Create real source file
     {
         const f = try tmp.dir.createFile(std.testing.io, "file.zig", .{});
         defer f.close(std.testing.io);
@@ -37,7 +36,7 @@ test "validateCache does not invalidate an unmodified file" {
 
     // First session: populate cache
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         const mtime_s = try mtimeSeconds(tmp.dir, "file.zig");
         const size = try fileSize(tmp.dir, "file.zig");
         try cache.update(file_abs, null, mtime_s, size, "const x = 1;\n");
@@ -45,9 +44,9 @@ test "validateCache does not invalidate an unmodified file" {
         cache.deinit();
     }
 
-    // Second session: reload — validateCache must NOT evict the entry
+    // Second session, reload: validateCache must NOT evict the entry
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         defer cache.deinit();
 
         const mtime_s = try mtimeSeconds(tmp.dir, "file.zig");
@@ -81,17 +80,17 @@ test "cache survives a full init/saveToDisk/deinit/init round-trip" {
     const mtime_s = try mtimeSeconds(tmp.dir, "hello.zig");
     const size = try fileSize(tmp.dir, "hello.zig");
 
-    // Session 1 — write
+    // Session 1 write
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         try cache.update(file_abs, null, mtime_s, size, "// hello\n");
         try cache.saveToDisk();
         cache.deinit();
     }
 
-    // Session 2 — verify hit and content
+    // Session 2 verify hit and content
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         defer cache.deinit();
 
         try std.testing.expect(try cache.isCached(file_abs, mtime_s, size, null));
@@ -123,9 +122,9 @@ test "validateCache evicts entries for deleted files" {
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
 
-    // Session 1 — cache the file
+    // Session 1 cache the file
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         const mtime_s = try mtimeSeconds(tmp.dir, "gone.zig");
         const size = try fileSize(tmp.dir, "gone.zig");
         try cache.update(file_abs, null, mtime_s, size, "// temp\n");
@@ -133,12 +132,11 @@ test "validateCache evicts entries for deleted files" {
         cache.deinit();
     }
 
-    // Delete the file
     try tmp.dir.deleteFile(std.testing.io, "gone.zig");
 
-    // Session 2 — validateCache should evict the stale entry
+    // Session 2 validateCache should evict the stale entry
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         defer cache.deinit();
 
         const hit = cache.isCached(file_abs, 0, 0, null) catch false;
@@ -167,9 +165,9 @@ test "validateCache evicts entries whose mtime changed" {
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
 
-    // Session 1 — cache with a deliberately wrong (old) mtime
+    // Session 1 cache with a deliberately wrong (old) mtime
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         const size = try fileSize(tmp.dir, "changing.zig");
         // Store mtime = 1 (epoch+1s) — guaranteed to differ from the real file
         try cache.update(file_abs, null, 1, size, "v1\n");
@@ -177,9 +175,9 @@ test "validateCache evicts entries whose mtime changed" {
         cache.deinit();
     }
 
-    // Session 2 — reload; validateCache sees real mtime != 1 → evicts
+    // Session 2 reload; validateCache sees real mtime != 1 → evicts
     {
-        var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+        var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
         defer cache.deinit();
 
         const mtime_s = try mtimeSeconds(tmp.dir, "changing.zig");
@@ -201,14 +199,14 @@ test "isCached returns false for unknown path" {
     const cache_dir = try std.fs.path.join(alloc, &.{ tmp_path, ".cache" });
     defer alloc.free(cache_dir);
 
-    var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+    var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
     defer cache.deinit();
 
     const hit = try cache.isCached("/nonexistent/path.zig", 12345, 100, null);
     try std.testing.expect(!hit);
 }
 
-test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
+test "Cache.init succeeds when cache index exceeds 10 MiB" {
     // Regression test: loadFromDisk previously had a hard 10 MiB limit which caused
     // error.FileTooBig on large projects with many cached files.
     const alloc = std.testing.allocator;
@@ -248,6 +246,6 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
     }
 
     // Must not return error.FileTooBig
-    var cache = try CacheImpl.init(alloc, cache_dir, 1 << 20);
+    var cache = try Cache.init(alloc, std.testing.io, cache_dir, 1 << 20);
     defer cache.deinit();
 }

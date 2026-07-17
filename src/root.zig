@@ -60,7 +60,7 @@ test {
     _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
     _ = @import("./conf/file_test.zig");
-    _ = @import("./cache/impl_test.zig");
+    _ = @import("./cache/Cache_test.zig");
 
     _ = @import("./fs/directory_test.zig");
     _ = @import("./fs/watcher.zig");

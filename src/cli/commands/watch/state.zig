@@ -7,7 +7,7 @@ const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
 const Pool = @import("../../../workers/pool.zig").Pool;
 const WaitGroup = @import("../../../workers/wait_group.zig").WaitGroup;
-const CacheImpl = @import("../../../cache/impl.zig").CacheImpl;
+const Cache = @import("../../../cache/Cache.zig");
 const ProcessStats = @import("../stats.zig").ProcessStats;
 const Job = @import("../../../jobs/job.zig").Job;
 const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
@@ -31,7 +31,7 @@ pub const State = struct {
     pub fn init(
         stats: *ProcessStats,
         cfg: *const Config,
-        cache: ?*CacheImpl,
+        cache: ?*Cache,
         path: []const u8,
         pool: *Pool,
         allocator: std.mem.Allocator,
@@ -134,7 +134,7 @@ pub const State = struct {
 
     /// Re-scan the entire root path and rebuild in-memory entries from scratch.
     /// Called after an inotify queue overflow to recover from lost events.
-    pub fn rescan(self: *State, cache: ?*CacheImpl, pool: *Pool) !void {
+    pub fn rescan(self: *State, cache: ?*Cache, pool: *Pool) !void {
         {
             self.entries_mutex.lockUncancelable(rt.io());
             defer self.entries_mutex.unlock(rt.io());
@@ -167,7 +167,7 @@ pub const State = struct {
     }
 
     /// Re-process a single changed file and update the in-memory map.
-    pub fn updateFile(self: *State, file_path: []const u8, cache: ?*CacheImpl, pool: *Pool) !void {
+    pub fn updateFile(self: *State, file_path: []const u8, cache: ?*Cache, pool: *Pool) !void {
         self.removeFile(file_path);
 
         const path_copy = try self.allocator.dupe(u8, file_path);

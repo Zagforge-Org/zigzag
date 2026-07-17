@@ -1,7 +1,7 @@
 const std = @import("std");
 
 const FileContext = @import("../cli/context.zig").FileContext;
-const CacheImpl = @import("../cache/impl.zig").CacheImpl;
+const Cache = @import("../cache/Cache.zig");
 const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;
 const JobEntry = @import("entry.zig").JobEntry;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
@@ -9,7 +9,7 @@ const BinaryEntry = @import("entry.zig").BinaryEntry;
 pub const Job = struct {
     path: []const u8,
     file_ctx: ?*FileContext,
-    cache: ?*CacheImpl,
+    cache: ?*Cache,
     stats: *ProcessStats,
     file_entries: *std.StringHashMap(JobEntry),
     binary_entries: *std.StringHashMap(BinaryEntry),

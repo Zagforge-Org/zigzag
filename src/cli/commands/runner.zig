@@ -3,7 +3,7 @@ const rt = @import("../../runtime.zig");
 const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
 const Config = @import("config/config.zig").Config;
-const CacheImpl = @import("../../cache/impl.zig").CacheImpl;
+const Cache = @import("../../cache/Cache.zig");
 const Pool = @import("../../workers/pool.zig").Pool;
 const lg = @import("../../utils/utils.zig");
 const Logger = lg.Logger;
@@ -14,7 +14,7 @@ const ScanResult = scan_mod.ScanResult;
 const nsElapsed = scan_mod.nsElapsed;
 
 /// Executes the runner command for all configured paths.
-pub fn exec(cfg: *const Config, cache: ?*CacheImpl, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {
+pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {
     if (cfg.paths.items.len == 0) return;
 
     // Set up file logger if --log is enabled

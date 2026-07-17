@@ -4,7 +4,7 @@ const State = @import("state.zig").State;
 const reporter = @import("reporter.zig");
 const Config = @import("../config/config.zig").Config;
 const Pool = @import("../../../workers/pool.zig").Pool;
-const CacheImpl = @import("../../../cache/impl.zig").CacheImpl;
+const Cache = @import("../../../cache/Cache.zig");
 const watcher_mod = @import("../../../fs/watcher.zig");
 const Watcher = watcher_mod.Watcher;
 const WatchEvent = watcher_mod.WatchEvent;
@@ -22,7 +22,7 @@ inline fn nsElapsed(start: i128) u64 {
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
-pub fn execWatch(cfg: *Config, cache: ?*CacheImpl, allocator: std.mem.Allocator) !void {
+pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
 
     var pool = Pool{};

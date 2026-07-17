@@ -5,7 +5,7 @@ const watch = @import("./cli/commands/watch.zig");
 const serve = @import("./cli/commands/serve.zig");
 const bench = @import("./cli/commands/bench.zig");
 const report = @import("./cli/commands/report.zig");
-const CacheImpl = @import("cache/impl.zig").CacheImpl;
+const Cache = @import("cache/Cache.zig");
 const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
@@ -113,7 +113,7 @@ pub fn main(init: std.process.Init) !void {
                     defer allocator.free(cache_path);
 
                     lg.printStep("Loading cache...", .{});
-                    var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
+                    var cache = try Cache.init(allocator, rt.io(), cache_path, typedCfg.small_threshold);
                     defer cache.deinit();
                     if (cache.entryCount() > 0)
                         lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
@@ -168,7 +168,7 @@ pub fn main(init: std.process.Init) !void {
 
                 // Initialize cache with configured threshold
                 lg.printStep("Loading cache...", .{});
-                var cache = try CacheImpl.init(allocator, cache_path, typedCfg.small_threshold);
+                var cache = try Cache.init(allocator, rt.io(), cache_path, typedCfg.small_threshold);
                 defer cache.deinit();
                 if (cache.entryCount() > 0)
                     lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
