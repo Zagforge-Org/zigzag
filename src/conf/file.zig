@@ -57,7 +57,7 @@ pub const FileConf = struct {
         var file = try std.Io.Dir.cwd().createFile(rt.io(), full_path, .{});
         defer file.close(rt.io());
 
-        var w = file.writer(&buf);
+        var w = file.writer(rt.io(), &buf);
         try w.interface.writeAll(FileConf.default());
         try w.interface.flush();
     }
@@ -70,7 +70,7 @@ pub const FileConf = struct {
     }
 
     pub fn read(allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
-        const data = std.Io.Dir.cwd().readFileAlloc(allocator, path, END_ALLOC_SIZE) catch |err| {
+        const data = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| {
             switch (err) {
                 error.FileNotFound => return null,
                 else => return err,

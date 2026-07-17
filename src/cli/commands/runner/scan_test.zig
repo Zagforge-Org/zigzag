@@ -93,8 +93,8 @@ test "scanPath picks up source files in directory" {
 
     var tmp_dir = try std.Io.Dir.cwd().openDir(std.testing.io, dir_name, .{});
     defer tmp_dir.close(std.testing.io);
-    try tmp_dir.writeFile(.{ .sub_path = "main.zig", .data = "const x = 1;\n" });
-    try tmp_dir.writeFile(.{ .sub_path = "readme.md", .data = "# Hello\n" });
+    try tmp_dir.writeFile(std.testing.io, .{ .sub_path = "main.zig", .data = "const x = 1;\n" });
+    try tmp_dir.writeFile(std.testing.io, .{ .sub_path = "readme.md", .data = "# Hello\n" });
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();

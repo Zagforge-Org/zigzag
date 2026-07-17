@@ -74,7 +74,7 @@ test "writePathReports with scanned files produces non-empty report" {
 
     var scan_dir = try std.Io.Dir.cwd().openDir(std.testing.io, scan_name, .{});
     defer scan_dir.close(std.testing.io);
-    try scan_dir.writeFile(.{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
+    try scan_dir.writeFile(std.testing.io, .{ .sub_path = "hello.zig", .data = "const x = 42;\n" });
 
     var cfg = Config.default(alloc);
     defer cfg.deinit();

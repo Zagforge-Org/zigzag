@@ -10,7 +10,7 @@ test "isPortListening returns false for an occupied port" {
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
     var listener = try addr.listen(std.testing.io, .{});
     const ephemeral_port = listener.socket.address.getPort();
-    listener.deinit();
+    listener.deinit(std.testing.io);
 
     try std.testing.expect(!isPortListening(ephemeral_port));
 }
@@ -56,7 +56,7 @@ test "port probe works even when SO_REUSEADDR would allow duplicate bind" {
         // On some kernels SO_REUSEADDR allows this bind — exactly the bug we fix.
         // isPortListening must still detect the port as occupied.
         var s = second_srv;
-        s.deinit();
+        s.deinit(std.testing.io);
     } else |_| {}
 
     // Regardless of whether the duplicate bind succeeded or not, the original
@@ -86,7 +86,7 @@ test "port selection skips an occupied port and binds to next free port" {
         // Verify we can actually bind to the next port.
         const addr = try std.Io.net.IpAddress.parse("127.0.0.1", next_port);
         var listener = try addr.listen(std.testing.io, .{ .reuse_address = true });
-        defer listener.deinit();
+        defer listener.deinit(std.testing.io);
         // After binding, isPortListening must return true for that port too.
         try std.testing.expect(isPortListening(next_port));
     }

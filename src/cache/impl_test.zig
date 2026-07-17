@@ -4,7 +4,7 @@ const CacheImpl = @import("./impl.zig").CacheImpl;
 /// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
 fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
     const s = try dir.statFile(std.testing.io, name, .{});
-    return @intCast(@divFloor(s.mtime, std.time.ns_per_s));
+    return @intCast(s.mtime.toSeconds());
 }
 
 fn fileSize(dir: std.Io.Dir, name: []const u8) !usize {

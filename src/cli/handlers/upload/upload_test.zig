@@ -1,4 +1,5 @@
 const std = @import("std");
+const rt = @import("../../../runtime.zig");
 const gitBlobSha = @import("./upload.zig").gitBlobSha;
 const parseApiKeyFromCredentials = @import("./upload.zig").parseApiKeyFromCredentials;
 const resolveUploadUrl = @import("./upload.zig").resolveUploadUrl;
@@ -66,11 +67,9 @@ test "resolveUploadUrl: returns default URL when env var is absent" {
 
 test "resolveUploadUrl: default base matches expected dev endpoint" {
     // Guard: if someone has ZAGFORGE_API_URL set, skip the base-URL assertion.
-    const maybe = std.process.getEnvVarOwned(std.testing.allocator, "ZAGFORGE_API_URL");
-    if (maybe) |v| {
-        std.testing.allocator.free(v);
+    if (rt.getEnv("ZAGFORGE_API_URL") != null) {
         return; // env var is set — skip base-URL check
-    } else |_| {}
+    }
 
     const allocator = std.testing.allocator;
     const url = try resolveUploadUrl(allocator);

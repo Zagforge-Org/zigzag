@@ -3,7 +3,7 @@
 // Written with tests for both binary and runtime modes.
 
 const std = @import("std");
-const fs = std.fs;
+const rt = @import("../../runtime.zig");
 
 const DEFAULT_MAX_ZON_BYTES = 1 << 20; // 1 MiB
 const DEFAULT_BUILD_PATH = "build.zig.zon";
@@ -52,9 +52,9 @@ pub fn readZonVersion(allocator: std.mem.Allocator, opts: ReadOptions) VersionEr
     const file_path = opts.path orelse DEFAULT_BUILD_PATH;
     const max_bytes = opts.max_bytes orelse DEFAULT_MAX_ZON_BYTES;
 
-    const file_data = fs.cwd().readFileAlloc(allocator, file_path, max_bytes) catch |err| {
+    const file_data = std.Io.Dir.cwd().readFileAlloc(rt.io(), file_path, allocator, .limited(max_bytes)) catch |err| {
         return switch (err) {
-            error.FileTooBig => VersionError.FileTooBig,
+            error.StreamTooLong => VersionError.FileTooBig,
             error.FileNotFound => VersionError.FileNotFound,
             else => VersionError.Other,
         };
