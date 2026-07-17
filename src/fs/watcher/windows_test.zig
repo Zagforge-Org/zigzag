@@ -19,7 +19,7 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     try w.addSkipDir("skip_me");
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "skip_me\\hidden.txt", .{});
@@ -32,7 +32,7 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
         f.close(std.testing.io);
     }
 
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {
@@ -77,7 +77,7 @@ test "Watcher.poll emits modified event on file write" {
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     // Open, write, close — background thread picks up ReadDirectoryChangesW event
     {
@@ -87,7 +87,7 @@ test "Watcher.poll emits modified event on file write" {
     }
 
     // Give the background thread time to receive and enqueue the event
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {
@@ -122,12 +122,12 @@ test "Watcher.poll emits deleted event on file removal" {
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     try tmp.dir.deleteFile(std.testing.io, "to_delete.txt");
 
     // Give the background thread time to receive and enqueue the event
-    std.Thread.sleep(100 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
     var events: std.ArrayList(WatchEvent) = .empty;
     defer {

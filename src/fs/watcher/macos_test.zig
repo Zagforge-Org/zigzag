@@ -157,7 +157,7 @@ test "mtime fallback detects in-place file modification" {
     try w.watchDir(path);
 
     // Small sleep so the mtime changes (filesystem time granularity).
-    std.Thread.sleep(50 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(50 * std.time.ns_per_ms), .awake) catch {};
 
     // Modify the file in-place.
     {
@@ -197,7 +197,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
     defer w.deinit();
     try w.watchDir(path);
 
-    std.Thread.sleep(50 * std.time.ns_per_ms);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(50 * std.time.ns_per_ms), .awake) catch {};
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "nested/config.txt", .{});

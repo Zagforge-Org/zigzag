@@ -203,7 +203,7 @@ jobs:
                       .zig-cache/ts_chunker.o
             - name: Run tests
               shell: bash
-              run: zig test -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
+              run: zig test -fllvm -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a
 
     build:
         name: Build (${{ matrix.target }})

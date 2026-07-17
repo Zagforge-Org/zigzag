@@ -5,6 +5,11 @@ const colors = @import("../../colors/colors.zig");
 const fmt_utils = @import("../../fmt/fmt.zig");
 const cpu = @import("../cpu/cpu.zig");
 
+const win_console = struct {
+    extern "kernel32" fn GetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, lpMode: *std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
+    extern "kernel32" fn SetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, dwMode: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
+};
+
 // Stores the last printPhaseStart text so printPhaseDone can reprint the full line on TTY.
 threadlocal var g_phase_buf: [256]u8 = undefined;
 threadlocal var g_phase_len: usize = 0;
@@ -35,8 +40,8 @@ pub fn printPhaseDone(elapsed_ns: u64, comptime context_fmt: []const u8, context
         if (comptime builtin.os.tag == .windows) {
             const windows = std.os.windows;
             var mode: windows.DWORD = 0;
-            if (windows.kernel32.GetConsoleMode(std.Io.File.stderr().handle, &mode) != 0) {
-                _ = windows.kernel32.SetConsoleMode(
+            if (win_console.GetConsoleMode(std.Io.File.stderr().handle, &mode) != .FALSE) {
+                _ = win_console.SetConsoleMode(
                     std.Io.File.stderr().handle,
                     mode | 0x0004, // ENABLE_VIRTUAL_TERMINAL_PROCESSING
                 );
