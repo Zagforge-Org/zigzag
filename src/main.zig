@@ -11,16 +11,14 @@ const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
 const lg = @import("./utils/utils.zig");
 const cli_flags = @import("./cli/flags.zig");
 
-pub fn main() !void {
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
 
     // Create list to hold command-line arguments
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(allocator);
 
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = try init.minimal.args.iterateAllocator(allocator);
     defer args.deinit();
 
     _ = args.skip(); // skip program name

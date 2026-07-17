@@ -23,7 +23,7 @@ pub fn build(b: *std.Build) void {
     // npm install only runs when node_modules is absent (bundle.py handles the check).
     const bundle = b.addSystemCommand(&.{ "python3", "src/templates/bundle.py" });
     bundle.addArgs(&.{});
-    _ = bundle.captureStdOut();
+    // _ = bundle.captureStdOut();
     const bundle_step = b.step("bundle", "Regenerate src/templates/dashboard.html");
     bundle_step.dependOn(&bundle.step);
 
@@ -41,9 +41,9 @@ pub fn build(b: *std.Build) void {
     mod.addCSourceFiles(.{
         .root = b.path("ast/vendor/tree-sitter/lib/src"),
         .files = &.{
-            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
-            "node.c",  "parser.c",             "query.c",   "stack.c",
-            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+            "alloc.c",   "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",    "parser.c",             "query.c",    "stack.c",
+            "subtree.c", "tree_cursor.c",        "tree.c",     "wasm_store.c",
         },
         .flags = &.{"-std=gnu99"},
     });
@@ -155,9 +155,9 @@ pub fn build(b: *std.Build) void {
     test_mod.addCSourceFiles(.{
         .root = b.path("ast/vendor/tree-sitter/lib/src"),
         .files = &.{
-            "alloc.c", "get_changed_ranges.c", "language.c", "lexer.c",
-            "node.c",  "parser.c",             "query.c",   "stack.c",
-            "subtree.c", "tree_cursor.c", "tree.c", "wasm_store.c",
+            "alloc.c",   "get_changed_ranges.c", "language.c", "lexer.c",
+            "node.c",    "parser.c",             "query.c",    "stack.c",
+            "subtree.c", "tree_cursor.c",        "tree.c",     "wasm_store.c",
         },
         .flags = &.{"-std=gnu99"},
     });
