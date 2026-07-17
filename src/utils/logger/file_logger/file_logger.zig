@@ -12,7 +12,7 @@ pub const Logger = struct {
         std.Io.Dir.cwd().createDirPath(rt.io(), output_dir) catch {};
         const log_path = try std.fs.path.join(allocator, &.{ output_dir, "zigzag.log" });
         defer allocator.free(log_path);
-        const f = try std.Io.Dir.cwd().createFile(rt.io(), log_path, .{ .truncate = false });
+        const f = try std.Io.Dir.cwd().createFile(rt.io(), log_path, .{ .truncate = false, .read = true });
         const end = (try f.stat(rt.io())).size;
         return .{ .file = f, .pos = end };
     }
