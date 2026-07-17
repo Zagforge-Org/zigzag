@@ -11,6 +11,8 @@ test "isPortListening returns false for an occupied port" {
     var listener = try addr.listen(std.testing.io, .{});
     const ephemeral_port = listener.socket.address.getPort();
     listener.deinit(std.testing.io);
+    // Give the OS a moment to release the socket before probing.
+    std.Io.sleep(std.testing.io, .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
 
     try std.testing.expect(!isPortListening(ephemeral_port));
 }
