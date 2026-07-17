@@ -364,7 +364,7 @@ test "FileConf deserialises 'ignores' key" {
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
     defer f.close(std.testing.io);
-    try f.writeAll(
+    try f.writeStreamingAll(std.testing.io, 
         \\{"ignores": ["*.png", "*.jpg"]}
     );
     const result = try FileConf.loadFromPath(allocator, tmp_path);
@@ -383,7 +383,7 @@ test "FileConf old 'ignore_patterns' key is silently ignored" {
     const f = try std.Io.Dir.cwd().createFile(std.testing.io, tmp_path, .{});
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
     defer f.close(std.testing.io);
-    try f.writeAll(
+    try f.writeStreamingAll(std.testing.io, 
         \\{"ignore_patterns": ["*.png"]}
     );
     const result = try FileConf.loadFromPath(allocator, tmp_path);

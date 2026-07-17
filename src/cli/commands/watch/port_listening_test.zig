@@ -8,8 +8,8 @@ test "isPortListening returns false for an occupied port" {
     // Bind to an ephemeral port (0), record the assigned port, then release it.
     // After release the port should no longer have an active listener.
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-    var listener = try addr.listen(.{});
-    const ephemeral_port = listener.listen_address.getPort();
+    var listener = try addr.listen(std.testing.io, .{});
+    const ephemeral_port = listener.socket.address.getPort();
     listener.deinit();
 
     try std.testing.expect(!isPortListening(ephemeral_port));
@@ -20,7 +20,7 @@ test "isPortListening returns true for an actively listening port" {
     // SseServer.init binds to an OS-assigned ephemeral port when port == 0.
     const srv = try SseServer.init(0, "/tmp", "report.html", alloc);
     defer srv.deinit();
-    const actual_port = srv.listener.listen_address.getPort();
+    const actual_port = srv.listener.socket.address.getPort();
     try std.testing.expect(isPortListening(actual_port));
 }
 
@@ -31,8 +31,8 @@ test "isPortListening correctly detects two independent servers" {
     const srv2 = try SseServer.init(0, "/tmp", "report.html", alloc);
     defer srv2.deinit();
 
-    const p1 = srv1.listener.listen_address.getPort();
-    const p2 = srv2.listener.listen_address.getPort();
+    const p1 = srv1.listener.socket.address.getPort();
+    const p2 = srv2.listener.socket.address.getPort();
 
     // Both ports must be distinct and both must be detected as listening.
     try std.testing.expect(p1 != p2);
@@ -47,11 +47,11 @@ test "port probe works even when SO_REUSEADDR would allow duplicate bind" {
     const srv = try SseServer.init(0, "/tmp", "report.html", alloc);
     defer srv.deinit();
 
-    const occupied_port = srv.listener.listen_address.getPort();
+    const occupied_port = srv.listener.socket.address.getPort();
 
     // Attempt a second bind with SO_REUSEADDR on the same port.
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", occupied_port);
-    const maybe_second = addr.listen(.{ .reuse_address = true });
+    const maybe_second = addr.listen(std.testing.io, .{ .reuse_address = true });
     if (maybe_second) |second_srv| {
         // On some kernels SO_REUSEADDR allows this bind — exactly the bug we fix.
         // isPortListening must still detect the port as occupied.
@@ -70,7 +70,7 @@ test "port selection skips an occupied port and binds to next free port" {
     // Occupy a port via SseServer.
     const occupier = try SseServer.init(0, "/tmp", "report.html", alloc);
     defer occupier.deinit();
-    const occupied_port = occupier.listener.listen_address.getPort();
+    const occupied_port = occupier.listener.socket.address.getPort();
 
     // Simulate the retry loop: occupied_port is taken, occupied_port+1 should be free.
     // We bound occupied_port to an ephmeral high port, so occupied_port+1 is almost
@@ -85,7 +85,7 @@ test "port selection skips an occupied port and binds to next free port" {
     if (!isPortListening(next_port)) {
         // Verify we can actually bind to the next port.
         const addr = try std.Io.net.IpAddress.parse("127.0.0.1", next_port);
-        var listener = try addr.listen(.{ .reuse_address = true });
+        var listener = try addr.listen(std.testing.io, .{ .reuse_address = true });
         defer listener.deinit();
         // After binding, isPortListening must return true for that port too.
         try std.testing.expect(isPortListening(next_port));

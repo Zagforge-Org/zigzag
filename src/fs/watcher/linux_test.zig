@@ -24,12 +24,12 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     // Write inside the skipped subdir and the non-skipped subdir
     {
         const f = try tmp.dir.createFile(std.testing.io, "skip_me/hidden.txt", .{});
-        try f.writeAll("should not appear");
+        try f.writeStreamingAll(std.testing.io, "should not appear");
         f.close(std.testing.io);
     }
     {
         const f = try tmp.dir.createFile(std.testing.io, "keep_me/visible.txt", .{});
-        try f.writeAll("should appear");
+        try f.writeStreamingAll(std.testing.io, "should appear");
         f.close(std.testing.io);
     }
 
@@ -80,7 +80,7 @@ test "Watcher.poll emits modified event on CLOSE_WRITE" {
     // Open, write, close — triggers IN_CLOSE_WRITE → .modified
     {
         const f = try tmp.dir.openFile(std.testing.io, "existing.txt", .{ .mode = .write_only });
-        try f.writeAll("new content");
+        try f.writeStreamingAll(std.testing.io, "new content");
         f.close(std.testing.io);
     }
 

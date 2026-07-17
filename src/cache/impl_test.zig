@@ -26,7 +26,7 @@ test "validateCache does not invalidate an unmodified file" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "file.zig", .{});
         defer f.close(std.testing.io);
-        try f.writeAll("const x = 1;\n");
+        try f.writeStreamingAll(std.testing.io, "const x = 1;\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "file.zig" });
@@ -69,7 +69,7 @@ test "cache survives a full init/saveToDisk/deinit/init round-trip" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "hello.zig", .{});
         defer f.close(std.testing.io);
-        try f.writeAll("// hello\n");
+        try f.writeStreamingAll(std.testing.io, "// hello\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "hello.zig" });
@@ -114,7 +114,7 @@ test "validateCache evicts entries for deleted files" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "gone.zig", .{});
         defer f.close(std.testing.io);
-        try f.writeAll("// temp\n");
+        try f.writeStreamingAll(std.testing.io, "// temp\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "gone.zig" });
@@ -158,7 +158,7 @@ test "validateCache evicts entries whose mtime changed" {
     {
         const f = try tmp.dir.createFile(std.testing.io, "changing.zig", .{});
         defer f.close(std.testing.io);
-        try f.writeAll("v1\n");
+        try f.writeStreamingAll(std.testing.io, "v1\n");
     }
 
     const file_abs = try std.fs.path.join(alloc, &.{ tmp_path, "changing.zig" });
@@ -243,7 +243,7 @@ test "CacheImpl.init succeeds when cache index exceeds 10 MiB" {
         var i: usize = 0;
         while (i < 23_000) : (i += 1) {
             const line = std.fmt.bufPrint(&line_buf, "/tmp/{s}/{s}/file_{d:0>5}.zig|1234567890|100|{s}\n", .{ seg, seg, i, fake_hash }) catch unreachable;
-            try index_file.writeAll(line);
+            try index_file.writeStreamingAll(std.testing.io, line);
         }
     }
 

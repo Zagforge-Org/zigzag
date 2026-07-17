@@ -54,14 +54,14 @@ test "writePathReports with scanned files produces non-empty report" {
     // doesn't filter out the test files. Use separate scan and output dirs so
     // the output path isn't a parent of the scanned files.
     var rand_scan: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_scan));
+    rand_scan = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var scan_name_buf: [32]u8 = undefined;
     const scan_name = try std.fmt.bufPrint(&scan_name_buf, "zztest_scan_{x}", .{rand_scan});
     try std.Io.Dir.cwd().createDir(std.testing.io, scan_name, .default_dir);
     defer std.Io.Dir.cwd().deleteTree(std.testing.io, scan_name) catch {};
 
     var rand_out: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_out));
+    rand_out = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var out_name_buf: [32]u8 = undefined;
     const out_name = try std.fmt.bufPrint(&out_name_buf, "zztest_out_{x}", .{rand_out});
     try std.Io.Dir.cwd().createDir(std.testing.io, out_name, .default_dir);

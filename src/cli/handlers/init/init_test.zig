@@ -40,7 +40,7 @@ test "handleInit does not overwrite existing file" {
     {
         const f = try tmp_dir.dir.createFile(std.testing.io, DEFAULT_CONF_FILENAME, .{});
         defer f.close(std.testing.io);
-        try f.writeAll("{\"watch\": true}");
+        try f.writeStreamingAll(std.testing.io, "{\"watch\": true}");
     }
 
     // handleInit should not overwrite

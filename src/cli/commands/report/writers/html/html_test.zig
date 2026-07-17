@@ -548,7 +548,7 @@ test "writeContentFiles creates directory and correct number of files" {
     defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
-    while (try it.next()) |_| count += 1;
+    while (try it.next(std.testing.io)) |_| count += 1;
     try std.testing.expectEqual(@as(usize, 2), count);
 }
 
@@ -585,7 +585,7 @@ test "writeCombinedContentFiles uses combined key for hashing" {
     defer dir.close(std.testing.io);
     var count: usize = 0;
     var it = dir.iterate();
-    while (try it.next()) |_| count += 1;
+    while (try it.next(std.testing.io)) |_| count += 1;
     try std.testing.expectEqual(@as(usize, 2), count);
 
     // Verify the content for "./backend:src/main.zig"

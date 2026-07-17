@@ -16,7 +16,7 @@ fn makeState(
     state.binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
     state.entries_mutex = .init;
     state.allocator = alloc;
-    state.file_ctx = .{ .ignore_list = .{}, .md = undefined, .md_mutex = undefined };
+    state.file_ctx = .{ .ignore_list = .empty, .md = undefined, .md_mutex = undefined };
     return state;
 }
 

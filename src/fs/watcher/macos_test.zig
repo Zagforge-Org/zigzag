@@ -49,12 +49,12 @@ test "addSkipDir suppresses events from skipped subdirectory" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "skip_me/hidden.txt", .{});
-        try f.writeAll("should not appear");
+        try f.writeStreamingAll(std.testing.io, "should not appear");
         f.close(std.testing.io);
     }
     {
         const f = try tmp.dir.createFile(std.testing.io, "keep_me/visible.txt", .{});
-        try f.writeAll("should appear");
+        try f.writeStreamingAll(std.testing.io, "should appear");
         f.close(std.testing.io);
     }
 
@@ -91,7 +91,7 @@ test "poll emits created event on new file" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "new.txt", .{});
-        try f.writeAll("hello");
+        try f.writeStreamingAll(std.testing.io, "hello");
         f.close(std.testing.io);
     }
 
@@ -148,7 +148,7 @@ test "mtime fallback detects in-place file modification" {
     // Create file BEFORE watching so the snapshot records its mtime.
     {
         const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
-        try f.writeAll("original");
+        try f.writeStreamingAll(std.testing.io, "original");
         f.close(std.testing.io);
     }
 
@@ -162,7 +162,7 @@ test "mtime fallback detects in-place file modification" {
     // Modify the file in-place.
     {
         const f = try tmp.dir.createFile(std.testing.io, "existing.txt", .{});
-        try f.writeAll("modified content that is different");
+        try f.writeStreamingAll(std.testing.io, "modified content that is different");
         f.close(std.testing.io);
     }
 
@@ -189,7 +189,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
     try tmp.dir.createDir(std.testing.io, "nested", .default_dir);
     {
         const f = try tmp.dir.createFile(std.testing.io, "nested/config.txt", .{});
-        try f.writeAll("v1");
+        try f.writeStreamingAll(std.testing.io, "v1");
         f.close(std.testing.io);
     }
 
@@ -201,7 +201,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "nested/config.txt", .{});
-        try f.writeAll("v2 changed");
+        try f.writeStreamingAll(std.testing.io, "v2 changed");
         f.close(std.testing.io);
     }
 
@@ -260,7 +260,7 @@ test "poll returns 0 events when no files changed" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "stable.txt", .{});
-        try f.writeAll("unchanged");
+        try f.writeStreamingAll(std.testing.io, "unchanged");
         f.close(std.testing.io);
     }
 
@@ -321,7 +321,7 @@ test "poll detects file created in subdirectory" {
 
     {
         const f = try tmp.dir.createFile(std.testing.io, "subdir/deep.txt", .{});
-        try f.writeAll("deep file");
+        try f.writeStreamingAll(std.testing.io, "deep file");
         f.close(std.testing.io);
     }
 

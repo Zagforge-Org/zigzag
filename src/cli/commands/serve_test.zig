@@ -24,8 +24,8 @@ test "isPathSafe rejects traversal" {
 
 test "serve.isPortListening returns false for a released port" {
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-    var listener = try addr.listen(.{});
-    const ephemeral_port = listener.listen_address.getPort();
+    var listener = try addr.listen(std.testing.io, .{});
+    const ephemeral_port = listener.socket.address.getPort();
     listener.deinit();
     // Give the OS a moment to release the socket.
     std.Thread.sleep(10 * std.time.ns_per_ms);
@@ -34,9 +34,9 @@ test "serve.isPortListening returns false for a released port" {
 
 test "serve.isPortListening returns true for an actively listening port" {
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-    var listener = try addr.listen(.{});
+    var listener = try addr.listen(std.testing.io, .{});
     defer listener.deinit();
-    const port = listener.listen_address.getPort();
+    const port = listener.socket.address.getPort();
     try std.testing.expect(isPortListening(port));
 }
 
@@ -44,13 +44,13 @@ test "serve.isPortListening detects port occupied even with SO_REUSEADDR on seco
     // Regression: SO_REUSEADDR may allow a second bind() to succeed; the probe must
     // still report the port as occupied because the original listener is still active.
     const addr = try std.Io.net.IpAddress.parse("127.0.0.1", 0);
-    var listener = try addr.listen(.{});
+    var listener = try addr.listen(std.testing.io, .{});
     defer listener.deinit();
-    const port = listener.listen_address.getPort();
+    const port = listener.socket.address.getPort();
 
     // Attempt duplicate bind with SO_REUSEADDR — mirrors what SseServer.init does.
     const addr2 = try std.Io.net.IpAddress.parse("127.0.0.1", port);
-    if (addr2.listen(.{ .reuse_address = true })) |second| {
+    if (addr2.listen(std.testing.io, .{ .reuse_address = true })) |second| {
         var s = second;
         s.deinit();
     } else |_| {}

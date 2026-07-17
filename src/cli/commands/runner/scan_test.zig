@@ -82,7 +82,7 @@ test "scanPath picks up source files in directory" {
     // doesn't filter out the test files. This matches the zztest_* pattern
     // used elsewhere in this codebase (e.g. conf/file_test.zig).
     var rand_int: u64 = undefined;
-    std.crypto.random.bytes(std.mem.asBytes(&rand_int));
+    rand_int = @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(std.testing.io, .real).nanoseconds)));
     var dir_name_buf: [32]u8 = undefined;
     const dir_name = try std.fmt.bufPrint(&dir_name_buf, "zztest_{x}", .{rand_int});
     try std.Io.Dir.cwd().createDir(std.testing.io, dir_name, .default_dir);
