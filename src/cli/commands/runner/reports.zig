@@ -7,7 +7,7 @@ const Pool = @import("../../../workers/pool.zig").Pool;
 const report = @import("../report.zig");
 const lg = @import("../../../utils/utils.zig");
 const Logger = lg.Logger;
-const BenchResult = @import("../bench.zig").BenchResult;
+const BenchResult = @import("../bench/BenchResult.zig");
 
 /// File size in bytes, or 0 on error.
 fn fileSizeOf(path: []const u8) u64 {

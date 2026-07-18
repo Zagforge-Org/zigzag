@@ -90,17 +90,8 @@ pub fn printFinalSummary(data: *const FinalSummaryData) void {
     const stderr = std.Io.File.stderr();
     const sep = "\x1b[90m────────────────────────────────────────\x1b[0m\n";
 
-    const os_name = comptime switch (builtin.os.tag) {
-        .linux => "Linux",
-        .macos => "macOS",
-        .windows => "Windows",
-        else => @tagName(builtin.os.tag),
-    };
-    const arch_name = comptime switch (builtin.cpu.arch) {
-        .x86_64 => "x86_64",
-        .aarch64 => "arm64",
-        else => @tagName(builtin.cpu.arch),
-    };
+    const os_name = cpu.getOs();
+    const arch_name = cpu.getArch();
     const cpu_count = std.Thread.getCpuCount() catch 0;
 
     var buf: [512]u8 = undefined;

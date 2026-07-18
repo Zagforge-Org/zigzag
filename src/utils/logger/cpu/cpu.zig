@@ -2,6 +2,25 @@ const std = @import("std");
 const rt = @import("../../../runtime.zig");
 const builtin = @import("builtin");
 
+/// Returns the host OS name (e.g. "Linux", "macOS", "Windows").
+pub fn getOs() []const u8 {
+    return comptime switch (builtin.os.tag) {
+        .linux => "Linux",
+        .macos => "macOS",
+        .windows => "Windows",
+        else => @tagName(builtin.os.tag),
+    };
+}
+
+/// Returns the host CPU architecture name (e.g. "x86_64", "arm64").
+pub fn getArch() []const u8 {
+    return comptime switch (builtin.cpu.arch) {
+        .x86_64 => "x86_64",
+        .aarch64 => "arm64",
+        else => @tagName(builtin.cpu.arch),
+    };
+}
+
 /// Returns the CPU model name into `buf`. Falls back to "unknown" on error.
 pub fn getCpuName(buf: []u8) []const u8 {
     return switch (comptime builtin.os.tag) {

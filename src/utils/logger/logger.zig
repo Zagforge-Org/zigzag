@@ -1,4 +1,4 @@
-/// Facade — re-exports the public surface of the logger sub-modules.
+/// Facade: re-exports the public surface of the logger sub-modules.
 const fmt_utils = @import("../fmt/fmt.zig");
 
 pub const printSeparator = @import("./print/print.zig").printSeparator;
@@ -16,6 +16,8 @@ pub const FinalSummaryData = @import("./phase/phase.zig").FinalSummaryData;
 pub const printFinalSummary = @import("./phase/phase.zig").printFinalSummary;
 
 pub const getCpuName = @import("./cpu/cpu.zig").getCpuName;
+pub const getOs = @import("./cpu/cpu.zig").getOs;
+pub const getArch = @import("./cpu/cpu.zig").getArch;
 
 pub const Logger = @import("./file_logger/file_logger.zig").Logger;
 

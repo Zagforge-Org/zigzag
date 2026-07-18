@@ -8,7 +8,7 @@ const Pool = @import("../../workers/pool.zig").Pool;
 const lg = @import("../../utils/utils.zig");
 const Logger = lg.Logger;
 
-pub const BenchResult = @import("./bench.zig").BenchResult;
+pub const BenchResult = @import("./bench/BenchResult.zig");
 
 const ScanResult = scan_mod.ScanResult;
 const nsElapsed = scan_mod.nsElapsed;

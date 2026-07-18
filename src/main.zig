@@ -3,7 +3,7 @@ const config = @import("./cli/commands/config/config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const serve = @import("./cli/commands/serve.zig");
-const bench = @import("./cli/commands/bench.zig");
+const Bench = @import("./cli/commands/bench/Bench.zig");
 const report = @import("./cli/commands/report.zig");
 const Cache = @import("cache/Cache.zig");
 const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
@@ -96,7 +96,7 @@ pub fn main(init: std.process.Init) !void {
                     lg.printError("bench requires at least one path (--paths or zig.conf.json)", .{});
                     return;
                 }
-                try bench.execBench(rt.io(), &typedCfg, allocator);
+                try Bench.init(rt.io(), &typedCfg, allocator).run();
                 return;
             }
 

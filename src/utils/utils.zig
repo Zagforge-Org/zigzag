@@ -4,6 +4,7 @@ pub const colorCode = @import("./colors/colors.zig").colorCode;
 
 pub const fmtBytes = @import("./fmt/fmt.zig").fmtBytes;
 pub const fmtElapsed = @import("./fmt/fmt.zig").fmtElapsed;
+pub const fmtDuration = @import("./fmt/fmt.zig").fmtDuration;
 
 pub const ProgressBar = @import("./progress/progress.zig").ProgressBar;
 
@@ -22,3 +23,5 @@ pub const printPhaseDone = @import("./logger/logger.zig").printPhaseDone;
 pub const FinalSummaryData = @import("./logger/logger.zig").FinalSummaryData;
 pub const printFinalSummary = @import("./logger/logger.zig").printFinalSummary;
 pub const getCpuName = @import("./logger/logger.zig").getCpuName;
+pub const getOs = @import("./logger/logger.zig").getOs;
+pub const getArch = @import("./logger/logger.zig").getArch;

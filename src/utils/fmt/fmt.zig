@@ -16,6 +16,13 @@ pub fn fmtBytes(buf: []u8, n: u64, html: bool) []const u8 {
     return std.fmt.bufPrint(buf, "{d} B{s}", .{ n, suffix }) catch "?";
 }
 
+/// Formats a nanosecond duration as "< 1 ms" (sub-millisecond) or "{d} ms".
+pub fn fmtDuration(buf: []u8, ns: u64) []const u8 {
+    const ms = ns / 1_000_000;
+    if (ms == 0) return "< 1 ms";
+    return std.fmt.bufPrint(buf, "{d} ms", .{ms}) catch "? ms";
+}
+
 /// fmtElapsed formats a nanosecond duration into a human-readable string.
 /// Writes into buf and returns a slice into buf.
 /// ns < 1_000_000        → "< 1ms"

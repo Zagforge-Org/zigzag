@@ -1,8 +1,9 @@
 const std = @import("std");
-const bench = @import("../bench.zig");
+const BenchResult = @import("BenchResult.zig");
+const Table = @import("Table.zig");
 
-test "printTable does not panic with populated BenchResult" {
-    var result = bench.BenchResult{
+test "Table.print does not panic with populated BenchResult" {
+    var result = BenchResult{
         .scan_ns = 340_000_000,
         .aggregate_ns = 12_000_000,
         .write_md_ns = 8_000_000,
@@ -18,10 +19,10 @@ test "printTable does not panic with populated BenchResult" {
         .html_bytes = 2_202_009,
         .llm_bytes = 0,
     };
-    bench.printTable(std.testing.io, &result);
+    Table.init(&result).print(std.testing.io);
 }
 
-test "printTable with all-zero BenchResult does not panic" {
-    var result: bench.BenchResult = .{};
-    bench.printTable(std.testing.io, &result);
+test "Table.print with all-zero BenchResult does not panic" {
+    var result: BenchResult = .{};
+    Table.init(&result).print(std.testing.io);
 }
