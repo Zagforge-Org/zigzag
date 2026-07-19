@@ -1,6 +1,6 @@
 const std = @import("std");
-const JobEntry = @import("../../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../../jobs/entry.zig").BinaryEntry;
+const JobEntry = @import("../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../jobs/entries.zig").BinaryEntry;
 
 /// Per-language aggregate statistics.
 pub const LanguageStat = struct {

@@ -1,6 +1,6 @@
 const std = @import("std");
 const sse = @import("sse.zig");
-const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
+const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
 
 test "buildFileDeltaPayload file_update contains type, path, content" {
     const alloc = std.testing.allocator;

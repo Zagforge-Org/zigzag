@@ -64,7 +64,7 @@ test {
 
     _ = @import("./fs/directory_test.zig");
     _ = @import("./fs/watcher.zig");
-    _ = @import("./jobs/entry.zig");
+    _ = @import("./jobs/entries_test.zig");
     _ = @import("./jobs/inspect_test.zig");
 
     _ = @import("./cli/commands/serve_test.zig");

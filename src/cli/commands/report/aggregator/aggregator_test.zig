@@ -1,6 +1,6 @@
 const std = @import("std");
-const JobEntry = @import("../../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../../jobs/entry.zig").BinaryEntry;
+const JobEntry = @import("../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
 
 test "ReportData.init aggregates language stats" {

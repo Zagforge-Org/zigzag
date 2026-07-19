@@ -1,7 +1,7 @@
 const std = @import("std");
 const State = @import("state.zig").State;
-const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
+const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 
 test "State.removeFile removes file entry and frees memory" {
     var state: State = undefined;

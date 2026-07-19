@@ -1,7 +1,7 @@
 const std = @import("std");
 const Config = @import("../../../config/config.zig").Config;
-const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
+const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
 const writeReport = @import("./markdown.zig").writeReport;
 

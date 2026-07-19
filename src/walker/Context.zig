@@ -5,8 +5,8 @@ const WaitGroup = @import("../workers/WaitGroup.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const Cache = @import("../cache/Cache.zig");
 const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;
-const JobEntry = @import("../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../jobs/entry.zig").BinaryEntry;
+const JobEntry = @import("../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../jobs/entries.zig").BinaryEntry;
 
 pool: *Pool,
 wg: *WaitGroup,
