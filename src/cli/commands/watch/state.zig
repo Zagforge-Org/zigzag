@@ -1,7 +1,6 @@
 const std = @import("std");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
-const processFileJob = @import("../../../jobs/process.zig").processFileJob;
 const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
 const Pool = @import("../../../workers/Pool.zig");
@@ -176,7 +175,6 @@ pub const State = struct {
         const path_copy = try self.allocator.dupe(u8, file_path);
         var stats = ProcessStats.init();
         const job = Job{
-            .io = self.io,
             .path = path_copy,
             .file_ctx = &self.file_ctx,
             .cache = cache,
@@ -188,7 +186,7 @@ pub const State = struct {
         };
 
         var wg = WaitGroup.init(self.io);
-        try pool.spawn(&wg, processFileJob, .{job});
+        try pool.spawn(&wg, Job.process, .{job});
         wg.wait();
     }
 

@@ -1,7 +1,7 @@
 const std = @import("std");
 const Cache = @import("./Cache.zig");
 
-/// Stat a file and return its mtime in SECONDS (matching what processFileJob stores).
+/// Stat a file and return its mtime in SECONDS (matching what Job.process stores).
 fn mtimeSeconds(dir: std.Io.Dir, name: []const u8) !u64 {
     const s = try dir.statFile(std.testing.io, name, .{});
     return @intCast(s.mtime.toSeconds());

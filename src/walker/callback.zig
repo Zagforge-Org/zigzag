@@ -1,7 +1,6 @@
 const Context = @import("./Context.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const Job = @import("../jobs/Job.zig");
-const processFileJob = @import("../jobs/process.zig").processFileJob;
 
 pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
     if (ctx) |c| {
@@ -10,7 +9,6 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
         errdefer walker_ctx.allocator.free(path_copy);
 
         const job = Job{
-            .io = walker_ctx.pool.io,
             .path = path_copy,
             .file_ctx = walker_ctx.file_ctx,
             .cache = walker_ctx.cache,
@@ -21,6 +19,6 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
             .allocator = walker_ctx.allocator,
         };
 
-        try walker_ctx.pool.spawn(walker_ctx.wg, processFileJob, .{job});
+        try walker_ctx.pool.spawn(walker_ctx.wg, Job.process, .{job});
     }
 }

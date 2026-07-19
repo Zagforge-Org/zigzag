@@ -12,13 +12,13 @@ pub const WalkError = error{
 /// path ownership is transferred in; freed here on completion.
 /// WaitGroup is balanced by the pool's Closure.runFn — do NOT call wg.finish().
 fn walkSubtreeJob(
-    _: JobContext,
     walk_self: Walk,
     path: []const u8,
     depth: usize,
     callback: TProcessWriter,
     ctx: ?*FileContext,
     walker_ctx: *Context,
+    _: JobContext,
 ) !void {
     defer walk_self.allocator.free(path);
     try Walk.walkParallelInternal(walk_self, path, depth, callback, ctx, walker_ctx);

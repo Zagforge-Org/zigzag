@@ -9,9 +9,10 @@ const WaitGroup = @import("WaitGroup.zig");
 
 const STACK_SIZE = 16 * 1024 * 1024; // 16MB stack for safety
 
-/// Passed as the first argument to every job. `allocator` is the calling
-/// worker's arena which is cheap and is reset after the job returns, so only for scratch.
+/// Passed as the last argument to every job. `allocator` is the calling worker's
+/// arena which is cheap and is reset after the job returns, so only for scratch.
 pub const JobContext = struct {
+    io: std.Io,
     allocator: std.mem.Allocator,
 };
 
@@ -72,14 +73,14 @@ fn stop(self: *Self) void {
     self.cond.broadcast(self.io);
 }
 
-/// Queue `func(JobContext, args...)` on the pool, tracked by `wg` on a
-/// single-threaded build.
+/// Queue `func(args..., JobContext)` on the pool, tracked by `wg`. On a
+/// single-threaded build
 pub fn spawn(self: *Self, wg: *WaitGroup, comptime func: anytype, args: anytype) !void {
     wg.start();
 
     if (builtin.single_threaded) {
         defer wg.finish();
-        return callJob(func, .{ .allocator = self.allocator }, args);
+        return callJob(func, .{ .io = self.io, .allocator = self.allocator }, args);
     }
 
     const Closure = struct {
@@ -92,7 +93,7 @@ pub fn spawn(self: *Self, wg: *WaitGroup, comptime func: anytype, args: anytype)
             const closure: *@This() = @fieldParentPtr("runnable", runnable);
             const pool = closure.pool;
             const wg_ptr = closure.wg;
-            const ctx = JobContext{ .allocator = runnable.thread_allocator };
+            const ctx = JobContext{ .io = pool.io, .allocator = runnable.thread_allocator };
 
             callJob(func, ctx, closure.args) catch |err|
                 std.log.err("job failed: {}", .{err});
@@ -104,7 +105,7 @@ pub fn spawn(self: *Self, wg: *WaitGroup, comptime func: anytype, args: anytype)
 
     const closure = self.allocator.create(Closure) catch {
         defer wg.finish();
-        return callJob(func, .{ .allocator = self.allocator }, args);
+        return callJob(func, .{ .io = self.io, .allocator = self.allocator }, args);
     };
     closure.* = .{ .pool = self, .wg = wg, .args = args };
 
@@ -115,9 +116,9 @@ pub fn spawn(self: *Self, wg: *WaitGroup, comptime func: anytype, args: anytype)
     self.cond.signal(self.io);
 }
 
-/// Invoke a job with `ctx` prepended to its args, propagating any error.
+/// Invoke a job with `ctx` appended to its args, propagating any error.
 fn callJob(comptime func: anytype, ctx: JobContext, args: anytype) anyerror!void {
-    const result = @call(.auto, func, .{ctx} ++ args);
+    const result = @call(.auto, func, args ++ .{ctx});
     if (@typeInfo(@TypeOf(result)) == .error_union) return result;
 }
 
