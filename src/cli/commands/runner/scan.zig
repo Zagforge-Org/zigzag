@@ -1,5 +1,5 @@
 const std = @import("std");
-const walk = @import("../../../fs/walk.zig").Walk;
+const Walk = @import("../../../fs/Walk.zig");
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
@@ -144,7 +144,7 @@ pub fn scanPath(
         .allocator = allocator,
     };
 
-    const walker = try walk.init(io, allocator);
+    const walker = try Walk.init(io, allocator);
     const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
 
     var pb = lg.Progress.init(io, &stats); // pb must not be moved after this line

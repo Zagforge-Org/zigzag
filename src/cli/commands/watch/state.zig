@@ -1,5 +1,5 @@
 const std = @import("std");
-const walk = @import("../../../fs/walk.zig").Walk;
+const Walk = @import("../../../fs/Walk.zig");
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
@@ -75,7 +75,7 @@ pub const State = struct {
             .allocator = allocator,
         };
 
-        const walker = try walk.init(io, allocator);
+        const walker = try Walk.init(io, allocator);
         const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
         try walker.walkDir(path, walkerCallback, walk_ctx);
         wg.wait();
@@ -162,7 +162,7 @@ pub const State = struct {
             .allocator = self.allocator,
         };
 
-        const walker = try walk.init(self.io, self.allocator);
+        const walker = try Walk.init(self.io, self.allocator);
         const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
         try walker.walkDir(self.root_path, walkerCallback, walk_ctx);
         wg.wait();

@@ -1,0 +1,50 @@
+//! A memory-mapped file on Windows.
+
+const std = @import("std");
+const api = @import("../../windows/api.zig");
+const windows = std.os.windows;
+
+const Self = @This();
+
+data: []const u8,
+mapping: ?windows.HANDLE,
+
+pub fn open(io: std.Io, path: []const u8) !Self {
+    var file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    errdefer file.close(io);
+
+    const size = try file.getEndPos();
+    if (size == 0) return .{ .data = &[_]u8{}, .mapping = null };
+
+    const mapping = api.CreateFileMappingW(
+        file.handle,
+        null,
+        api.PAGE_READONLY,
+        @intCast(size >> 32),
+        @intCast(size & 0xffffffff),
+        null,
+    );
+    if (@intFromPtr(mapping) == 0 or mapping == windows.INVALID_HANDLE_VALUE) {
+        return error.MMapFailed;
+    }
+
+    const view = api.MapViewOfFile(mapping, api.FILE_MAP_READ, 0, 0, 0);
+    if (@intFromPtr(view) == 0) {
+        _ = api.CloseHandle(mapping);
+        return error.MapViewFailed;
+    }
+
+    const bytes = @as([*]const u8, @ptrCast(view.?))[0..@intCast(size)];
+    return .{ .data = bytes, .mapping = mapping };
+}
+
+pub fn close(self: *Self) !void {
+    if (self.data.len != 0) {
+        _ = api.UnmapViewOfFile(self.data.ptr);
+        self.data = &[_]u8{};
+    }
+    if (self.mapping != null) {
+        _ = api.CloseHandle(self.mapping);
+        self.mapping = null;
+    }
+}
