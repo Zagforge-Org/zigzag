@@ -130,7 +130,7 @@ pub fn growEstimate(estimate: usize, total: usize) usize {
 }
 
 /// Filled bar cells for `total` against `estimate`, capped at BAR_MAX_FILL so the
-/// bar never reads as full before the scan finishes. estimate ≥ 1 avoids div-by-zero.
+/// bar never reads as full before the scan finishes. estimate >= 1 avoids div-by-zero.
 pub fn fillFor(total: usize, estimate: usize) usize {
     return @min(BAR_MAX_FILL, total * BAR_WIDTH / estimate);
 }
