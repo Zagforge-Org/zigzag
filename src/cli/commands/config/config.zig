@@ -1,7 +1,7 @@
 const std = @import("std");
 const flags = @import("../../flags.zig").flags;
 const FileConf = @import("../../../conf/FileConf.zig");
-const parseTimezoneStr = @import("./timezone/timezone.zig").parseTimezoneStr;
+const parseTimezoneStr = @import("./timezone.zig").parseTimezoneStr;
 
 pub const VERSION = @import("options").version_string;
 const DEFAULT_SMALL_THRESHOLD = 1 << 20; // 1 MiB
