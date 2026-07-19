@@ -1,6 +1,6 @@
 const std = @import("std");
 const scan = @import("./scan.zig");
-const Config = @import("../config/config.zig").Config;
+const Config = @import("../config/Config.zig");
 const Pool = @import("../../../workers/Pool.zig");
 const ProcessStats = @import("../stats.zig").ProcessStats;
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;

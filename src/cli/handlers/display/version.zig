@@ -1,7 +1,7 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 const stdoutPrint = @import("../../../fs/stdout.zig").stdoutPrint;
-pub const VERSION = @import("../../commands/config/config.zig").VERSION;
+pub const VERSION = @import("../../commands/config/Config.zig").VERSION;
 
 /// printVersion prints version information to stdout.
 pub fn printVersion(io: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {

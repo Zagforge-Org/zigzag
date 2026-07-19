@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handleMmap handles the mmap option.
 pub fn handleMmap(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {

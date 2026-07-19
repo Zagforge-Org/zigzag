@@ -1,6 +1,6 @@
 const std = @import("std");
 const handleChunkSize = @import("./chunk_size.zig").handleChunkSize;
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 test "handleChunkSize: bare integer" {
     var cfg = Config.default(std.testing.allocator);

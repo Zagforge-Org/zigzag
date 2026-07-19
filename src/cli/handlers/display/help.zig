@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 const stdoutPrint = @import("../../../fs/stdout.zig").stdoutPrint;
 
 /// printHelp prints help information to stdout.

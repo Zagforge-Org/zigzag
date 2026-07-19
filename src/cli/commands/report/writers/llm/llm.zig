@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../../config/config.zig").Config;
+const Config = @import("../../../config/Config.zig");
 const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
@@ -9,7 +9,7 @@ const condenseContent = content_mod.condenseContent;
 const ChunkWriter = @import("chunk_writer.zig").ChunkWriter;
 const ast_chunker = @import("ast_chunker.zig");
 
-const VERSION = @import("../../../config/config.zig").VERSION;
+const VERSION = @import("../../../config/Config.zig").VERSION;
 
 /// Write a condensed LLM-optimised report alongside the markdown report.
 pub fn writeLlmReport(

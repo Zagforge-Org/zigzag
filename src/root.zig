@@ -31,7 +31,7 @@ test {
     _ = @import("./cli/handlers/display/version_test.zig");
     // handler tests — init/ (previously undiscovered — adds 2 tests)
     _ = @import("./cli/handlers/init/init_test.zig");
-    _ = @import("./cli/commands/config/config.zig");
+    _ = @import("./cli/commands/config/Config.zig");
     _ = @import("./cli/commands/runner.zig");
 
     // runner sub-module tests

@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 const parseTimezoneStr = @import("../../commands/config/timezone.zig").parseTimezoneStr;
 
 /// handleTimezone handles the timezone option.

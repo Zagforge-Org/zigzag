@@ -1,5 +1,5 @@
 const std = @import("std");
-const config = @import("./cli/commands/config/config.zig");
+const config = @import("./cli/commands/config/Config.zig");
 const runner = @import("./cli/commands/runner.zig");
 const watch = @import("./cli/commands/watch.zig");
 const serve = @import("./cli/commands/serve.zig");
@@ -83,10 +83,10 @@ pub fn main(init: std.process.Init) !void {
     }
 
     // Parse config: load zig.conf.json as base, then apply CLI args on top
-    const result = config.Config.parseFromFile(io, list.items, allocator);
+    const result = config.parseFromFile(io, list.items, allocator);
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
-            var typedCfg: config.Config = cfg;
+            var typedCfg: config = cfg;
             defer typedCfg.deinit();
 
             if (is_bench_command) {

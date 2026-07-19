@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../../config/config.zig").Config;
+const Config = @import("../../../config/Config.zig");
 const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;

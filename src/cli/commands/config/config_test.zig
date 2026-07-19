@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("./config.zig").Config;
+const Config = @import("./Config.zig");
 const FileConf = @import("../../../conf/FileConf.zig");
 
 test "Config.default has expected defaults" {

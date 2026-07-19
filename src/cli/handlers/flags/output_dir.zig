@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handleOutputDir sets the base output directory for generated reports.
 pub fn handleOutputDir(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../config/config.zig").Config;
+const Config = @import("../../config/Config.zig");
 
 /// Compute the output directory segment for a scanned path.
 /// Relative paths have "./" stripped; absolute paths use basename only.
@@ -49,8 +49,8 @@ pub fn deriveHtmlPath(allocator: std.mem.Allocator, md_path: []const u8) ![]u8 {
 }
 
 /// Derive the content JSON sidecar path from an HTML report path.
-/// "report.html"  → "report-content.json"
-/// "report"       → "report-content.json"
+/// "report.html"  -> "report-content.json"
+/// "report"       -> "report-content.json"
 pub fn deriveContentPath(allocator: std.mem.Allocator, html_path: []const u8) ![]u8 {
     if (std.mem.endsWith(u8, html_path, ".html")) {
         const base = html_path[0 .. html_path.len - ".html".len];
@@ -86,8 +86,8 @@ pub fn resolveCombinedContentPath(
 }
 
 /// Derive the content directory path from an HTML report path.
-/// "report.html"  → "report-content"
-/// "report"       → "report-content"
+/// "report.html"  -> "report-content"
+/// "report"       -> "report-content"
 pub fn deriveContentDir(allocator: std.mem.Allocator, html_path: []const u8) ![]u8 {
     if (std.mem.endsWith(u8, html_path, ".html")) {
         const base = html_path[0 .. html_path.len - ".html".len];

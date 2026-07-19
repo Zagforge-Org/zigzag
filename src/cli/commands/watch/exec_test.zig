@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../config/config.zig").Config;
+const Config = @import("../config/Config.zig");
 const execWatch = @import("exec.zig").execWatch;
 
 test "execWatch returns immediately when no paths configured" {

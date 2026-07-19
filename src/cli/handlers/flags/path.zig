@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handlePaths handles the path option (can be called multiple times).
 /// Accepts comma-separated paths; whitespace around each segment is trimmed.

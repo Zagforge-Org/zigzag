@@ -1,7 +1,7 @@
 const std = @import("std");
 const State = @import("state.zig").State;
 const SseServer = @import("server.zig").SseServer;
-const Config = @import("../config/config.zig").Config;
+const Config = @import("../config/Config.zig");
 const report = @import("../report.zig");
 const log = @import("../../../logger/Logger.zig");
 
