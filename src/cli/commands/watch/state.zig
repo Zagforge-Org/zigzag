@@ -12,7 +12,7 @@ const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 const Context = @import("../../../walker/Context.zig");
 const report = @import("../report.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 
 /// Per-path persistent state for watch mode.
 /// Heap-allocated so that entries_mutex has a stable address for thread pool jobs.

@@ -3,7 +3,7 @@ const State = @import("state.zig").State;
 const SseServer = @import("server.zig").SseServer;
 const Config = @import("../config/config.zig").Config;
 const report = @import("../report.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 
 /// Write the combined multi-path HTML dashboard and its content sidecar.
 /// No-op when html_output is false or fewer than 2 states are active.

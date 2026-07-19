@@ -4,7 +4,7 @@ const nsElapsed = @import("./scan.zig").nsElapsed;
 const Config = @import("../config/config.zig").Config;
 const Pool = @import("../../../workers/Pool.zig");
 const report = @import("../report.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 const BenchResult = @import("../bench/BenchResult.zig");
 
 /// File size in bytes, or 0 on error.

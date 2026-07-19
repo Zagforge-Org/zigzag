@@ -8,7 +8,7 @@ const report = @import("./cli/commands/report.zig");
 const Cache = @import("cache/Cache.zig");
 const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
-const log = @import("./utils/logger/Logger.zig");
+const log = @import("./logger/Logger.zig");
 const cli_flags = @import("./cli/flags.zig");
 
 pub fn main(init: std.process.Init) !void {

@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const options = @import("options");
-const fmt = @import("../fmt/fmt.zig");
-const host = @import("../host.zig");
+const fmt = @import("../utils/fmt/fmt.zig");
+const host = @import("../utils/host.zig");
 const Style = @import("Style.zig");
 const ConsoleWriter = @import("ConsoleWriter.zig");
 const Phase = @import("Phase.zig");

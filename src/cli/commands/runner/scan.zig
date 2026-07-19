@@ -12,7 +12,7 @@ const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 const Context = @import("../../../walker/Context.zig");
 const report = @import("../report.zig");
 const lg = @import("../../../utils/utils.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 
 /// Nanoseconds elapsed since `start` (from nanoTimestamp). Clamped to 0.
 pub inline fn nsElapsed(io: std.Io, start: i128) u64 {

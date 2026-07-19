@@ -1,5 +1,5 @@
 const std = @import("std");
-const ProcessStats = @import("../../cli/commands/stats/stats.zig").ProcessStats;
+const ProcessStats = @import("../cli/commands/stats/stats.zig").ProcessStats;
 const Progress = @import("./Progress.zig");
 
 test "fillFor: total=0 → fill=0, no div-by-zero" {

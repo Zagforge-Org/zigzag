@@ -11,7 +11,7 @@ const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
 const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 const Progress = lg.Progress;
 const ProcessStats = @import("../stats.zig").ProcessStats;
 

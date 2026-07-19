@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const log = @import("../../utils/logger/Logger.zig");
+const log = @import("../../logger/Logger.zig");
 const isPortListening = @import("./watch/port_listening.zig").isPortListening;
 
 pub const ServeConfig = struct {

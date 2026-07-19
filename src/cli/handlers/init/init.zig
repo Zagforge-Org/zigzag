@@ -2,7 +2,7 @@ const std = @import("std");
 
 const DEFAULT_CONF_FILE = @import("../../../conf/FileConf.zig").DEFAULT_CONF_FILE;
 const FileConf = @import("../../../conf/FileConf.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 
 /// handleInit creates the zig.conf.json configuration file with default values.
 /// dir is the directory in which to create the file (use std.Io.Dir.cwd() for normal use).

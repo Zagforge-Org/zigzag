@@ -1,8 +1,8 @@
 //! Progress displays as a progress UI loader in the terminal
 
 const std = @import("std");
-const fmt_utils = @import("../fmt/fmt.zig");
-const ProcessStats = @import("../../cli/commands/stats/stats.zig").ProcessStats;
+const fmt_utils = @import("../utils/fmt/fmt.zig");
+const ProcessStats = @import("../cli/commands/stats/stats.zig").ProcessStats;
 
 const SPINNERS = [_][]const u8{
     "⠋",

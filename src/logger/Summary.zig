@@ -1,5 +1,5 @@
 const std = @import("std");
-const colors = @import("../colors/colors.zig");
+const colors = @import("../utils/colors/colors.zig");
 const ConsoleWriter = @import("ConsoleWriter.zig");
 
 const Self = @This();

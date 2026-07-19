@@ -69,10 +69,10 @@ test {
     _ = @import("./cli/commands/serve_test.zig");
     _ = @import("./utils/colors/colors_test.zig");
     _ = @import("./utils/skip_dirs/skip_dirs_test.zig");
-    _ = @import("./utils/logger/Logger_test.zig");
+    _ = @import("./logger/Logger_test.zig");
     _ = @import("./utils/host_test.zig");
     _ = @import("./utils/fmt/fmt_test.zig");
-    _ = @import("./utils/progress/progress_test.zig");
+    _ = @import("./progress/progress_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone/timezone_test.zig");
     _ = @import("./cli/commands/bench/bench_test.zig");

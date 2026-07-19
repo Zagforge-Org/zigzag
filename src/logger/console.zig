@@ -1,9 +1,9 @@
 //! ConsoleLogger — line-oriented stderr UI (steps, status glyphs, phase timing).
 
 const std = @import("std");
-const colors = @import("../colors/colors.zig");
-const fmt = @import("../fmt/fmt.zig");
-const console = @import("../../platform/console.zig");
+const colors = @import("../utils/colors/colors.zig");
+const fmt = @import("../utils/fmt/fmt.zig");
+const console = @import("../platform/console.zig");
 const ConsoleWriter = @import("ConsoleWriter.zig");
 const LineWriter = @import("LineWriter.zig");
 

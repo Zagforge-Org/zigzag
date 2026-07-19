@@ -5,7 +5,7 @@ const std = @import("std");
 const Config = @import("../config/config.zig").Config;
 const Cache = @import("../../../cache/Cache.zig");
 const runner = @import("../runner.zig");
-const log = @import("../../../utils/logger/Logger.zig");
+const log = @import("../../../logger/Logger.zig");
 const BenchResult = @import("BenchResult.zig");
 const Table = @import("Table.zig");
 
