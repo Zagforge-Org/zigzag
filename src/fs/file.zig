@@ -1,9 +1,10 @@
 const std = @import("std");
-const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
-const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
+const winMmap = @import("./mmap/windows/Mmap.zig");
+const unixMmap = @import("./mmap/unix/Mmap.zig");
 const api = @import("../platform/windows/api.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessChunk = @import("../cli/commands/writer.zig").TProcessWriter;
+const MappedFile = @import("MappedFile.zig");
 
 const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
 const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
@@ -17,28 +18,6 @@ pub const ReadResult = union(enum) {
     Alloc: []u8,
     Mapped: MappedFile,
     Chunked: void,
-};
-
-pub const MappedFile = struct {
-    data: []const u8,
-    len: usize,
-
-    const Self = @This();
-
-    pub fn deinit(self: *Self) void {
-        if (self.len != 0 and self.data.len != 0) {
-            const builtin = @import("builtin");
-            switch (builtin.os.tag) {
-                .windows => _ = {
-                    const ptr: *anyopaque = @ptrCast(@constCast(self.data.ptr));
-                    _ = api.UnmapViewOfFile(ptr);
-                },
-                else => _ = std.os.linux.munmap(self.data.ptr, self.len),
-            }
-            self.data = &[_]u8{};
-            self.len = 0;
-        }
-    }
 };
 
 /// Check if a path is a file
@@ -103,19 +82,19 @@ pub fn readFileAuto(
 ) !ReadResult {
     const size = try getFileSize(io, path);
 
-    // Small files → read fully into memory
+    // Small files read fully into memory
     if (size <= SMALL_FILE_THRESHOLD) {
         const data = try readFileAlloc(io, allocator, path);
         return .{ .Alloc = data };
     }
 
-    // Medium files → memory map
+    // Medium files read into memory map
     if (size <= MMAP_THRESHOLD) {
         const mapped = try readFileMapped(io, path);
         return .{ .Mapped = mapped };
     }
 
-    // Very large files → stream in chunks
+    // Very large files read into stream in chunks
     try readFileChunked(io, path, process, ctx);
     return .{ .Chunked = {} };
 }
