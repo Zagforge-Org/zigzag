@@ -1,6 +1,6 @@
 const std = @import("std");
 const JobContext = @import("../workers/Pool.zig").JobContext;
-const Job = @import("job.zig").Job;
+const Job = @import("Job.zig");
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
 const DEFAULT_SKIP_DIRS = @import("../utils/utils.zig").DEFAULT_SKIP_DIRS;

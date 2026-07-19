@@ -1,6 +1,6 @@
 const Context = @import("./Context.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
-const Job = @import("../jobs/job.zig").Job;
+const Job = @import("../jobs/Job.zig");
 const processFileJob = @import("../jobs/process.zig").processFileJob;
 
 pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
