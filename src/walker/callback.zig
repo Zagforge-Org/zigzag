@@ -1,11 +1,11 @@
-const WalkerCtx = @import("../walker/context.zig").WalkerCtx;
+const Context = @import("./Context.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const Job = @import("../jobs/job.zig").Job;
 const processFileJob = @import("../jobs/process.zig").processFileJob;
 
 pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
     if (ctx) |c| {
-        const walker_ctx: *WalkerCtx = @ptrCast(@alignCast(c));
+        const walker_ctx: *Context = @ptrCast(@alignCast(c));
         const path_copy = try walker_ctx.allocator.dupe(u8, path);
         errdefer walker_ctx.allocator.free(path_copy);
 

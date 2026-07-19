@@ -11,7 +11,7 @@ const ProcessStats = @import("../stats.zig").ProcessStats;
 const Job = @import("../../../jobs/job.zig").Job;
 const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
-const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
+const Context = @import("../../../walker/Context.zig");
 const report = @import("../report.zig");
 const log = @import("../../../utils/logger/Logger.zig");
 
@@ -64,7 +64,7 @@ pub const State = struct {
         try self.buildIgnoreList(cfg);
 
         var wg = WaitGroup.init(io);
-        var walker_ctx = WalkerCtx{
+        var walker_ctx = Context{
             .pool = pool,
             .wg = &wg,
             .file_ctx = &self.file_ctx,
@@ -151,7 +151,7 @@ pub const State = struct {
 
         var wg = WaitGroup.init(self.io);
         var stats = ProcessStats.init();
-        var walker_ctx = WalkerCtx{
+        var walker_ctx = Context{
             .pool = pool,
             .wg = &wg,
             .file_ctx = &self.file_ctx,

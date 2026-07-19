@@ -1,7 +1,7 @@
 const std = @import("std");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
-const WalkerCtx = @import("../walker/context.zig").WalkerCtx;
+const Context = @import("../walker/Context.zig");
 
 pub const WalkError = error{
     NotADirectory,
@@ -16,7 +16,7 @@ fn walkSubtreeJob(
     depth: usize,
     callback: TProcessWriter,
     ctx: ?*FileContext,
-    walker_ctx: *WalkerCtx,
+    walker_ctx: *Context,
 ) !void {
     defer walk_self.allocator.free(path);
     try Walk.walkParallelInternal(walk_self, path, depth, callback, ctx, walker_ctx);
@@ -56,7 +56,7 @@ pub const Walk = struct {
         depth: usize,
         callback: TProcessWriter,
         ctx: ?*FileContext,
-        walker_ctx: *WalkerCtx,
+        walker_ctx: *Context,
     ) !void {
         try walkParallelInternal(self, path, depth, callback, ctx, walker_ctx);
     }
@@ -67,7 +67,7 @@ pub const Walk = struct {
         depth: usize,
         callback: TProcessWriter,
         ctx: ?*FileContext,
-        walker_ctx: *WalkerCtx,
+        walker_ctx: *Context,
     ) !void {
         walker_ctx.dir_semaphore.waitUncancelable(self.io); // cap the number of simultaneously open dirs
         var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .access_sub_paths = true, .iterate = true }) catch {

@@ -9,7 +9,7 @@ const Cache = @import("../../../cache/Cache.zig");
 const ProcessStats = @import("../stats.zig").ProcessStats;
 const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
-const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
+const Context = @import("../../../walker/Context.zig");
 const report = @import("../report.zig");
 const lg = @import("../../../utils/utils.zig");
 const log = @import("../../../utils/logger/Logger.zig");
@@ -132,7 +132,7 @@ pub fn scanPath(
 
     var entries_mutex = @as(std.Io.Mutex, .init);
 
-    var walker_ctx = WalkerCtx{
+    var walker_ctx = Context{
         .pool = pool,
         .wg = &wg,
         .file_ctx = &file_ctx,
