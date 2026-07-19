@@ -8,6 +8,6 @@ test "handleJson sets json_output to true" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
     try std.testing.expect(!cfg.json_output);
-    try handleJson(&cfg, allocator, null);
+    try handleJson(std.testing.io, &cfg, allocator, null);
     try std.testing.expect(cfg.json_output);
 }

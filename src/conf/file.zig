@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../runtime.zig");
 
 pub const DEFAULT_CONF_FILENAME = "zig.conf.json";
 
@@ -50,12 +49,12 @@ pub const FileConf = struct {
         ;
     }
 
-    pub fn writeDefaultConfig(full_path: []const u8) !void {
+    pub fn writeDefaultConfig(io: std.Io, full_path: []const u8) !void {
         var buf: [1024]u8 = undefined;
-        var file = try std.Io.Dir.cwd().createFile(rt.io(), full_path, .{});
-        defer file.close(rt.io());
+        var file = try std.Io.Dir.cwd().createFile(io, full_path, .{});
+        defer file.close(io);
 
-        var w = file.writer(rt.io(), &buf);
+        var w = file.writer(io, &buf);
         try w.interface.writeAll(FileConf.default());
         try w.interface.flush();
     }
@@ -63,12 +62,12 @@ pub const FileConf = struct {
     /// Loads and parses zigzag.conf.json from the current directory.
     /// Returns null if the file does not exist or is empty.
     /// If the file exists but is empty, create a default configuration and return it.
-    pub fn load(allocator: std.mem.Allocator) !?std.json.Parsed(FileConf) {
-        return try loadFromPath(allocator, DEFAULT_CONF_FILENAME);
+    pub fn load(io: std.Io, allocator: std.mem.Allocator) !?std.json.Parsed(FileConf) {
+        return try loadFromPath(io, allocator, DEFAULT_CONF_FILENAME);
     }
 
-    pub fn read(allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
-        const data = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| {
+    pub fn read(io: std.Io, allocator: std.mem.Allocator, path: []const u8) !?[]const u8 {
+        const data = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(END_ALLOC_SIZE)) catch |err| {
             switch (err) {
                 error.FileNotFound => return null,
                 else => return err,
@@ -80,8 +79,8 @@ pub const FileConf = struct {
 
     /// loadFromPathEmpty loads a FileConf from a JSON file at the given path.
     /// Returns null if the file does not exist or is empty.
-    pub fn loadFromPathEmpty(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const content = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
+    pub fn loadFromPathEmpty(io: std.Io, allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
+        const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };
@@ -108,8 +107,8 @@ pub const FileConf = struct {
     /// Loads a FileConf from a JSON file at `path`.
     /// Returns null if the file doesn't exist, or parses the file contents.
     /// If the file is empty (only whitespace), parses the default JSON instead.
-    pub fn loadFromPath(allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
-        const content = std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
+    pub fn loadFromPath(io: std.Io, allocator: std.mem.Allocator, path: []const u8) !?std.json.Parsed(FileConf) {
+        const content = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(END_ALLOC_SIZE)) catch |err| switch (err) {
             error.FileNotFound => return null,
             else => return err,
         };

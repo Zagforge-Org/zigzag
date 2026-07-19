@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../runtime.zig");
 const State = @import("state.zig").State;
 const reporter = @import("reporter.zig");
 const Config = @import("../config/config.zig").Config;
@@ -12,26 +11,27 @@ const report = @import("../report.zig");
 const SseServer = @import("server.zig").SseServer;
 const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
+const log = @import("../../../utils/logger/Logger.zig");
 const ProgressBar = lg.ProgressBar;
 const ProcessStats = @import("../stats.zig").ProcessStats;
 
-inline fn nsElapsed(start: i128) u64 {
-    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
+inline fn nsElapsed(io: std.Io, start: i128) u64 {
+    const delta = std.Io.Timestamp.now(io, .real).nanoseconds - start;
     return @intCast(@max(0, delta));
 }
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
-pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !void {
+pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !void {
     if (cfg.paths.items.len == 0) return;
 
     var pool = Pool{};
-    try pool.init(.{ .allocator = allocator, .n_jobs = cfg.n_threads });
+    try pool.init(io, .{ .allocator = allocator, .n_jobs = cfg.n_threads });
     defer pool.deinit();
 
     // Scan phase progress is suppressed on TTY (same rationale as runner.zig: worker
     // thread output between printPhaseStart and printPhaseDone corrupts cursor-up rewrite).
-    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
+    const is_tty = (std.Io.File.stderr().isTty(io) catch false);
 
     // Scan all configured paths for initial state.
     var states: std.ArrayList(*State) = .empty;
@@ -41,29 +41,29 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
     }
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
-        if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
+        const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
+        if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
         var stats = ProcessStats.init();
-        var pb = ProgressBar.init(&stats); // pb must not be moved after this line
+        var pb = ProgressBar.init(io, &stats); // pb must not be moved after this line
         try pb.start();
         const state = blk: {
-            if (State.init(&stats, cfg, cache, path, &pool, allocator)) |s| {
+            if (State.init(io, &stats, cfg, cache, path, &pool, allocator)) |s| {
                 pb.stop();
-                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "{d} files", .{s.file_entries.count()});
+                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "{d} files", .{s.file_entries.count()});
                 break :blk s;
             } else |err| {
                 pb.stop();
-                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "", .{});
+                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "", .{});
                 switch (err) {
-                    error.NotADirectory => lg.printError("Path '{s}' is not a directory", .{path}),
-                    else => lg.printError("Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
+                    error.NotADirectory => log.err(io, "Path '{s}' is not a directory", .{path}),
+                    else => log.err(io, "Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
                 }
                 continue;
             }
         };
         try states.append(allocator, state);
         // Write initial reports (no SSE server yet — will be started after all paths init)
-        reporter.writeAllReports(state, cfg, null, &.{}, allocator);
+        reporter.writeAllReports(io, state, cfg, null, &.{}, allocator);
     }
 
     if (states.items.len == 0) return;
@@ -73,7 +73,7 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
     if (cache) |c| c.saveToDisk() catch {};
 
     // Write combined HTML report (initial, before SSE server starts).
-    reporter.writeCombinedReport(states.items, cfg, null, &.{}, allocator);
+    reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
 
     // Start SSE dev server when both --watch and --html are active
     var sse_server: ?*SseServer = null;
@@ -99,18 +99,18 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
             const max_port_attempts = 10;
             var port = cfg.serve_port;
             for (0..max_port_attempts) |i| {
-                if (isPortListening(port)) {
+                if (isPortListening(io, port)) {
                     if (i == 0) {
-                        lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                        log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
                     }
                     if (i == max_port_attempts - 1) {
-                        lg.printError("Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
+                        log.err(io, "Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
                         break;
                     }
                     port += 1;
                     continue;
                 }
-                if (SseServer.init(port, srv_root, default_page, allocator)) |srv| {
+                if (SseServer.init(io, port, srv_root, default_page, allocator)) |srv| {
                     sse_server = srv;
                     if (port != cfg.serve_port) {
                         cfg.serve_port = port; // propagate to HTML/SSE-URL generation
@@ -120,27 +120,27 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
                     // Bind still failed (race condition or other error); treat as occupied.
                     if (err == error.AddressInUse) {
                         if (i == 0) {
-                            lg.printWarn("Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                            log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
                         }
                         port += 1;
                     } else {
-                        lg.printWarn("SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
+                        log.warn(io, "SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
                         break;
                     }
                 }
             }
             if (sse_server) |srv| {
                 srv.start() catch |err| {
-                    lg.printWarn("SSE server thread failed: {s}", .{@errorName(err)});
+                    log.warn(io, "SSE server thread failed: {s}", .{@errorName(err)});
                     srv.deinit();
                     sse_server = null;
                 };
                 if (sse_server != null) {
-                    lg.printSuccess("Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
+                    log.success(io, "Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
                     if (cfg.open_browser) sse_server.?.openBrowser();
                     // Broadcast initial payload so connecting clients get data immediately.
                     const first = states.items[0];
-                    var init_data = report.ReportData.init(allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
+                    var init_data = report.ReportData.init(io, allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
                     if (init_data) |*d| {
                         defer d.deinit();
                         const payload = report.buildSsePayload(d, first.root_path, cfg, allocator) catch null;
@@ -160,15 +160,15 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
     // but port fallback can change cfg.serve_port — the HTML sse_url must match.
     if (sse_server != null) {
         for (states.items) |state| {
-            reporter.writeAllReports(state, cfg, null, &.{}, allocator);
+            reporter.writeAllReports(io, state, cfg, null, &.{}, allocator);
         }
         if (states.items.len > 1) {
-            reporter.writeCombinedReport(states.items, cfg, null, &.{}, allocator);
+            reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
         }
     }
 
     // Set up OS-level filesystem watcher
-    var watcher = try Watcher.init(allocator);
+    var watcher = try Watcher.init(io, allocator);
     defer watcher.deinit();
 
     // Register the report output directory as a skip path before adding watches.
@@ -182,11 +182,11 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
 
     for (states.items) |state| {
         watcher.watchDir(state.root_path) catch |err| {
-            lg.printError("Failed to watch '{s}': {s}", .{ state.root_path, @errorName(err) });
+            log.err(io, "Failed to watch '{s}': {s}", .{ state.root_path, @errorName(err) });
         };
     }
 
-    lg.printSuccess("Watching {d} path(s) — press Ctrl+C to stop", .{states.items.len});
+    log.success(io, "Watching {d} path(s) — press Ctrl+C to stop", .{states.items.len});
 
     // Event loop with debounce to group multiple events into a single update.
     // Ensures that updates are not triggered by rapid-fire events and preserves CPU resources.
@@ -216,7 +216,7 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
 
         const timeout: i32 = if (any_dirty) DEBOUNCE_MS else -1;
         const n = watcher.poll(&events, timeout) catch |err| {
-            lg.printError("Watcher poll error: {s}", .{@errorName(err)});
+            log.err(io, "Watcher poll error: {s}", .{@errorName(err)});
             continue;
         };
 
@@ -253,16 +253,16 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
                     switch (event.kind) {
                         .created, .modified => {
                             state.updateFile(event.path, cache, &pool) catch |err| {
-                                lg.printError("Failed to process {s}: {s}", .{ event.path, @errorName(err) });
+                                log.err(io, "Failed to process {s}: {s}", .{ event.path, @errorName(err) });
                             };
                             // Track the changed path for selective sidecar writes on debounce.
                             const path_copy = allocator.dupe(u8, event.path) catch null;
                             if (path_copy) |p| changed_paths.append(allocator, p) catch allocator.free(p);
                             // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
                             if (sse_server) |srv| {
-                                state.entries_mutex.lockUncancelable(rt.io());
+                                state.entries_mutex.lockUncancelable(io);
                                 const entry_opt = state.file_entries.get(event.path);
-                                state.entries_mutex.unlock(rt.io());
+                                state.entries_mutex.unlock(io);
                                 if (entry_opt) |entry| {
                                     const delta = report.buildFileDeltaPayload(allocator, &entry, .updated) catch null;
                                     if (delta) |d| {
@@ -306,11 +306,11 @@ pub fn execWatch(cfg: *Config, cache: ?*Cache, allocator: std.mem.Allocator) !vo
                 // Only write and signal the combined dashboard in multi-path mode.
                 // Single-path watch uses SSE deltas and the per-state report event instead.
                 // writeCombinedReport handles the broadcastCombined SSE push internally.
-                reporter.writeCombinedReport(states.items, cfg, sse_server, paths_for_write, allocator);
+                reporter.writeCombinedReport(io, states.items, cfg, sse_server, paths_for_write, allocator);
             }
             for (states.items, 0..) |state, i| {
                 if (!dirty_states[i]) continue;
-                reporter.writeAllReports(state, cfg, sse_server, paths_for_write, allocator);
+                reporter.writeAllReports(io, state, cfg, sse_server, paths_for_write, allocator);
                 dirty_states[i] = false;
             }
             any_dirty = false;

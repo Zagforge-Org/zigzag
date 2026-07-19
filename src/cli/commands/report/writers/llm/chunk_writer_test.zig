@@ -24,7 +24,7 @@ test "ChunkWriter: single chunk no manifest" {
     const base_path = try std.fs.path.join(std.testing.allocator, &.{ base_dir, "report.llm" });
     defer std.testing.allocator.free(base_path);
 
-    var cw = try ChunkWriter.init(base_path, "src/", 10_000, std.testing.allocator);
+    var cw = try ChunkWriter.init(std.testing.io, base_path, "src/", 10_000, std.testing.allocator);
     defer cw.deinit();
 
     try cw.writeFile("src/a.zig", "hello world\n");
@@ -55,7 +55,7 @@ test "ChunkWriter: multi-chunk rotation and manifest" {
     defer std.testing.allocator.free(base_path);
 
     // chunk_limit = 20 bytes, so 3 files of 10 bytes each → 3 chunks
-    var cw = try ChunkWriter.init(base_path, "src/", 20, std.testing.allocator);
+    var cw = try ChunkWriter.init(std.testing.io, base_path, "src/", 20, std.testing.allocator);
     defer cw.deinit();
 
     try cw.writeFile("src/a.zig", "0123456789"); // 10 bytes — chunk 1, total 10
@@ -91,7 +91,7 @@ test "ChunkWriter: oversized file gets own chunk" {
     defer std.testing.allocator.free(base_path);
 
     // chunk_limit = 5 bytes, file is 20 bytes
-    var cw = try ChunkWriter.init(base_path, "src/", 5, std.testing.allocator);
+    var cw = try ChunkWriter.init(std.testing.io, base_path, "src/", 5, std.testing.allocator);
     defer cw.deinit();
 
     try cw.writeFile("src/big.zig", "01234567890123456789"); // 20 bytes > limit=5, but current_bytes=0 → no rotate
@@ -112,7 +112,7 @@ test "ChunkWriter: exact limit does not rotate" {
     defer std.testing.allocator.free(base_path);
 
     // chunk_limit = 10 bytes, file is exactly 10 bytes
-    var cw = try ChunkWriter.init(base_path, "src/", 10, std.testing.allocator);
+    var cw = try ChunkWriter.init(std.testing.io, base_path, "src/", 10, std.testing.allocator);
     defer cw.deinit();
 
     try cw.writeFile("src/a.zig", "0123456789"); // 10 bytes == limit → no rotate (> not >=)

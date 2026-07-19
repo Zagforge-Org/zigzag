@@ -10,12 +10,12 @@ const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 
 test "nsElapsed clamps future timestamp to 0" {
     const future = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds + 1_000_000_000_000;
-    try std.testing.expectEqual(@as(u64, 0), scan.nsElapsed(future));
+    try std.testing.expectEqual(@as(u64, 0), scan.nsElapsed(std.testing.io, future));
 }
 
 test "nsElapsed returns positive for past timestamp" {
     const past = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds - 1_000_000;
-    try std.testing.expect(scan.nsElapsed(past) > 0);
+    try std.testing.expect(scan.nsElapsed(std.testing.io, past) > 0);
 }
 
 // ── ScanResult ────────────────────────────────────────────────────────────────
@@ -47,10 +47,10 @@ test "scanPath returns NotADirectory for a file path" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
-    const result = scan.scanPath(&cfg, null, file_path, &pool, alloc, null);
+    const result = scan.scanPath(std.testing.io, &cfg, null, file_path, &pool, alloc);
     try std.testing.expectError(error.NotADirectory, result);
 }
 
@@ -65,10 +65,10 @@ test "scanPath on empty directory returns zero entries" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
-    var result = try scan.scanPath(&cfg, null, dir_path, &pool, alloc, null);
+    var result = try scan.scanPath(std.testing.io, &cfg, null, dir_path, &pool, alloc);
     defer result.deinit(alloc);
 
     try std.testing.expectEqual(@as(usize, 0), result.file_entries.count());
@@ -99,10 +99,10 @@ test "scanPath picks up source files in directory" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
-    var result = try scan.scanPath(&cfg, null, dir_path, &pool, alloc, null);
+    var result = try scan.scanPath(std.testing.io, &cfg, null, dir_path, &pool, alloc);
     defer result.deinit(alloc);
 
     try std.testing.expectEqual(@as(usize, 2), result.file_entries.count());

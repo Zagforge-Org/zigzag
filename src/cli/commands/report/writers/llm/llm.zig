@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -14,6 +13,7 @@ const VERSION = @import("../../../config/config.zig").VERSION;
 
 /// Write a condensed LLM-optimised report alongside the markdown report.
 pub fn writeLlmReport(
+    io: std.Io,
     data: *const ReportData,
     binary_count: usize,
     llm_path: []const u8,
@@ -113,7 +113,7 @@ pub fn writeLlmReport(
         else
             llm_path;
 
-        var cw = try ChunkWriter.init(base_path, root_path, chunk_size, allocator);
+        var cw = try ChunkWriter.init(io, base_path, root_path, chunk_size, allocator);
         defer cw.deinit();
 
         // Chunk 1 header
@@ -350,9 +350,9 @@ pub fn writeLlmReport(
     }
 
     // Write to disk
-    var llm_file = try std.Io.Dir.cwd().createFile(rt.io(), llm_path, .{ .truncate = true });
-    defer llm_file.close(rt.io());
-    try llm_file.writeStreamingAll(rt.io(), aw.written());
+    var llm_file = try std.Io.Dir.cwd().createFile(io, llm_path, .{ .truncate = true });
+    defer llm_file.close(io);
+    try llm_file.writeStreamingAll(io, aw.written());
 }
 
 /// Extracts lines [start_line..=end_line] (0-based) from content as a slice.

@@ -10,6 +10,7 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
         errdefer walker_ctx.allocator.free(path_copy);
 
         const job = Job{
+            .io = walker_ctx.pool.io,
             .path = path_copy,
             .file_ctx = walker_ctx.file_ctx,
             .cache = walker_ctx.cache,

@@ -29,7 +29,7 @@ test "serve.isPortListening returns false for a released port" {
     listener.deinit(std.testing.io);
     // Give the OS a moment to release the socket.
     std.Io.sleep(std.testing.io, .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
-    try std.testing.expect(!isPortListening(ephemeral_port));
+    try std.testing.expect(!isPortListening(std.testing.io, ephemeral_port));
 }
 
 test "serve.isPortListening returns true for an actively listening port" {
@@ -37,7 +37,7 @@ test "serve.isPortListening returns true for an actively listening port" {
     var listener = try addr.listen(std.testing.io, .{});
     defer listener.deinit(std.testing.io);
     const port = listener.socket.address.getPort();
-    try std.testing.expect(isPortListening(port));
+    try std.testing.expect(isPortListening(std.testing.io, port));
 }
 
 test "serve.isPortListening detects port occupied even with SO_REUSEADDR on second bind" {
@@ -56,5 +56,5 @@ test "serve.isPortListening detects port occupied even with SO_REUSEADDR on seco
     } else |_| {}
 
     // The original listener is still up — probe must return true.
-    try std.testing.expect(isPortListening(port));
+    try std.testing.expect(isPortListening(std.testing.io, port));
 }

@@ -70,11 +70,8 @@ test {
     _ = @import("./cli/commands/serve_test.zig");
     _ = @import("./utils/colors/colors_test.zig");
     _ = @import("./utils/skip_dirs/skip_dirs_test.zig");
-    _ = @import("./utils/logger/print/print_test.zig");
-    _ = @import("./utils/logger/summary/summary_test.zig");
-    _ = @import("./utils/logger/phase/phase_test.zig");
-    _ = @import("./utils/logger/cpu/cpu_test.zig");
-    _ = @import("./utils/logger/file_logger/file_logger_test.zig");
+    _ = @import("./utils/logger/Logger_test.zig");
+    _ = @import("./utils/host_test.zig");
     _ = @import("./utils/fmt/fmt_test.zig");
     _ = @import("./utils/progress/progress_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");

@@ -3,7 +3,7 @@ const std = @import("std");
 
 test "loadFromPath returns null for non-existent file" {
     const allocator = std.testing.allocator;
-    const result = try FileConf.loadFromPath(allocator, "/nonexistent/zztest_does_not_exist.json");
+    const result = try FileConf.loadFromPath(std.testing.io, allocator, "/nonexistent/zztest_does_not_exist.json");
     try std.testing.expect(result == null);
 }
 
@@ -20,12 +20,12 @@ test "loadFromPath returns default for empty file" {
         };
     }
 
-    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    const result = try FileConf.loadFromPath(std.testing.io, allocator, tmp_path);
 
     if (result) |conf| {
         defer conf.deinit();
 
-        const maybe_content = FileConf.read(allocator, tmp_path) catch |err| switch (err) {
+        const maybe_content = FileConf.read(std.testing.io, allocator, tmp_path) catch |err| switch (err) {
             error.FileNotFound => null, // return null if file missing
             else => return err, // propagate any other error
         };
@@ -58,7 +58,7 @@ test "loadFromPath parses valid JSON with all fields" {
     defer f.close(std.testing.io);
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    const result = try FileConf.loadFromPath(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
 
     var parsed = result.?;
@@ -84,7 +84,7 @@ test "loadFromPath handles empty JSON object" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
 
     var parsed = result.?;
@@ -112,7 +112,7 @@ test "loadFromPath handles ignores array" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
 
     var parsed = result.?;
@@ -165,7 +165,7 @@ test "loadFromPath parses json_output true" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     var parsed = result.?;
     defer parsed.deinit();
@@ -197,7 +197,7 @@ test "loadFromPathEmpty parses html_output true" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     var parsed = result.?;
     defer parsed.deinit();
@@ -217,7 +217,7 @@ test "loadFromPathEmpty sets json_output to null when field is absent" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     var parsed = result.?;
     defer parsed.deinit();
@@ -239,7 +239,7 @@ test "loadFromPathEmpty ignores unknown JSON fields" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
 
     var parsed = result.?;
@@ -261,7 +261,7 @@ test "loadFromPathEmpty parses output_dir field" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     var parsed = result.?;
     defer parsed.deinit();
@@ -281,7 +281,7 @@ test "loadFromPathEmpty parses llm_report field" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     var parsed = result.?;
     defer parsed.deinit();
     try std.testing.expect(parsed.value.llm_report.? == true);
@@ -300,7 +300,7 @@ test "loadFromPathEmpty parses llm_max_lines field" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     var parsed = result.?;
     defer parsed.deinit();
     try std.testing.expectEqual(@as(u64, 200), parsed.value.llm_max_lines.?);
@@ -319,7 +319,7 @@ test "loadFromPathEmpty parses llm_description field" {
     }
     defer std.Io.Dir.cwd().deleteFile(std.testing.io, tmp_path) catch {};
 
-    const result = try FileConf.loadFromPathEmpty(allocator, tmp_path);
+    const result = try FileConf.loadFromPathEmpty(std.testing.io, allocator, tmp_path);
     var parsed = result.?;
     defer parsed.deinit();
     try std.testing.expectEqualStrings("A CLI tool", parsed.value.llm_description.?);
@@ -348,7 +348,7 @@ test "writeDefaultConfig writes FileConf.default() to file" {
     };
 
     // Write default config
-    try FileConf.writeDefaultConfig(tmp_path);
+    try FileConf.writeDefaultConfig(std.testing.io, tmp_path);
 
     // Read all contents
     const file_contents = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, tmp_path, std.testing.allocator, .limited(4096));
@@ -367,7 +367,7 @@ test "FileConf deserialises 'ignores' key" {
     try f.writeStreamingAll(std.testing.io,
         \\{"ignores": ["*.png", "*.jpg"]}
     );
-    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    const result = try FileConf.loadFromPath(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     defer result.?.deinit();
     const conf = result.?.value;
@@ -386,7 +386,7 @@ test "FileConf old 'ignore_patterns' key is silently ignored" {
     try f.writeStreamingAll(std.testing.io,
         \\{"ignore_patterns": ["*.png"]}
     );
-    const result = try FileConf.loadFromPath(allocator, tmp_path);
+    const result = try FileConf.loadFromPath(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     defer result.?.deinit();
     // Old key is unknown field — parsed as null

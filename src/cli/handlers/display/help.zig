@@ -2,13 +2,22 @@ const std = @import("std");
 const Config = @import("../../commands/config/config.zig").Config;
 const stdoutPrint = @import("../../../fs/stdout.zig").stdoutPrint;
 
-/// printHelp prints help information.
-pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+/// printHelp prints help information to stdout.
+pub fn printHelp(io: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = cfg;
     _ = allocator;
     _ = value;
-    try stdoutPrint(
-        \\Usage: zigzag [COMMAND] [OPTIONS]
+    try stdoutPrint(io, "{s}", .{help_text});
+}
+
+/// writeHelp writes help information to `w`. Separated from printHelp so tests
+/// can exercise it against a buffer instead of the real stdout.
+pub fn writeHelp(w: *std.Io.Writer) anyerror!void {
+    try w.writeAll(help_text);
+}
+
+const help_text =
+    \\Usage: zigzag [COMMAND] [OPTIONS]
         \\
         \\Commands:
         \\  init            Initialize a new project (creates zig.conf.json)
@@ -52,5 +61,4 @@ pub fn printHelp(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8)
         \\  zigzag --paths ./project1,./project2
         \\  zigzag --paths ./src --timezone +1
         \\
-    , .{});
-}
+    ;

@@ -1,12 +1,10 @@
 const std = @import("std");
-const rt = @import("../../runtime.zig");
 const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
 const Config = @import("config/config.zig").Config;
 const Cache = @import("../../cache/Cache.zig");
 const Pool = @import("../../workers/pool.zig").Pool;
-const lg = @import("../../utils/utils.zig");
-const Logger = lg.Logger;
+const log = @import("../../utils/logger/Logger.zig");
 
 pub const BenchResult = @import("./bench/BenchResult.zig");
 
@@ -14,28 +12,23 @@ const ScanResult = scan_mod.ScanResult;
 const nsElapsed = scan_mod.nsElapsed;
 
 /// Executes the runner command for all configured paths.
-pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {
+pub fn exec(io: std.Io, cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {
     if (cfg.paths.items.len == 0) return;
 
     // Set up file logger if --log is enabled
-    var logger_storage: ?Logger = null;
-    defer if (logger_storage) |*l| l.deinit();
     if (cfg.log) {
         const output_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-        if (Logger.init(output_dir, allocator)) |l| {
-            logger_storage = l;
-        } else |err| {
-            lg.printWarn("Could not create log file: {s}", .{@errorName(err)});
-        }
+        log.initFile(io, output_dir, allocator) catch |err|
+            log.warn(io, "Could not create log file: {s}", .{@errorName(err)});
     }
-    const logger: ?*Logger = if (logger_storage) |*l| l else null;
+    defer log.deinitFile(io);
 
-    if (logger) |l| l.log("zigzag started — processing {d} path(s)", .{cfg.paths.items.len});
+    log.file(io, "zigzag started — processing {d} path(s)", .{cfg.paths.items.len});
 
-    const t_exec_start = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
+    const t_exec_start = std.Io.Timestamp.now(io, .real).nanoseconds;
 
     var pool = Pool{};
-    try pool.init(.{
+    try pool.init(io, .{
         .allocator = allocator,
         .n_jobs = cfg.n_threads,
     });
@@ -45,8 +38,8 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
     // to stderr between printPhaseStart and printPhaseDone, causing the cursor-up
     // rewrite (\x1B[1A) to overwrite a worker line instead of the scan line.
     // On non-TTY (piped/redirected), both calls emit clean text lines.
-    const is_tty = (std.Io.File.stderr().isTty(rt.io()) catch false);
-    if (!is_tty) lg.printStep("Processing {d} path(s)...", .{cfg.paths.items.len});
+    const is_tty = (std.Io.File.stderr().isTty(io) catch false);
+    if (!is_tty) log.step(io, "Processing {d} path(s)...", .{cfg.paths.items.len});
 
     // Always collect timing data for the final summary (or for the external bench caller).
     var local_bench: BenchResult = .{};
@@ -66,24 +59,24 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
     var path_name_count: usize = 0;
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
-        if (!is_tty) lg.printPhaseStart("Scanning {s}...", .{path});
-        const scan_or_err = scan_mod.scanPath(cfg, cache, path, &pool, allocator, logger);
+        const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
+        if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
+        const scan_or_err = scan_mod.scanPath(io, cfg, cache, path, &pool, allocator);
         const result: ScanResult = blk: {
             if (scan_or_err) |r| {
-                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "{d} files", .{r.file_entries.count()});
+                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "{d} files", .{r.file_entries.count()});
                 break :blk r;
             } else |err| {
-                if (!is_tty) lg.printPhaseDone(nsElapsed(t_scan), "", .{});
+                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "", .{});
                 switch (err) {
                     error.NotADirectory => {
-                        lg.printError("Path '{s}' is not a directory", .{path});
-                        if (logger) |l| l.log("ERROR: Path '{s}' is not a directory", .{path});
+                        log.err(io, "Path '{s}' is not a directory", .{path});
+                        log.file(io, "ERROR: Path '{s}' is not a directory", .{path});
                         return error.ErrorNotFound;
                     },
                     else => {
-                        lg.printError("Unexpected error: {s}", .{@errorName(err)});
-                        if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
+                        log.err(io, "Unexpected error: {s}", .{@errorName(err)});
+                        log.file(io, "ERROR: {s}", .{@errorName(err)});
                         failed_paths += 1;
                         continue;
                     },
@@ -91,7 +84,7 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
             }
         };
         {
-            const elapsed_scan = nsElapsed(t_scan);
+            const elapsed_scan = nsElapsed(io, t_scan);
             const summary = result.stats.getSummary();
             local_bench.scan_ns += elapsed_scan;
             local_bench.files_total += summary.total;
@@ -123,19 +116,19 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
     for (all_results.items, 0..) |*result, i| {
         // Print a separator between writing blocks so each path is visually distinct.
         // Skip i==0: the last scan's trailing separator already provides the break.
-        if (verbose and i > 0) lg.printSeparator();
-        reports_mod.writePathReports(result, cfg, &pool, allocator, logger, &local_bench, verbose) catch |err| {
-            lg.printError("Unexpected error: {s}", .{@errorName(err)});
-            if (logger) |l| l.log("ERROR: {s}", .{@errorName(err)});
+        if (verbose and i > 0) log.separator(io);
+        reports_mod.writePathReports(io, result, cfg, &pool, allocator, &local_bench, verbose) catch |err| {
+            log.err(io, "Unexpected error: {s}", .{@errorName(err)});
+            log.file(io, "ERROR: {s}", .{@errorName(err)});
         };
     }
 
     // Write combined HTML dashboard when multiple paths produced results.
     const has_combined = cfg.html_output and all_results.items.len > 1;
     if (has_combined) {
-        reports_mod.writeCombinedReports(all_results.items, failed_paths, cfg, allocator, logger) catch |err| {
-            lg.printError("Combined report error: {s}", .{@errorName(err)});
-            if (logger) |l| l.log("ERROR writing combined report: {s}", .{@errorName(err)});
+        reports_mod.writeCombinedReports(io, all_results.items, failed_paths, cfg, allocator) catch |err| {
+            log.err(io, "Combined report error: {s}", .{@errorName(err)});
+            log.file(io, "ERROR writing combined report: {s}", .{@errorName(err)});
         };
     }
 
@@ -154,8 +147,8 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
 
     if (is_tty and bench == null) {
         // Pretty interactive summary for terminal users.
-        const summary_data = lg.FinalSummaryData{
-            .total_ns = nsElapsed(t_exec_start),
+        const summary_data = log.FinalSummary{
+            .total_ns = nsElapsed(io, t_exec_start),
             .scan_ns = local_bench.scan_ns,
             .aggregate_ns = local_bench.aggregate_ns,
             .write_md_ns = local_bench.write_md_ns,
@@ -167,9 +160,9 @@ pub fn exec(cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, be
             .path_names = path_names[0..path_name_count],
             .has_combined = has_combined,
         };
-        lg.printFinalSummary(&summary_data);
+        log.finalSummary(io, &summary_data);
     } else {
-        lg.printSuccess("All paths processed!", .{});
+        log.success(io, "All paths processed!", .{});
     }
-    if (logger) |l| l.log("Done", .{});
+    log.file(io, "Done", .{});
 }

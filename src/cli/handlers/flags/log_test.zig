@@ -9,6 +9,6 @@ test "handleLog enables log mode" {
     defer cfg.deinit();
 
     try testing.expect(!cfg.log);
-    try handleLog(&cfg, allocator, null);
+    try handleLog(std.testing.io, &cfg, allocator, null);
     try testing.expect(cfg.log);
 }

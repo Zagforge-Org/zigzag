@@ -1,3 +1,4 @@
+const std = @import("std");
 const colors = @import("../../../utils/utils.zig");
 const stdoutPrint = @import("../../../fs/stdout.zig").stdoutPrint;
 
@@ -19,8 +20,18 @@ pub const ascii_logo =
     \\
 ;
 
-pub fn printAsciiLogo() anyerror!void {
-    try stdoutPrint("{s}{s}{s}", .{
+pub fn printAsciiLogo(io: std.Io) anyerror!void {
+    try stdoutPrint(io, "{s}{s}{s}", .{
+        colors.colorCode(colors.Color.Yellow),
+        ascii_logo,
+        colors.colorCode(colors.Color.Reset),
+    });
+}
+
+/// writeAsciiLogo writes the logo to `w`. Separated from printAsciiLogo so
+/// tests can exercise it against a buffer instead of the real stdout.
+pub fn writeAsciiLogo(w: *std.Io.Writer) anyerror!void {
+    try w.print("{s}{s}{s}", .{
         colors.colorCode(colors.Color.Yellow),
         ascii_logo,
         colors.colorCode(colors.Color.Reset),

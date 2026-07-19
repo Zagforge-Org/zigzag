@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../runtime.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
 const WalkerCtx = @import("../walker/context.zig").WalkerCtx;
@@ -24,12 +23,14 @@ fn walkSubtreeJob(
 }
 
 pub const Walk = struct {
+    io: std.Io,
     allocator: std.mem.Allocator,
 
     const Self = @This();
 
-    pub fn init(allocator: std.mem.Allocator) !Self {
+    pub fn init(io: std.Io, allocator: std.mem.Allocator) !Self {
         return Self{
+            .io = io,
             .allocator = allocator,
         };
     }
@@ -68,18 +69,18 @@ pub const Walk = struct {
         ctx: ?*FileContext,
         walker_ctx: *WalkerCtx,
     ) !void {
-        walker_ctx.dir_semaphore.waitUncancelable(rt.io()); // cap the number of simultaneously open dirs
-        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .access_sub_paths = true, .iterate = true }) catch {
-            walker_ctx.dir_semaphore.post(rt.io());
+        walker_ctx.dir_semaphore.waitUncancelable(self.io); // cap the number of simultaneously open dirs
+        var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .access_sub_paths = true, .iterate = true }) catch {
+            walker_ctx.dir_semaphore.post(self.io);
             return;
         };
         defer {
-            dir.close(rt.io());
-            walker_ctx.dir_semaphore.post(rt.io());
+            dir.close(self.io);
+            walker_ctx.dir_semaphore.post(self.io);
         }
 
         var it = dir.iterate();
-        while (try it.next(rt.io())) |entry| {
+        while (try it.next(self.io)) |entry| {
             if (std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
 
             const full_path = try std.fs.path.join(self.allocator, &.{ path, entry.name });
@@ -116,11 +117,11 @@ pub const Walk = struct {
         callback: TProcessWriter,
         ctx: ?*FileContext,
     ) !void {
-        var dir = try std.Io.Dir.cwd().openDir(rt.io(), path, .{ .access_sub_paths = true, .iterate = true });
-        defer dir.close(rt.io());
+        var dir = try std.Io.Dir.cwd().openDir(self.io, path, .{ .access_sub_paths = true, .iterate = true });
+        defer dir.close(self.io);
 
         var it = dir.iterate();
-        while (try it.next(rt.io())) |entry| {
+        while (try it.next(self.io)) |entry| {
             if (std.mem.eql(u8, entry.name, ".") or
                 std.mem.eql(u8, entry.name, ".."))
             {

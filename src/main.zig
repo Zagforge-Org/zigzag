@@ -8,13 +8,11 @@ const report = @import("./cli/commands/report.zig");
 const Cache = @import("cache/Cache.zig");
 const printAsciiLogo = @import("./cli/handlers/display/logo.zig").printAsciiLogo;
 const initHandler = @import("./cli/handlers/init/init.zig").handleInit;
-const lg = @import("./utils/utils.zig");
+const log = @import("./utils/logger/Logger.zig");
 const cli_flags = @import("./cli/flags.zig");
-const rt = @import("./runtime.zig");
 
 pub fn main(init: std.process.Init) !void {
-    rt.setIo(init.io);
-    rt.setEnviron(init.environ_map);
+    const io = init.io;
     const allocator = init.gpa;
 
     // Create list to hold command-line arguments
@@ -34,10 +32,10 @@ pub fn main(init: std.process.Init) !void {
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "init")) {
             if (args.next()) |extra| {
-                lg.printWarn("'init' takes no arguments (unexpected: {s})", .{extra});
+                log.warn(io, "'init' takes no arguments (unexpected: {s})", .{extra});
                 return;
             }
-            try initHandler(allocator, std.Io.Dir.cwd());
+            try initHandler(io, allocator, std.Io.Dir.cwd());
             return;
         }
 
@@ -53,7 +51,7 @@ pub fn main(init: std.process.Init) !void {
 
         if (std.mem.eql(u8, arg, "bench")) {
             if (is_run_command or is_serve_command) {
-                lg.printWarn("'bench' is a standalone subcommand — use: zigzag bench", .{});
+                log.warn(io, "'bench' is a standalone subcommand — use: zigzag bench", .{});
                 return;
             }
             is_bench_command = true;
@@ -73,19 +71,19 @@ pub fn main(init: std.process.Init) !void {
                 }
             }
         } else {
-            lg.printWarn("unknown argument: {s}", .{arg});
+            log.warn(io, "unknown argument: {s}", .{arg});
             return;
         }
     }
 
     // With no flags and no subcommand, just print usage
     if (param_count == 0 and !is_run_command and !is_serve_command and !is_bench_command) {
-        try printAsciiLogo();
+        try printAsciiLogo(io);
         return;
     }
 
     // Parse config: load zig.conf.json as base, then apply CLI args on top
-    const result = config.Config.parseFromFile(list.items, allocator);
+    const result = config.Config.parseFromFile(io, list.items, allocator);
     switch (result) {
         config.ConfigParseResult.Success => |cfg| {
             var typedCfg: config.Config = cfg;
@@ -93,10 +91,10 @@ pub fn main(init: std.process.Init) !void {
 
             if (is_bench_command) {
                 if (typedCfg.paths.items.len == 0) {
-                    lg.printError("bench requires at least one path (--paths or zig.conf.json)", .{});
+                    log.err(io, "bench requires at least one path (--paths or zig.conf.json)", .{});
                     return;
                 }
-                try Bench.init(rt.io(), &typedCfg, allocator).run();
+                try Bench.init(io, &typedCfg, allocator).run();
                 return;
             }
 
@@ -112,22 +110,22 @@ pub fn main(init: std.process.Init) !void {
                     const cache_path = try std.fs.path.join(allocator, &.{ ".", ".cache" });
                     defer allocator.free(cache_path);
 
-                    lg.printStep("Loading cache...", .{});
-                    var cache = try Cache.init(allocator, rt.io(), cache_path, typedCfg.small_threshold);
+                    log.step(io, "Loading cache...", .{});
+                    var cache = try Cache.init(allocator, io, cache_path, typedCfg.small_threshold);
                     defer cache.deinit();
                     if (cache.entryCount() > 0)
-                        lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
+                        log.success(io, "Cache: {d} entries", .{cache.entryCount()});
 
                     if (typedCfg.skip_cache) {
-                        lg.printStep("Clearing cache: {s}", .{cache_path});
+                        log.step(io, "Clearing cache: {s}", .{cache_path});
                         try cache.cleanup();
-                        lg.printSuccess("Cache cleared", .{});
+                        log.success(io, "Cache cleared", .{});
                     }
 
-                    _ = runner.exec(&typedCfg, &cache, allocator, null) catch |err| {
+                    _ = runner.exec(io, &typedCfg, &cache, allocator, null) catch |err| {
                         switch (err) {
                             error.ErrorNotFound => {},
-                            else => lg.printError("error generating reports: {s}", .{@errorName(err)}),
+                            else => log.err(io, "error generating reports: {s}", .{@errorName(err)}),
                         }
                     };
                 }
@@ -139,7 +137,7 @@ pub fn main(init: std.process.Init) !void {
                 var srv_root_buf: ?[]u8 = null;
                 defer if (srv_root_buf) |b| allocator.free(b);
                 const srv_root: []const u8 = if (!multi and typedCfg.paths.items.len == 1) blk: {
-                    const md_path = try report.resolveOutputPath(allocator, &typedCfg, typedCfg.paths.items[0], "report.md");
+                    const md_path = try report.resolveOutputPath(io, allocator, &typedCfg, typedCfg.paths.items[0], "report.md");
                     defer allocator.free(md_path);
                     const html_path = try report.deriveHtmlPath(allocator, md_path);
                     defer allocator.free(html_path);
@@ -148,14 +146,14 @@ pub fn main(init: std.process.Init) !void {
                     break :blk srv_root_buf.?;
                 } else base_out_dir;
 
-                serve.execServe(.{
+                serve.execServe(io, .{
                     .root_dir = srv_root,
                     .port = typedCfg.serve_port,
                     .open_browser = typedCfg.open_browser,
                     .default_page = default_page,
                     .allocator = allocator,
                 }) catch |err| {
-                    lg.printError("serve error: {s}", .{@errorName(err)});
+                    log.err(io, "serve error: {s}", .{@errorName(err)});
                 };
                 return;
             }
@@ -167,48 +165,48 @@ pub fn main(init: std.process.Init) !void {
                 defer allocator.free(cache_path);
 
                 // Initialize cache with configured threshold
-                lg.printStep("Loading cache...", .{});
-                var cache = try Cache.init(allocator, rt.io(), cache_path, typedCfg.small_threshold);
+                log.step(io, "Loading cache...", .{});
+                var cache = try Cache.init(allocator, io, cache_path, typedCfg.small_threshold);
                 defer cache.deinit();
                 if (cache.entryCount() > 0)
-                    lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
+                    log.success(io, "Cache: {d} entries", .{cache.entryCount()});
 
                 if (typedCfg.skip_cache) {
-                    lg.printStep("Clearing cache: {s}", .{cache_path});
+                    log.step(io, "Clearing cache: {s}", .{cache_path});
                     try cache.cleanup();
-                    lg.printSuccess("Cache cleared", .{});
+                    log.success(io, "Cache cleared", .{});
                 }
 
                 if (typedCfg.watch) {
-                    watch.execWatch(&typedCfg, &cache, allocator) catch |err| {
-                        lg.printError("watch error: {s}", .{@errorName(err)});
+                    watch.execWatch(io, &typedCfg, &cache, allocator) catch |err| {
+                        log.err(io, "watch error: {s}", .{@errorName(err)});
                     };
                 } else {
-                    _ = runner.exec(&typedCfg, &cache, allocator, null) catch |err| {
+                    _ = runner.exec(io, &typedCfg, &cache, allocator, null) catch |err| {
                         switch (err) {
                             error.ErrorNotFound => {
                                 return;
                             },
                             else => {
-                                lg.printError("error executing runner: {s}", .{@errorName(err)});
+                                log.err(io, "error executing runner: {s}", .{@errorName(err)});
                             },
                         }
                     };
                 }
             } else if (is_run_command) {
-                lg.printWarn("no paths configured — add --paths or set \"paths\" in zig.conf.json", .{});
+                log.warn(io, "no paths configured — add --paths or set \"paths\" in zig.conf.json", .{});
             }
         },
         config.ConfigParseResult.MissingValue => |opt| {
-            lg.printError("missing value for option: {s}", .{opt});
+            log.err(io, "missing value for option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.UnknownOption => |opt| {
-            lg.printError("unknown option: {s}", .{opt});
+            log.err(io, "unknown option: {s}", .{opt});
             return;
         },
         config.ConfigParseResult.Other => |err_name| {
-            lg.printError("handler failed: {s}", .{err_name});
+            log.err(io, "handler failed: {s}", .{err_name});
             return;
         },
     }

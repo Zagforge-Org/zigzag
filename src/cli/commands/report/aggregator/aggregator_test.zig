@@ -15,7 +15,7 @@ test "ReportData.init aggregates language stats" {
     var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
     defer binary_entries.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
     try std.testing.expectEqual(@as(usize, 35), data.total_lines);
@@ -40,7 +40,7 @@ test "ReportData.init sorts files by path" {
     var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
     defer binary_entries.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
     try std.testing.expectEqual(@as(usize, 2), data.sorted_files.items.len);
@@ -56,7 +56,7 @@ test "ReportData.init handles empty entries" {
     var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
     defer binary_entries.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
     try std.testing.expectEqual(@as(usize, 0), data.sorted_files.items.len);

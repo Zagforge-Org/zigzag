@@ -7,6 +7,6 @@ test "handleMmap handles mmap option" {
     const allocator = std.testing.allocator;
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
-    try handleMmap(&cfg, allocator, "2048");
+    try handleMmap(std.testing.io, &cfg, allocator, "2048");
     try testing.expectEqual(2048, cfg.mmap_threshold);
 }

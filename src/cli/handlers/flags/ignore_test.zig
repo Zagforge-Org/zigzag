@@ -15,7 +15,7 @@ test "handleIgnores single pattern" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, "*.png");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.png");
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.png"));
 }
 
@@ -24,7 +24,7 @@ test "handleIgnores comma-separated patterns" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, "*.png,*.jpg");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.png,*.jpg");
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.png"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.jpg"));
     try testing.expectEqual(@as(usize, 2), cfg.ignore_patterns.items.len);
@@ -35,7 +35,7 @@ test "handleIgnores trims whitespace from segments" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, "*.png, *.jpg , *.gif");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.png, *.jpg , *.gif");
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.png"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.jpg"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.gif"));
@@ -47,7 +47,7 @@ test "handleIgnores skips empty segments" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, "*.png,,*.jpg");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.png,,*.jpg");
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.png"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.jpg"));
     try testing.expectEqual(@as(usize, 2), cfg.ignore_patterns.items.len);
@@ -58,8 +58,8 @@ test "handleIgnores multiple calls accumulate" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, "*.png,*.jpg");
-    try handleIgnores(&cfg, allocator, "*.gif");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.png,*.jpg");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.gif");
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.png"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.jpg"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.gif"));
@@ -75,7 +75,7 @@ test "handleIgnores first call clears file-loaded patterns" {
     try cfg.appendIgnorePattern("*.from_file");
 
     // First CLI call should replace file patterns
-    try handleIgnores(&cfg, allocator, "*.from_cli");
+    try handleIgnores(std.testing.io, &cfg, allocator, "*.from_cli");
     try testing.expect(!hasPattern(cfg.ignore_patterns, "*.from_file"));
     try testing.expect(hasPattern(cfg.ignore_patterns, "*.from_cli"));
     try testing.expectEqual(@as(usize, 1), cfg.ignore_patterns.items.len);
@@ -86,6 +86,6 @@ test "handleIgnores null value is a no-op" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleIgnores(&cfg, allocator, null);
+    try handleIgnores(std.testing.io, &cfg, allocator, null);
     try testing.expectEqual(@as(usize, 0), cfg.ignore_patterns.items.len);
 }

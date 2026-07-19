@@ -9,7 +9,7 @@ test "handleNoWatch disables watch mode" {
 
     cfg.watch = true;
     try std.testing.expect(cfg.watch);
-    try handleNoWatch(&cfg, allocator, null);
+    try handleNoWatch(std.testing.io, &cfg, allocator, null);
     try std.testing.expect(!cfg.watch);
     try std.testing.expect(cfg._no_watch_set_by_cli);
 }

@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../runtime.zig");
 const windows = std.os.windows;
 const watch_api = @import("../../platform/windows/watch.zig");
 
@@ -15,14 +14,15 @@ const DEFAULT_SKIP_DIRS = @import("../../utils/utils.zig").DEFAULT_SKIP_DIRS;
 /// Heap-allocated and ref-counted so both the Watcher and each watchThread can
 /// hold a reference; the queue is only freed when the last holder releases it.
 const SharedQueue = struct {
+    io: std.Io,
     mutex: std.Io.Mutex = .init,
     events: std.ArrayList(WatchEvent) = .empty,
     allocator: std.mem.Allocator,
     ref: std.atomic.Value(u32),
 
-    fn create(allocator: std.mem.Allocator) !*SharedQueue {
+    fn create(io: std.Io, allocator: std.mem.Allocator) !*SharedQueue {
         const q = try allocator.create(SharedQueue);
-        q.* = .{ .allocator = allocator, .ref = std.atomic.Value(u32).init(1) };
+        q.* = .{ .io = io, .allocator = allocator, .ref = std.atomic.Value(u32).init(1) };
         return q;
     }
 
@@ -39,14 +39,14 @@ const SharedQueue = struct {
     }
 
     fn push(self: *SharedQueue, ev: WatchEvent) void {
-        self.mutex.lockUncancelable(rt.io());
-        defer self.mutex.unlock(rt.io());
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
         self.events.append(self.allocator, ev) catch {};
     }
 
     fn drain(self: *SharedQueue, out: *std.ArrayList(WatchEvent)) !void {
-        self.mutex.lockUncancelable(rt.io());
-        defer self.mutex.unlock(rt.io());
+        self.mutex.lockUncancelable(self.io);
+        defer self.mutex.unlock(self.io);
         try out.appendSlice(self.allocator, self.events.items);
         self.events.clearRetainingCapacity();
     }
@@ -175,6 +175,7 @@ fn watchThread(ctx: *WatchCtx) void {
 }
 
 pub const Watcher = struct {
+    io: std.Io,
     queue: *SharedQueue,
     ctxs: std.ArrayList(*WatchCtx) = .empty,
     allocator: std.mem.Allocator,
@@ -183,7 +184,7 @@ pub const Watcher = struct {
     /// Directory names to filter out of poll() results (basename component match).
     skip_dirs: std.ArrayList([]const u8),
 
-    pub fn init(allocator: std.mem.Allocator) !Watcher {
+    pub fn init(io: std.Io, allocator: std.mem.Allocator) !Watcher {
         var skip_dirs: std.ArrayList([]const u8) = .empty;
         errdefer {
             for (skip_dirs.items) |d| allocator.free(d);
@@ -193,7 +194,8 @@ pub const Watcher = struct {
             try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
         }
         return .{
-            .queue = try SharedQueue.create(allocator),
+            .io = io,
+            .queue = try SharedQueue.create(io, allocator),
             .allocator = allocator,
             .skip_dirs = skip_dirs,
         };
@@ -285,12 +287,12 @@ pub const Watcher = struct {
 
         // Wait up to timeout_ms for events (or indefinitely if -1)
         const wait_ms: u64 = if (timeout_ms < 0) std.math.maxInt(u64) else @intCast(timeout_ms);
-        const start = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
+        const start = std.Io.Timestamp.now(self.io, .real).toMilliseconds();
         while (true) {
-            std.Io.sleep(rt.io(), .fromNanoseconds(5 * std.time.ns_per_ms), .awake) catch {};
+            std.Io.sleep(self.io, .fromNanoseconds(5 * std.time.ns_per_ms), .awake) catch {};
             try self.drainFiltered(out);
             if (out.items.len > before) break;
-            if (@as(u64, @intCast(std.Io.Timestamp.now(rt.io(), .real).toMilliseconds() - start)) >= wait_ms) break;
+            if (@as(u64, @intCast(std.Io.Timestamp.now(self.io, .real).toMilliseconds() - start)) >= wait_ms) break;
         }
         return out.items.len - before;
     }

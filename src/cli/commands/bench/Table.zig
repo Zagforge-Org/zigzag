@@ -6,6 +6,7 @@ const options = @import("options");
 const BenchResult = @import("BenchResult.zig");
 const Aggregator = @import("Aggregator.zig");
 const lg = @import("../../../utils/utils.zig");
+const host = @import("../../../utils/host.zig");
 
 const Self = @This();
 
@@ -25,17 +26,17 @@ pub fn print(self: Self, io: std.Io) void {
     var buf: [4096]u8 = undefined;
     var file_writer = std.Io.File.stderr().writer(io, &buf);
     const w = &file_writer.interface;
-    self.write(w) catch return;
+    self.write(io, w) catch return;
     w.flush() catch {};
 }
 
-fn write(self: Self, w: *std.Io.Writer) !void {
+pub fn write(self: Self, io: std.Io, w: *std.Io.Writer) !void {
     const cpu_count = std.Thread.getCpuCount() catch 0;
     var cpu_name_buf: [128]u8 = undefined;
-    const cpu_name = lg.getCpuName(&cpu_name_buf);
+    const cpu_name = host.getCpuName(io, &cpu_name_buf);
     const cpu_s: []const u8 = if (cpu_count == 1) "" else "s";
 
-    try w.print("\n  Machine : {s} {s} · {d} core{s}\n", .{ lg.getOs(), lg.getArch(), cpu_count, cpu_s });
+    try w.print("\n  Machine : {s} {s} · {d} core{s}\n", .{ host.getOs(), host.getArch(), cpu_count, cpu_s });
     try w.print("  CPU     : {s}\n", .{cpu_name});
     try w.print("  ZigZag  : {s}\n\n", .{options.version_string});
 

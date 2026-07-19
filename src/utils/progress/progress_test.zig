@@ -38,19 +38,19 @@ test "rolling estimate: large counts — fill caps at 19" {
 
 test "stop() before start() does not panic" {
     var stats = ProcessStats.init();
-    var pb = ProgressBar{ .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
+    var pb = ProgressBar{ .io = std.testing.io, .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
     pb.stop();
 }
 
 test "stop() with thread=null (simulates failed start()) does not panic" {
     var stats = ProcessStats.init();
-    var pb = ProgressBar{ .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
+    var pb = ProgressBar{ .io = std.testing.io, .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
     pb.stop();
 }
 
 test "non-TTY: start() leaves thread null" {
     var stats = ProcessStats.init();
-    var pb = ProgressBar{ .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
+    var pb = ProgressBar{ .io = std.testing.io, .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
     try pb.start();
     try std.testing.expect(pb.thread == null);
     pb.stop();
@@ -59,7 +59,7 @@ test "non-TTY: start() leaves thread null" {
 test "non-TTY: start()+stop() cycle completes without spawning thread" {
     var stats = ProcessStats.init();
     _ = stats.processed_files.fetchAdd(42, .monotonic);
-    var pb = ProgressBar{ .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
+    var pb = ProgressBar{ .io = std.testing.io, .stats = &stats, .is_tty = false, .done = std.atomic.Value(bool).init(false), .thread = null };
     try pb.start();
     pb.stop();
     try std.testing.expect(pb.thread == null);

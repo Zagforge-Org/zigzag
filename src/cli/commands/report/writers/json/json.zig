@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../../../runtime.zig");
 const Config = @import("../../../config/config.zig").Config;
 const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
@@ -7,6 +6,7 @@ const ReportData = @import("../aggregator.zig").ReportData;
 
 /// Serialize pre-aggregated data to a JSON report file alongside the markdown report.
 pub fn writeJsonReport(
+    io: std.Io,
     data: *const ReportData,
     json_path: []const u8,
     root_path: []const u8,
@@ -25,7 +25,7 @@ pub fn writeJsonReport(
     try ws.objectField("version");
     try ws.write(cfg.version);
     try ws.objectField("generated_at_ns");
-    try ws.write(std.Io.Timestamp.now(rt.io(), .real).nanoseconds);
+    try ws.write(std.Io.Timestamp.now(io, .real).nanoseconds);
     try ws.objectField("scanned_paths");
     try ws.beginArray();
     try ws.write(root_path);
@@ -100,7 +100,7 @@ pub fn writeJsonReport(
 
     try ws.endObject();
 
-    var json_file = try std.Io.Dir.cwd().createFile(rt.io(), json_path, .{ .truncate = true });
-    defer json_file.close(rt.io());
-    try json_file.writeStreamingAll(rt.io(), aw.written());
+    var json_file = try std.Io.Dir.cwd().createFile(io, json_path, .{ .truncate = true });
+    defer json_file.close(io);
+    try json_file.writeStreamingAll(io, aw.written());
 }

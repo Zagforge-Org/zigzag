@@ -16,7 +16,7 @@ fn makeState(
     state.binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
     state.entries_mutex = .init;
     state.allocator = alloc;
-    state.file_ctx = .{ .ignore_list = .empty, .md = undefined, .md_mutex = undefined };
+    state.file_ctx = .{ .io = std.testing.io, .ignore_list = .empty, .md = undefined, .md_mutex = undefined };
     return state;
 }
 
@@ -38,7 +38,7 @@ test "writeAllReports creates markdown file" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    writeAllReports(&state, &cfg, null, &.{}, alloc);
+    writeAllReports(std.testing.io, &state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access(std.testing.io, "report.md", .{}) catch |err| {
         std.debug.print("Expected report.md to exist, got: {s}\n", .{@errorName(err)});
@@ -65,7 +65,7 @@ test "writeAllReports creates JSON file when json_output is true" {
     defer cfg.deinit();
     cfg.json_output = true;
 
-    writeAllReports(&state, &cfg, null, &.{}, alloc);
+    writeAllReports(std.testing.io, &state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access(std.testing.io, "report.json", .{}) catch |err| {
         std.debug.print("Expected report.json to exist, got: {s}\n", .{@errorName(err)});
@@ -92,7 +92,7 @@ test "writeAllReports creates HTML file when html_output is true" {
     defer cfg.deinit();
     cfg.html_output = true;
 
-    writeAllReports(&state, &cfg, null, &.{}, alloc);
+    writeAllReports(std.testing.io, &state, &cfg, null, &.{}, alloc);
 
     tmp.dir.access(std.testing.io, "report.html", .{}) catch |err| {
         std.debug.print("Expected report.html to exist, got: {s}\n", .{@errorName(err)});
@@ -127,7 +127,7 @@ test "writeAllReports with file entry produces non-empty markdown" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    writeAllReports(&state, &cfg, null, &.{}, alloc);
+    writeAllReports(std.testing.io, &state, &cfg, null, &.{}, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);

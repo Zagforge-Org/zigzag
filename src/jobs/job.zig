@@ -7,6 +7,7 @@ const JobEntry = @import("entry.zig").JobEntry;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 
 pub const Job = struct {
+    io: std.Io,
     path: []const u8,
     file_ctx: ?*FileContext,
     cache: ?*Cache,

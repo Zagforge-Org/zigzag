@@ -1,6 +1,5 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const rt = @import("../../../runtime.zig");
 
 /// Returns true if a TCP listener is actively listening to connections on a given port.
 /// A successful connect means something is listening whereas a refused connection
@@ -10,7 +9,7 @@ const rt = @import("../../../runtime.zig");
 /// that maps a refused connection to `error.Unexpected`, and, in debug/test builds, dumps a
 /// noisy NSTATUS stack trace before returning. A direct `connect` reports refusal
 /// quetly.
-pub fn isPortListening(port: u16) bool {
+pub fn isPortListening(io: std.Io, port: u16) bool {
     if (comptime builtin.os.tag == .windows) {
         const ws2 = struct {
             const SOCKET = usize;
@@ -48,7 +47,7 @@ pub fn isPortListening(port: u16) bool {
     }
 
     const addr = std.Io.net.IpAddress.parse("127.0.0.1", port) catch return false;
-    var stream = addr.connect(rt.io(), .{ .mode = .stream }) catch return false;
-    stream.close(rt.io());
+    var stream = addr.connect(io, .{ .mode = .stream }) catch return false;
+    stream.close(io);
     return true;
 }

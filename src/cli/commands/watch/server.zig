@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../runtime.zig");
 const builtin = @import("builtin");
 
 // ---------------------------------------------------------------------------
@@ -27,9 +26,9 @@ const win_ws2 = struct {
 
 /// Writes all b ytes to a stream. It no longer exposes
 /// a direct `writeAll`.
-fn streamWriteAll(stream: std.Io.net.Stream, bytes: []const u8) !void {
+fn streamWriteAll(io: std.Io, stream: std.Io.net.Stream, bytes: []const u8) !void {
     var buf: [4096]u8 = undefined;
-    var sw = stream.writer(rt.io(), &buf);
+    var sw = stream.writer(io, &buf);
     try sw.interface.writeAll(bytes);
     try sw.interface.flush();
 }
@@ -49,7 +48,7 @@ fn socketRecv(handle: std.posix.socket_t, buf: []u8) !usize {
 /// Gracefully close a TCP connection to avoid RST on Windows.
 /// Without shutdown(SD_SEND) + drain, closesocket() sends RST if there is
 /// any unread data in the receive buffer — the browser sees ERR_CONNECTION_RESET.
-fn gracefulClose(stream: std.Io.net.Stream) void {
+fn gracefulClose(io: std.Io, stream: std.Io.net.Stream) void {
     if (comptime builtin.os.tag == .windows) {
         _ = win_ws2.shutdown(stream.socket.handle, 1); // SD_SEND = 1 -> sends FIN
         // Drain remaining receive-buffer data so closesocket() does not RST.
@@ -62,7 +61,7 @@ fn gracefulClose(stream: std.Io.net.Stream) void {
             drained += @intCast(n);
         }
     }
-    stream.close(rt.io());
+    stream.close(io);
 }
 
 /// SSE dev server for watch mode.
@@ -76,6 +75,7 @@ fn gracefulClose(stream: std.Io.net.Stream) void {
 ///   event: report — soft report update (JSON payload)
 ///   event: reload — full page reload signal
 pub const SseServer = struct {
+    io: std.Io,
     allocator: std.mem.Allocator,
     listener: std.Io.net.Server,
     root_dir: []const u8, // directory to serve static files from
@@ -103,12 +103,12 @@ pub const SseServer = struct {
     accept_queue: std.ArrayList(std.Io.net.Stream),
     accept_mu: std.Io.Mutex = .init,
 
-    pub fn init(port: u16, root_dir: []const u8, default_page: []const u8, allocator: std.mem.Allocator) !*SseServer {
+    pub fn init(io: std.Io, port: u16, root_dir: []const u8, default_page: []const u8, allocator: std.mem.Allocator) !*SseServer {
         const self = try allocator.create(SseServer);
         errdefer allocator.destroy(self);
 
         const addr = try std.Io.net.IpAddress.parse("127.0.0.1", port);
-        const listener = try addr.listen(rt.io(), .{ .reuse_address = true });
+        const listener = try addr.listen(io, .{ .reuse_address = true });
 
         const owned_dir = try allocator.dupe(u8, root_dir);
         errdefer allocator.free(owned_dir);
@@ -117,6 +117,7 @@ pub const SseServer = struct {
         errdefer allocator.free(owned_page);
 
         self.* = .{
+            .io = io,
             .allocator = allocator,
             .listener = listener,
             .root_dir = owned_dir,
@@ -138,8 +139,8 @@ pub const SseServer = struct {
     pub fn broadcast(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
 
-        self.mu.lockUncancelable(rt.io());
-        defer self.mu.unlock(rt.io());
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
 
         if (self.pending_payload) |old| self.allocator.free(old);
         self.pending_payload = copy;
@@ -149,8 +150,8 @@ pub const SseServer = struct {
     pub fn broadcastCombined(self: *SseServer, payload: []const u8) void {
         const copy = self.allocator.dupe(u8, payload) catch return;
 
-        self.mu.lockUncancelable(rt.io());
-        defer self.mu.unlock(rt.io());
+        self.mu.lockUncancelable(self.io);
+        defer self.mu.unlock(self.io);
 
         if (self.pending_combined) |old| self.allocator.free(old);
         self.pending_combined = copy;
@@ -158,9 +159,9 @@ pub const SseServer = struct {
 
     /// Queue a "reload" SSE event (triggers location.reload() in the browser).
     pub fn broadcastReload(self: *SseServer) void {
-        self.mu.lockUncancelable(rt.io());
+        self.mu.lockUncancelable(self.io);
         self.pending_reload = true;
-        self.mu.unlock(rt.io());
+        self.mu.unlock(self.io);
     }
 
     /// Open the dashboard URL in the system browser (fire-and-forget).
@@ -171,7 +172,7 @@ pub const SseServer = struct {
             .{self.bound_port},
         ) catch return;
 
-        const t = std.Thread.spawn(.{}, openBrowserThread, .{ self.allocator, url }) catch {
+        const t = std.Thread.spawn(.{}, openBrowserThread, .{ self.io, self.allocator, url }) catch {
             self.allocator.free(url);
             return;
         };
@@ -180,28 +181,28 @@ pub const SseServer = struct {
     }
 
     pub fn stop(self: *SseServer) void {
-        self.mu.lockUncancelable(rt.io());
+        self.mu.lockUncancelable(self.io);
         self.stopped = true;
-        self.mu.unlock(rt.io());
+        self.mu.unlock(self.io);
     }
 
     pub fn deinit(self: *SseServer) void {
         {
-            self.mu.lockUncancelable(rt.io());
-            defer self.mu.unlock(rt.io());
+            self.mu.lockUncancelable(self.io);
+            defer self.mu.unlock(self.io);
             self.stopped = true;
         }
 
-        self.listener.deinit(rt.io());
+        self.listener.deinit(self.io);
 
         if (self.accept_thread) |t| t.join();
 
         {
-            self.accept_mu.lockUncancelable(rt.io());
-            defer self.accept_mu.unlock(rt.io());
+            self.accept_mu.lockUncancelable(self.io);
+            defer self.accept_mu.unlock(self.io);
 
             for (self.accept_queue.items) |conn|
-                conn.close(rt.io());
+                conn.close(self.io);
 
             self.accept_queue.deinit(self.allocator);
         }
@@ -210,8 +211,8 @@ pub const SseServer = struct {
         self.allocator.free(self.default_page);
 
         {
-            self.mu.lockUncancelable(rt.io());
-            defer self.mu.unlock(rt.io());
+            self.mu.lockUncancelable(self.io);
+            defer self.mu.unlock(self.io);
 
             if (self.pending_payload) |p| self.allocator.free(p);
             if (self.pending_combined) |p| self.allocator.free(p);
@@ -226,22 +227,22 @@ pub const SseServer = struct {
     fn acceptLoop(self: *SseServer) void {
         while (true) {
             {
-                self.mu.lockUncancelable(rt.io());
+                self.mu.lockUncancelable(self.io);
                 const stopped = self.stopped;
-                self.mu.unlock(rt.io());
+                self.mu.unlock(self.io);
                 if (stopped) break;
             }
 
-            const conn = self.listener.accept(rt.io()) catch {
-                std.Io.sleep(rt.io(), .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
+            const conn = self.listener.accept(self.io) catch {
+                std.Io.sleep(self.io, .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
                 continue;
             };
 
-            self.accept_mu.lockUncancelable(rt.io());
+            self.accept_mu.lockUncancelable(self.io);
             self.accept_queue.append(self.allocator, conn) catch {
-                conn.close(rt.io());
+                conn.close(self.io);
             };
-            self.accept_mu.unlock(rt.io());
+            self.accept_mu.unlock(self.io);
         }
     }
 
@@ -251,30 +252,30 @@ pub const SseServer = struct {
         // Only accessed from this thread — no lock needed.
         var clients: std.ArrayList(std.Io.net.Stream) = .empty;
         defer {
-            for (clients.items) |c| c.close(rt.io());
+            for (clients.items) |c| c.close(self.io);
             clients.deinit(self.allocator);
         }
 
         const t = std.Thread.spawn(.{}, acceptLoop, .{self}) catch null;
         if (t) |thread| {
-            self.mu.lockUncancelable(rt.io());
+            self.mu.lockUncancelable(self.io);
             self.accept_thread = thread;
-            self.mu.unlock(rt.io());
+            self.mu.unlock(self.io);
         }
 
-        var last_keepalive_ms = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
+        var last_keepalive_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds();
         const KEEPALIVE_MS: i64 = 15_000;
 
         while (true) {
             // Check stop flag
             {
-                self.mu.lockUncancelable(rt.io());
+                self.mu.lockUncancelable(self.io);
                 const stopped = self.stopped;
-                self.mu.unlock(rt.io());
+                self.mu.unlock(self.io);
                 if (stopped) break;
             }
 
-            std.Io.sleep(rt.io(), .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
+            std.Io.sleep(self.io, .fromNanoseconds(100 * std.time.ns_per_ms), .awake) catch {};
 
             // Drain the accept queue into a local list before releasing the lock.
             // handleNewConn does a blocking read, so we must not hold accept_mu
@@ -282,27 +283,27 @@ pub const SseServer = struct {
             var local_queue: std.ArrayList(std.Io.net.Stream) = .empty;
             defer local_queue.deinit(self.allocator);
 
-            self.accept_mu.lockUncancelable(rt.io());
+            self.accept_mu.lockUncancelable(self.io);
             for (self.accept_queue.items) |conn| {
                 local_queue.append(self.allocator, conn) catch {
-                    conn.close(rt.io());
+                    conn.close(self.io);
                 };
             }
             self.accept_queue.clearRetainingCapacity();
-            self.accept_mu.unlock(rt.io());
+            self.accept_mu.unlock(self.io);
 
             for (local_queue.items) |conn| {
                 self.handleNewConn(conn, &clients);
             }
 
-            self.mu.lockUncancelable(rt.io());
+            self.mu.lockUncancelable(self.io);
             const payload = self.pending_payload;
             self.pending_payload = null;
             const combined = self.pending_combined;
             self.pending_combined = null;
             const reload = self.pending_reload;
             self.pending_reload = false;
-            self.mu.unlock(rt.io());
+            self.mu.unlock(self.io);
 
             if (payload) |p| {
                 defer self.allocator.free(p);
@@ -310,7 +311,7 @@ pub const SseServer = struct {
                 if (self.current_payload) |old| self.allocator.free(old);
                 self.current_payload = self.allocator.dupe(u8, p) catch null;
 
-                writePartsToAll(&clients, &.{ "event: report\ndata: ", p, "\n\n" });
+                writePartsToAll(self.io, &clients, &.{ "event: report\ndata: ", p, "\n\n" });
             }
 
             if (combined) |p| {
@@ -319,16 +320,16 @@ pub const SseServer = struct {
                 if (self.current_combined) |old| self.allocator.free(old);
                 self.current_combined = self.allocator.dupe(u8, p) catch null;
 
-                writePartsToAll(&clients, &.{ "event: combined_update\ndata: ", p, "\n\n" });
+                writePartsToAll(self.io, &clients, &.{ "event: combined_update\ndata: ", p, "\n\n" });
             }
 
             if (reload) {
-                writePartsToAll(&clients, &.{"event: reload\ndata: {}\n\n"});
+                writePartsToAll(self.io, &clients, &.{"event: reload\ndata: {}\n\n"});
             }
 
-            const now_ms = std.Io.Timestamp.now(rt.io(), .real).toMilliseconds();
+            const now_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds();
             if (now_ms - last_keepalive_ms >= KEEPALIVE_MS) {
-                writePartsToAll(&clients, &.{": keep-alive\n\n"});
+                writePartsToAll(self.io, &clients, &.{": keep-alive\n\n"});
                 last_keepalive_ms = now_ms;
             }
         }
@@ -346,11 +347,11 @@ pub const SseServer = struct {
         var total: usize = 0;
         while (total < buf.len - 1) {
             const n = socketRecv(conn.socket.handle, buf[total..]) catch {
-                gracefulClose(conn);
+                gracefulClose(self.io, conn);
                 return;
             };
             if (n == 0) {
-                gracefulClose(conn);
+                gracefulClose(self.io, conn);
                 return;
             }
             total += n;
@@ -360,12 +361,12 @@ pub const SseServer = struct {
 
         const line_end = std.mem.indexOf(u8, buf[0..total], "\r\n") orelse
             std.mem.indexOf(u8, buf[0..total], "\n") orelse {
-            gracefulClose(conn);
+            gracefulClose(self.io, conn);
             return;
         };
         const first_line = buf[0..line_end];
         if (!std.mem.startsWith(u8, first_line, "GET ")) {
-            gracefulClose(conn);
+            gracefulClose(self.io, conn);
             return;
         }
         const path_end = std.mem.indexOfPos(u8, first_line, 4, " ") orelse first_line.len;
@@ -374,7 +375,7 @@ pub const SseServer = struct {
         if (std.mem.eql(u8, req_path, "/__events")) {
             self.upgradeSse(conn, clients);
         } else {
-            serveStatic(self.allocator, self.root_dir, self.default_page, req_path, conn);
+            serveStatic(self.io, self.allocator, self.root_dir, self.default_page, req_path, conn);
         }
     }
 
@@ -392,8 +393,8 @@ pub const SseServer = struct {
             "\r\n" ++
             // Instruct the browser to reconnect every 3 s on disconnect.
             "retry: 3000\n\n";
-        streamWriteAll(stream, headers) catch {
-            gracefulClose(stream);
+        streamWriteAll(self.io, stream, headers) catch {
+            gracefulClose(self.io, stream);
             return;
         };
 
@@ -401,13 +402,13 @@ pub const SseServer = struct {
         // data without waiting for the next file-change event.
         if (self.current_combined) |p| {
             const ok = blk: {
-                streamWriteAll(stream, "event: combined_update\ndata: ") catch break :blk false;
-                streamWriteAll(stream, p) catch break :blk false;
-                streamWriteAll(stream, "\n\n") catch break :blk false;
+                streamWriteAll(self.io, stream, "event: combined_update\ndata: ") catch break :blk false;
+                streamWriteAll(self.io, stream, p) catch break :blk false;
+                streamWriteAll(self.io, stream, "\n\n") catch break :blk false;
                 break :blk true;
             };
             if (!ok) {
-                gracefulClose(stream);
+                gracefulClose(self.io, stream);
                 return;
             }
         }
@@ -416,19 +417,19 @@ pub const SseServer = struct {
         // the next file-change event.
         if (self.current_payload) |p| {
             const ok = blk: {
-                streamWriteAll(stream, "event: report\ndata: ") catch break :blk false;
-                streamWriteAll(stream, p) catch break :blk false;
-                streamWriteAll(stream, "\n\n") catch break :blk false;
+                streamWriteAll(self.io, stream, "event: report\ndata: ") catch break :blk false;
+                streamWriteAll(self.io, stream, p) catch break :blk false;
+                streamWriteAll(self.io, stream, "\n\n") catch break :blk false;
                 break :blk true;
             };
             if (!ok) {
-                gracefulClose(stream);
+                gracefulClose(self.io, stream);
                 return;
             }
         }
 
         clients.append(self.allocator, stream) catch {
-            gracefulClose(stream);
+            gracefulClose(self.io, stream);
             return;
         };
     }
@@ -438,17 +439,17 @@ pub const SseServer = struct {
 
 /// Write multiple string parts to every live client.
 /// Removes clients whose writes fail (disconnected).
-fn writePartsToAll(clients: *std.ArrayList(std.Io.net.Stream), parts: []const []const u8) void {
+fn writePartsToAll(io: std.Io, clients: *std.ArrayList(std.Io.net.Stream), parts: []const []const u8) void {
     var i: usize = 0;
     while (i < clients.items.len) {
         const alive = blk: {
             for (parts) |part| {
-                streamWriteAll(clients.items[i], part) catch break :blk false;
+                streamWriteAll(io, clients.items[i], part) catch break :blk false;
             }
             break :blk true;
         };
         if (!alive) {
-            gracefulClose(clients.items[i]);
+            gracefulClose(io, clients.items[i]);
             _ = clients.swapRemove(i);
         } else {
             i += 1;
@@ -465,8 +466,8 @@ fn deriveMimeType(path: []const u8) []const u8 {
     return "application/octet-stream";
 }
 
-fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page: []const u8, req_path_raw: []const u8, stream: std.Io.net.Stream) void {
-    defer gracefulClose(stream);
+fn serveStatic(io: std.Io, allocator: std.mem.Allocator, root_dir: []const u8, default_page: []const u8, req_path_raw: []const u8, stream: std.Io.net.Stream) void {
+    defer gracefulClose(io, stream);
 
     // Strip leading slash and query string.
     var req_path = req_path_raw;
@@ -478,21 +479,21 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
 
     // Reject path traversal.
     if (req_path[0] == '/' or std.mem.indexOf(u8, req_path, "..") != null) {
-        streamWriteAll(stream, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n") catch {};
+        streamWriteAll(io, stream, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     }
 
     const file_path = std.fs.path.join(allocator, &.{ root_dir, req_path }) catch return;
     defer allocator.free(file_path);
 
-    const file = std.Io.Dir.cwd().openFile(rt.io(), file_path, .{}) catch {
-        streamWriteAll(stream, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n") catch {};
+    const file = std.Io.Dir.cwd().openFile(io, file_path, .{}) catch {
+        streamWriteAll(io, stream, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     };
-    defer file.close(rt.io());
+    defer file.close(io);
 
-    const file_size = if (file.stat(rt.io())) |st| st.size else |_| {
-        streamWriteAll(stream, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n") catch {};
+    const file_size = if (file.stat(io)) |st| st.size else |_| {
+        streamWriteAll(io, stream, "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\n\r\n") catch {};
         return;
     };
 
@@ -503,24 +504,24 @@ fn serveStatic(allocator: std.mem.Allocator, root_dir: []const u8, default_page:
         "HTTP/1.1 200 OK\r\nContent-Type: {s}\r\nContent-Length: {d}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
         .{ mime, file_size },
     ) catch return;
-    streamWriteAll(stream, hdr) catch return;
+    streamWriteAll(io, stream, hdr) catch return;
 
     var buf: [64 * 1024]u8 = undefined;
     while (true) {
-        const n = file.readStreaming(rt.io(), &.{buf[0..]}) catch return;
+        const n = file.readStreaming(io, &.{buf[0..]}) catch return;
         if (n == 0) break;
-        streamWriteAll(stream, buf[0..n]) catch return;
+        streamWriteAll(io, stream, buf[0..n]) catch return;
     }
 }
 
-fn openBrowserThread(allocator: std.mem.Allocator, url: []u8) void {
+fn openBrowserThread(io: std.Io, allocator: std.mem.Allocator, url: []u8) void {
     defer allocator.free(url);
     const argv: []const []const u8 = switch (builtin.os.tag) {
         .macos => &.{ "open", url },
         .windows => &.{ "cmd", "/C", "start", "", url },
         else => &.{ "xdg-open", url },
     };
-    const result = std.process.run(allocator, rt.io(), .{ .argv = argv }) catch return;
+    const result = std.process.run(allocator, io, .{ .argv = argv }) catch return;
     allocator.free(result.stdout);
     allocator.free(result.stderr);
 }

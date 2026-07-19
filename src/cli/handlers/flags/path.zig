@@ -4,7 +4,7 @@ const Config = @import("../../commands/config/config.zig").Config;
 /// handlePaths handles the path option (can be called multiple times).
 /// Accepts comma-separated paths; whitespace around each segment is trimmed.
 /// When called via CLI, the first invocation replaces any file-config paths.
-pub fn handlePaths(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+pub fn handlePaths(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     if (value) |raw| {
         // First CLI --path call: replace file-loaded paths (CLI overrides file config)
         if (!cfg._paths_set_by_cli) {

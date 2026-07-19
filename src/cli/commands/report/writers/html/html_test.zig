@@ -31,10 +31,10 @@ test "writeHtmlReport creates file with expected HTML structure" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeHtmlReport(&data, html_path, ".", &cfg, alloc);
+    try writeHtmlReport(std.testing.io, &data, html_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -71,10 +71,10 @@ test "writeHtmlReport includes summary stats in embedded JSON" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeHtmlReport(&data, html_path, "src", &cfg, alloc);
+    try writeHtmlReport(std.testing.io, &data, html_path, "src", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -110,10 +110,10 @@ test "writeHtmlReport includes file entry path in embedded JSON" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeHtmlReport(&data, html_path, "src", &cfg, alloc);
+    try writeHtmlReport(std.testing.io, &data, html_path, "src", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -146,10 +146,10 @@ test "writeHtmlReport includes binary entry in embedded JSON" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeHtmlReport(&data, html_path, "assets", &cfg, alloc);
+    try writeHtmlReport(std.testing.io, &data, html_path, "assets", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -184,10 +184,10 @@ test "writeHtmlReport sanitizes </script> in content" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeHtmlReport(&data, html_path, ".", &cfg, alloc);
+    try writeHtmlReport(std.testing.io, &data, html_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -220,7 +220,7 @@ test "writeContentJson produces valid JSON object with single entry" {
         .line_count = 1,
     });
 
-    try writeContentJson(&file_entries, content_path, alloc);
+    try writeContentJson(std.testing.io, &file_entries, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -251,7 +251,7 @@ test "writeContentJson produces valid parseable JSON with multiple entries" {
     try file_entries.put("a.zig", .{ .path = "a.zig", .content = c1, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
     try file_entries.put("b.zig", .{ .path = "b.zig", .content = c2, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
 
-    try writeContentJson(&file_entries, content_path, alloc);
+    try writeContentJson(std.testing.io, &file_entries, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -280,7 +280,7 @@ test "writeContentJson escapes special characters in content" {
     defer alloc.free(special_content);
     try file_entries.put("test.txt", .{ .path = "test.txt", .content = special_content, .size = 30, .mtime = 0, .extension = ".txt", .line_count = 2 });
 
-    try writeContentJson(&file_entries, content_path, alloc);
+    try writeContentJson(std.testing.io, &file_entries, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -305,7 +305,7 @@ test "writeContentJson produces empty object for empty map" {
     var file_entries = std.StringHashMap(JobEntry).init(alloc);
     defer file_entries.deinit();
 
-    try writeContentJson(&file_entries, content_path, alloc);
+    try writeContentJson(std.testing.io, &file_entries, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -339,7 +339,7 @@ test "writeCombinedContentJson uses root_path:path as key to avoid collisions" {
         .{ .root_path = "./backend", .file_entries = &entries_a },
         .{ .root_path = "./frontend", .file_entries = &entries_b },
     };
-    try writeCombinedContentJson(&paths, content_path, alloc);
+    try writeCombinedContentJson(std.testing.io, &paths, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -377,7 +377,7 @@ test "writeCombinedContentJson produces valid JSON with two paths" {
         .{ .root_path = "./src", .file_entries = &entries_a },
         .{ .root_path = "./lib", .file_entries = &entries_b },
     };
-    try writeCombinedContentJson(&paths, content_path, alloc);
+    try writeCombinedContentJson(std.testing.io, &paths, content_path, alloc);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, content_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -408,9 +408,9 @@ test "writeCombinedHtmlReport creates file with combined:true in JSON" {
     var binary_entries_b = std.StringHashMap(BinaryEntry).init(alloc);
     defer binary_entries_b.deinit();
 
-    var data_a = try ReportData.init(alloc, &file_entries_a, &binary_entries_a, null);
+    var data_a = try ReportData.init(std.testing.io, alloc, &file_entries_a, &binary_entries_a, null);
     defer data_a.deinit();
-    var data_b = try ReportData.init(alloc, &file_entries_b, &binary_entries_b, null);
+    var data_b = try ReportData.init(std.testing.io, alloc, &file_entries_b, &binary_entries_b, null);
     defer data_b.deinit();
 
     var cfg = Config.default(alloc);
@@ -420,7 +420,7 @@ test "writeCombinedHtmlReport creates file with combined:true in JSON" {
         .{ .root_path = "./src", .data = &data_a },
         .{ .root_path = "./lib", .data = &data_b },
     };
-    try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
+    try writeCombinedHtmlReport(std.testing.io, &paths, html_path, 0, &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -446,7 +446,7 @@ test "writeCombinedHtmlReport includes root_path for each path section" {
     var be = std.StringHashMap(BinaryEntry).init(alloc);
     defer be.deinit();
 
-    var data = try ReportData.init(alloc, &fe, &be, null);
+    var data = try ReportData.init(std.testing.io, alloc, &fe, &be, null);
     defer data.deinit();
 
     var cfg = Config.default(alloc);
@@ -456,7 +456,7 @@ test "writeCombinedHtmlReport includes root_path for each path section" {
         .{ .root_path = "./myproject", .data = &data },
         .{ .root_path = "./myproject/tests", .data = &data },
     };
-    try writeCombinedHtmlReport(&paths, html_path, 0, &cfg, alloc);
+    try writeCombinedHtmlReport(std.testing.io, &paths, html_path, 0, &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -479,7 +479,7 @@ test "writeCombinedHtmlReport with zero paths produces valid HTML" {
     defer cfg.deinit();
 
     const paths: []const CombinedPathData = &.{};
-    try writeCombinedHtmlReport(paths, html_path, 0, &cfg, alloc);
+    try writeCombinedHtmlReport(std.testing.io, paths, html_path, 0, &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.html", alloc, .limited(4 << 20));
     defer alloc.free(content);
@@ -511,7 +511,7 @@ test "writeContentFiles creates one file per entry with correct content" {
         .line_count = 1,
     });
 
-    try writeContentFiles(&file_entries, content_dir, alloc);
+    try writeContentFiles(std.testing.io, &file_entries, content_dir, alloc);
 
     // Compute expected hash for "src/main.zig"
     var h: u32 = 2166136261;
@@ -549,7 +549,7 @@ test "writeContentFiles creates directory and correct number of files" {
     try file_entries.put("a.zig", .{ .path = "a.zig", .content = c1, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
     try file_entries.put("b.zig", .{ .path = "b.zig", .content = c2, .size = 3, .mtime = 0, .extension = ".zig", .line_count = 1 });
 
-    try writeContentFiles(&file_entries, content_dir, alloc);
+    try writeContentFiles(std.testing.io, &file_entries, content_dir, alloc);
 
     // Verify directory exists and has 2 files
     var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });
@@ -586,7 +586,7 @@ test "writeCombinedContentFiles uses combined key for hashing" {
         .{ .root_path = "./backend", .file_entries = &entries_a },
         .{ .root_path = "./frontend", .file_entries = &entries_b },
     };
-    try writeCombinedContentFiles(&paths, content_dir, alloc);
+    try writeCombinedContentFiles(std.testing.io, &paths, content_dir, alloc);
 
     // Two different combined keys should produce two different files
     var dir = try std.Io.Dir.cwd().openDir(std.testing.io, content_dir, .{ .iterate = true });

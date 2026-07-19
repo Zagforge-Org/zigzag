@@ -10,7 +10,7 @@ test "handleInit creates file with default content" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    try handleInit(allocator, tmp_dir.dir);
+    try handleInit(std.testing.io, allocator, tmp_dir.dir);
 
     // Verify file was created with valid default JSON
     const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
@@ -44,7 +44,7 @@ test "handleInit does not overwrite existing file" {
     }
 
     // handleInit should not overwrite
-    try handleInit(allocator, tmp_dir.dir);
+    try handleInit(std.testing.io, allocator, tmp_dir.dir);
 
     const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
     defer allocator.free(content);

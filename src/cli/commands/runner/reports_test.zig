@@ -30,13 +30,13 @@ test "writePathReports creates markdown report file" {
     cfg._output_dir_allocated = true;
 
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
     var result = makeEmptyResult(alloc, tmp_path);
     defer result.deinit(alloc);
 
-    try reports.writePathReports(&result, &cfg, &pool, alloc, null, null, false);
+    try reports.writePathReports(std.testing.io, &result, &cfg, &pool, alloc, null, false);
 
     // resolveOutputPath produces {output_dir}/{basename(root_path)}/report.md
     const basename = std.fs.path.basename(tmp_path);
@@ -82,13 +82,13 @@ test "writePathReports with scanned files produces non-empty report" {
     cfg._output_dir_allocated = true;
 
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
-    var scan_result = try scan.scanPath(&cfg, null, scan_path, &pool, alloc, null);
+    var scan_result = try scan.scanPath(std.testing.io, &cfg, null, scan_path, &pool, alloc);
     defer scan_result.deinit(alloc);
 
-    try reports.writePathReports(&scan_result, &cfg, &pool, alloc, null, null, false);
+    try reports.writePathReports(std.testing.io, &scan_result, &cfg, &pool, alloc, null, false);
 
     const basename = std.fs.path.basename(scan_path);
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ out_path, basename });

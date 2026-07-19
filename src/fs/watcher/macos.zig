@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../runtime.zig");
 const posix = std.posix;
 const c = std.c;
 
@@ -72,6 +71,7 @@ const MTIME_POLL_INTERVAL_NS: i128 = 2 * std.time.ns_per_s;
 const MTIME_BATCH_SIZE: usize = 256;
 
 pub const Watcher = struct {
+    io: std.Io,
     kq: posix.fd_t,
     dir_states: std.AutoHashMap(posix.fd_t, *DirState),
     /// Ordered list of directory fds for round-robin mtime scanning.
@@ -91,7 +91,7 @@ pub const Watcher = struct {
     /// Round-robin cursor for mtime batch scanning.
     mtime_scan_cursor: usize = 0,
 
-    pub fn init(allocator: std.mem.Allocator) !Watcher {
+    pub fn init(io: std.Io, allocator: std.mem.Allocator) !Watcher {
         var skip_dirs: std.ArrayList([]const u8) = .empty;
         errdefer {
             for (skip_dirs.items) |d| allocator.free(d);
@@ -101,13 +101,14 @@ pub const Watcher = struct {
             try skip_dirs.append(allocator, try allocator.dupe(u8, dir));
         }
         return .{
+            .io = io,
             .kq = try kqueue(),
             .dir_states = std.AutoHashMap(posix.fd_t, *DirState).init(allocator),
             .dir_fds = std.ArrayList(posix.fd_t).empty,
             .seen_inodes = std.AutoHashMap(u64, void).init(allocator),
             .allocator = allocator,
             .skip_dirs = skip_dirs,
-            .last_mtime_scan = std.Io.Timestamp.now(rt.io(), .real).nanoseconds,
+            .last_mtime_scan = std.Io.Timestamp.now(io, .real).nanoseconds,
         };
     }
 
@@ -151,7 +152,7 @@ pub const Watcher = struct {
 
     fn watchDirRecursive(self: *Watcher, path: []const u8) !void {
         if (self.shouldSkipPath(path)) return;
-        const dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
+        const dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
         const fd = dir.handle;
 
         // Deduplicate by inode: "apps" and "./apps" are the same physical directory.
@@ -186,13 +187,13 @@ pub const Watcher = struct {
             .path = try self.allocator.dupe(u8, path),
             .files = std.StringHashMap(i128).init(self.allocator),
         };
-        try buildSnapshot(self.allocator, path, &state.files);
+        try buildSnapshot(self.io, self.allocator, path, &state.files);
         try self.dir_states.put(fd, state);
         try self.dir_fds.append(self.allocator, fd);
 
         // Recurse into subdirectories
         var it = dir.iterate();
-        while (try it.next(rt.io())) |entry| {
+        while (try it.next(self.io)) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(self.allocator, &.{ path, entry.name });
             defer self.allocator.free(sub);
@@ -235,7 +236,7 @@ pub const Watcher = struct {
         // directories, advancing a cursor. For small projects (< MTIME_BATCH_SIZE
         // dirs), all directories are scanned every cycle. For large projects,
         // the full sweep is spread across multiple cycles.
-        const now = std.Io.Timestamp.now(rt.io(), .real).nanoseconds;
+        const now = std.Io.Timestamp.now(self.io, .real).nanoseconds;
         if (now - self.last_mtime_scan >= MTIME_POLL_INTERVAL_NS) {
             self.last_mtime_scan = now;
             const total_dirs = self.dir_fds.items.len;
@@ -270,7 +271,7 @@ pub const Watcher = struct {
     /// emit events, and swap the snapshot.
     fn diffAndEmit(self: *Watcher, state: *DirState, out: *std.ArrayList(WatchEvent)) !void {
         var new_files = std.StringHashMap(i128).init(self.allocator);
-        buildSnapshot(self.allocator, state.path, &new_files) catch {
+        buildSnapshot(self.io, self.allocator, state.path, &new_files) catch {
             new_files.deinit();
             return;
         };
@@ -306,13 +307,13 @@ pub const Watcher = struct {
     }
 };
 
-fn buildSnapshot(allocator: std.mem.Allocator, path: []const u8, files: *std.StringHashMap(i128)) !void {
-    var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
-    defer dir.close(rt.io());
+fn buildSnapshot(io: std.Io, allocator: std.mem.Allocator, path: []const u8, files: *std.StringHashMap(i128)) !void {
+    var dir = std.Io.Dir.cwd().openDir(io, path, .{ .iterate = true }) catch return;
+    defer dir.close(io);
     var it = dir.iterate();
-    while (try it.next(rt.io())) |entry| {
+    while (try it.next(io)) |entry| {
         if (entry.kind != .file) continue;
-        const stat = dir.statFile(rt.io(), entry.name, .{}) catch continue;
+        const stat = dir.statFile(io, entry.name, .{}) catch continue;
         const key = try allocator.dupe(u8, entry.name);
         try files.put(key, stat.mtime.nanoseconds);
     }

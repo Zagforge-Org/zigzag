@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../runtime.zig");
 const linux = std.os.linux;
 const posix = std.posix;
 
@@ -79,6 +78,7 @@ pub const WatchEvent = struct {
 // };
 
 pub const Watcher = struct {
+    io: std.Io,
     ifd: posix.fd_t,
     wd_map: std.AutoHashMap(i32, []const u8),
     allocator: std.mem.Allocator,
@@ -93,7 +93,7 @@ pub const Watcher = struct {
     const WATCH_MASK: u32 = linux.IN.CLOSE_WRITE | linux.IN.CREATE | linux.IN.DELETE |
         linux.IN.MOVED_FROM | linux.IN.MOVED_TO | linux.IN.DELETE_SELF;
 
-    pub fn init(allocator: std.mem.Allocator) !Watcher {
+    pub fn init(io: std.Io, allocator: std.mem.Allocator) !Watcher {
         const fd = try inotifyInit1(linux.IN.CLOEXEC);
         errdefer _ = linux.close(fd);
 
@@ -107,6 +107,7 @@ pub const Watcher = struct {
         }
 
         return .{
+            .io = io,
             .ifd = fd,
             .wd_map = std.AutoHashMap(i32, []const u8).init(allocator),
             .allocator = allocator,
@@ -178,10 +179,10 @@ pub const Watcher = struct {
         }
         gop.value_ptr.* = try self.allocator.dupe(u8, path);
 
-        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{ .iterate = true }) catch return;
-        defer dir.close(rt.io());
+        var dir = std.Io.Dir.cwd().openDir(self.io, path, .{ .iterate = true }) catch return;
+        defer dir.close(self.io);
         var it = dir.iterate();
-        while (try it.next(rt.io())) |entry| {
+        while (try it.next(self.io)) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(self.allocator, &.{ path, entry.name });
             defer self.allocator.free(sub);

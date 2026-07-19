@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../runtime.zig");
 const winMmap = @import("./mmap/windows/mmap.zig").WinMMap;
 const unixMmap = @import("./mmap/unix/mmap.zig").UnixMMap;
 const api = @import("../platform/windows/api.zig");
@@ -43,27 +42,27 @@ pub const MappedFile = struct {
 };
 
 /// Check if a path is a file
-pub fn isFile(path: []const u8) !bool {
-    const stat = try std.Io.Dir.cwd().statFile(rt.io(), path, .{});
+pub fn isFile(io: std.Io, path: []const u8) !bool {
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{});
     return stat.kind == .file;
 }
 
 /// Get the size of a file
-pub fn getFileSize(path: []const u8) !u64 {
-    const stat = try std.Io.Dir.cwd().statFile(rt.io(), path, .{});
+pub fn getFileSize(io: std.Io, path: []const u8) !u64 {
+    const stat = try std.Io.Dir.cwd().statFile(io, path, .{});
     if (stat.kind != .file) return FileError.NotAFile;
     return stat.size;
 }
 
 /// Read a file into memory
-pub fn readFileAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
-    return try std.Io.Dir.cwd().readFileAlloc(rt.io(), path, allocator, .unlimited);
+pub fn readFileAlloc(io: std.Io, allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    return try std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .unlimited);
 }
 
 /// Read a file in chunk
-pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *FileContext) !void {
-    const file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
-    defer file.close(rt.io());
+pub fn readFileChunked(io: std.Io, path: []const u8, comptime process: TProcessChunk, ctx: *FileContext) !void {
+    const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+    defer file.close(io);
 
     var buffer: [CHUNK_SIZE]u8 = undefined;
 
@@ -75,18 +74,18 @@ pub fn readFileChunked(path: []const u8, comptime process: TProcessChunk, ctx: *
 }
 
 /// Read a file into memory mapped (OS dependent)
-pub fn readFileMapped(path: []const u8) !MappedFile {
+pub fn readFileMapped(io: std.Io, path: []const u8) !MappedFile {
     const builtin = @import("builtin");
     const native_os = builtin.os.tag;
 
     if (native_os == .windows) {
-        const mapping = try winMmap.open(path);
+        const mapping = try winMmap.open(io, path);
         return MappedFile{
             .data = mapping.data,
             .len = mapping.data.len,
         };
     } else {
-        const mapping = try unixMmap.open(path);
+        const mapping = try unixMmap.open(io, path);
         return MappedFile{
             .data = mapping.data,
             .len = mapping.data.len,
@@ -96,26 +95,27 @@ pub fn readFileMapped(path: []const u8) !MappedFile {
 
 /// Automatically choose best read strategy based on file size
 pub fn readFileAuto(
+    io: std.Io,
     allocator: std.mem.Allocator,
     path: []const u8,
     process: TProcessChunk,
     ctx: *FileContext,
 ) !ReadResult {
-    const size = try getFileSize(path);
+    const size = try getFileSize(io, path);
 
     // Small files → read fully into memory
     if (size <= SMALL_FILE_THRESHOLD) {
-        const data = try readFileAlloc(allocator, path);
+        const data = try readFileAlloc(io, allocator, path);
         return .{ .Alloc = data };
     }
 
     // Medium files → memory map
     if (size <= MMAP_THRESHOLD) {
-        const mapped = try readFileMapped(path);
+        const mapped = try readFileMapped(io, path);
         return .{ .Mapped = mapped };
     }
 
     // Very large files → stream in chunks
-    try readFileChunked(path, process, ctx);
+    try readFileChunked(io, path, process, ctx);
     return .{ .Chunked = {} };
 }

@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../runtime.zig");
 const walk = @import("../../../fs/walk.zig").Walk;
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../../jobs/process.zig").processFileJob;
@@ -14,11 +13,12 @@ const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
 const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
 const report = @import("../report.zig");
-const lg = @import("../../../utils/utils.zig");
+const log = @import("../../../utils/logger/Logger.zig");
 
 /// Per-path persistent state for watch mode.
 /// Heap-allocated so that entries_mutex has a stable address for thread pool jobs.
 pub const State = struct {
+    io: std.Io,
     root_path: []const u8,
     md_path: []const u8,
     file_entries: std.StringHashMap(JobEntry),
@@ -29,6 +29,7 @@ pub const State = struct {
 
     /// Run initial full directory scan and return heap-allocated state.
     pub fn init(
+        io: std.Io,
         stats: *ProcessStats,
         cfg: *const Config,
         cache: ?*Cache,
@@ -36,11 +37,11 @@ pub const State = struct {
         pool: *Pool,
         allocator: std.mem.Allocator,
     ) !*State {
-        var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch return error.NotADirectory;
-        dir.close(rt.io());
+        var dir = std.Io.Dir.cwd().openDir(io, path, .{}) catch return error.NotADirectory;
+        dir.close(io);
 
         const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
-        const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
+        const md_path = try report.resolveOutputPath(io, allocator, cfg, path, output_filename);
         errdefer allocator.free(md_path);
 
         const self = try allocator.create(State);
@@ -50,7 +51,9 @@ pub const State = struct {
             .file_entries = std.StringHashMap(JobEntry).init(allocator),
             .binary_entries = std.StringHashMap(BinaryEntry).init(allocator),
             .entries_mutex = .init,
+            .io = io,
             .file_ctx = .{
+                .io = io,
                 .ignore_list = .empty,
                 .md = undefined,
                 .md_mutex = undefined,
@@ -60,7 +63,7 @@ pub const State = struct {
 
         try self.buildIgnoreList(cfg);
 
-        var wg = WaitGroup.init();
+        var wg = WaitGroup.init(io);
         var walker_ctx = WalkerCtx{
             .pool = pool,
             .wg = &wg,
@@ -73,13 +76,13 @@ pub const State = struct {
             .allocator = allocator,
         };
 
-        const walker = try walk.init(allocator);
+        const walker = try walk.init(io, allocator);
         const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
         try walker.walkDir(path, walkerCallback, walk_ctx);
         wg.wait();
 
         const sv = stats.getSummary();
-        lg.printSummary(.{ .path = path, .total = sv.total, .source = sv.source, .cached = sv.cached, .fresh = sv.processed, .binary = sv.binary, .ignored = sv.ignored });
+        log.summary(io, .{ .path = path, .total = sv.total, .source = sv.source, .cached = sv.cached, .fresh = sv.processed, .binary = sv.binary, .ignored = sv.ignored });
 
         return self;
     }
@@ -136,8 +139,8 @@ pub const State = struct {
     /// Called after an inotify queue overflow to recover from lost events.
     pub fn rescan(self: *State, cache: ?*Cache, pool: *Pool) !void {
         {
-            self.entries_mutex.lockUncancelable(rt.io());
-            defer self.entries_mutex.unlock(rt.io());
+            self.entries_mutex.lockUncancelable(self.io);
+            defer self.entries_mutex.unlock(self.io);
             var it = self.file_entries.iterator();
             while (it.next()) |entry| freeJobEntry(entry.value_ptr.*, self.allocator);
             self.file_entries.clearRetainingCapacity();
@@ -146,7 +149,7 @@ pub const State = struct {
             self.binary_entries.clearRetainingCapacity();
         }
 
-        var wg = WaitGroup.init();
+        var wg = WaitGroup.init(self.io);
         var stats = ProcessStats.init();
         var walker_ctx = WalkerCtx{
             .pool = pool,
@@ -160,7 +163,7 @@ pub const State = struct {
             .allocator = self.allocator,
         };
 
-        const walker = try walk.init(self.allocator);
+        const walker = try walk.init(self.io, self.allocator);
         const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
         try walker.walkDir(self.root_path, walkerCallback, walk_ctx);
         wg.wait();
@@ -173,6 +176,7 @@ pub const State = struct {
         const path_copy = try self.allocator.dupe(u8, file_path);
         var stats = ProcessStats.init();
         const job = Job{
+            .io = self.io,
             .path = path_copy,
             .file_ctx = &self.file_ctx,
             .cache = cache,
@@ -184,15 +188,15 @@ pub const State = struct {
             .thread_allocator = self.allocator, // placeholder; Task 2.3 wires real arena
         };
 
-        var wg = WaitGroup.init();
+        var wg = WaitGroup.init(self.io);
         try pool.spawnWg(&wg, processFileJob, .{job});
         wg.wait();
     }
 
     /// Remove a deleted file's entry from the in-memory map.
     pub fn removeFile(self: *State, file_path: []const u8) void {
-        self.entries_mutex.lockUncancelable(rt.io());
-        defer self.entries_mutex.unlock(rt.io());
+        self.entries_mutex.lockUncancelable(self.io);
+        defer self.entries_mutex.unlock(self.io);
         if (self.file_entries.fetchRemove(file_path)) |kv| freeJobEntry(kv.value, self.allocator);
         if (self.binary_entries.fetchRemove(file_path)) |kv| freeBinaryEntry(kv.value, self.allocator);
     }

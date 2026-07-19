@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../../../runtime.zig");
 
 pub const ChunkMeta = struct {
     file_name: []const u8, // owned
@@ -9,6 +8,7 @@ pub const ChunkMeta = struct {
 };
 
 pub const ChunkWriter = struct {
+    io: std.Io,
     base_path: []const u8, // NOT owned (caller owns)
     root_path: []const u8, // NOT owned (caller owns)
     chunk_limit: usize,
@@ -20,11 +20,12 @@ pub const ChunkWriter = struct {
     current_chunk_files: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
 
-    pub fn init(base_path: []const u8, root_path: []const u8, chunk_limit: usize, allocator: std.mem.Allocator) !ChunkWriter {
+    pub fn init(io: std.Io, base_path: []const u8, root_path: []const u8, chunk_limit: usize, allocator: std.mem.Allocator) !ChunkWriter {
         const path = try chunkFileName(base_path, 1, allocator);
         defer allocator.free(path);
-        const file = try std.Io.Dir.cwd().createFile(rt.io(), path, .{});
+        const file = try std.Io.Dir.cwd().createFile(io, path, .{});
         return ChunkWriter{
+            .io = io,
             .base_path = base_path,
             .root_path = root_path,
             .chunk_limit = chunk_limit,
@@ -40,7 +41,7 @@ pub const ChunkWriter = struct {
 
     /// Write raw bytes to current chunk. Does NOT trigger rotation.
     pub fn writeRaw(self: *ChunkWriter, content: []const u8) !void {
-        try self.file.writeStreamingAll(rt.io(), content);
+        try self.file.writeStreamingAll(self.io, content);
         self.current_bytes += content.len;
     }
 
@@ -62,13 +63,13 @@ pub const ChunkWriter = struct {
             .index = self.chunk_index,
         });
         // Open next chunk
-        self.file.close(rt.io());
+        self.file.close(self.io);
         self.chunk_index += 1;
         self.current_bytes = 0;
         self.current_chunk_files = .empty;
         const next_path = try chunkFileName(self.base_path, self.chunk_index, self.allocator);
         defer self.allocator.free(next_path);
-        self.file = try std.Io.Dir.cwd().createFile(rt.io(), next_path, .{});
+        self.file = try std.Io.Dir.cwd().createFile(self.io, next_path, .{});
     }
 
     /// Write file content. Triggers rotation if content would overflow chunk (and chunk non-empty).
@@ -94,7 +95,7 @@ pub const ChunkWriter = struct {
             .files = owned_files,
             .index = self.chunk_index,
         });
-        self.file.close(rt.io());
+        self.file.close(self.io);
         self.finalized = true;
         // Write manifest only for multi-chunk
         if (self.chunk_index > 1) {
@@ -103,7 +104,7 @@ pub const ChunkWriter = struct {
     }
 
     pub fn deinit(self: *ChunkWriter) void {
-        if (!self.finalized) self.file.close(rt.io());
+        if (!self.finalized) self.file.close(self.io);
         for (self.chunk_metas.items) |meta| {
             self.allocator.free(meta.file_name);
             for (meta.files) |f| self.allocator.free(f);
@@ -117,13 +118,13 @@ pub const ChunkWriter = struct {
     fn writeManifest(self: *ChunkWriter) !void {
         const manifest_path = try std.mem.concat(self.allocator, u8, &.{ self.base_path, ".manifest.json" });
         defer self.allocator.free(manifest_path);
-        const mf = try std.Io.Dir.cwd().createFile(rt.io(), manifest_path, .{});
-        defer mf.close(rt.io());
+        const mf = try std.Io.Dir.cwd().createFile(self.io, manifest_path, .{});
+        defer mf.close(self.io);
 
         var aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer aw.deinit();
 
-        const ts_raw = std.Io.Timestamp.now(rt.io(), .real).toSeconds();
+        const ts_raw = std.Io.Timestamp.now(self.io, .real).toSeconds();
         const ts: u64 = if (ts_raw > 0) @intCast(ts_raw) else 0;
         const es = std.time.epoch.EpochSeconds{ .secs = ts };
         const ed = es.getEpochDay();
@@ -169,7 +170,7 @@ pub const ChunkWriter = struct {
         try ws.endArray();
         try ws.endObject();
 
-        try mf.writeStreamingAll(rt.io(), aw.written());
+        try mf.writeStreamingAll(self.io, aw.written());
     }
 };
 

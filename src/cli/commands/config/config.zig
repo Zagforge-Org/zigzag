@@ -212,7 +212,7 @@ pub const Config = struct {
         }
     }
 
-    fn applyArgs(self: *Self, args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
+    fn applyArgs(io: std.Io, self: *Self, args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
         var i: usize = 0;
 
         while (i < args.len) : (i += 1) {
@@ -232,7 +232,7 @@ pub const Config = struct {
                         }
                     }
 
-                    flag.handler(self, allocator, value) catch |err| {
+                    flag.handler(io, self, allocator, value) catch |err| {
                         return .{ .Other = @errorName(err) };
                     };
 
@@ -250,9 +250,9 @@ pub const Config = struct {
     }
 
     // Parses command-line arguments into a Config instance.
-    pub fn parse(args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
+    pub fn parse(io: std.Io, args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
         var cfg = Self.default(allocator);
-        const result = applyArgs(&cfg, args, allocator);
+        const result = applyArgs(io, &cfg, args, allocator);
         switch (result) {
             .Success => return .{ .Success = cfg },
             else => |err_payload| {
@@ -262,11 +262,11 @@ pub const Config = struct {
         }
     }
 
-    pub fn parseFromFile(args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
+    pub fn parseFromFile(io: std.Io, args: [][]const u8, allocator: std.mem.Allocator) ConfigParseResult {
         var cfg = Self.default(allocator);
 
         // Try to load zig.conf.json
-        if (FileConf.load(allocator)) |maybe_conf| {
+        if (FileConf.load(io, allocator)) |maybe_conf| {
             if (maybe_conf) |parsed_conf| {
                 var fc = parsed_conf;
                 defer fc.deinit();
@@ -281,7 +281,7 @@ pub const Config = struct {
         }
 
         // Capture the result of applyArgs
-        const result = applyArgs(&cfg, args, allocator);
+        const result = applyArgs(io, &cfg, args, allocator);
 
         switch (result) {
             .Success => return .{ .Success = cfg },

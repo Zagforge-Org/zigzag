@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../../../runtime.zig");
 const FileError = @import("../common.zig").FileError;
 
 /// UnixMMap represents a memory-mapped file on Unix-like systems.
@@ -7,11 +6,11 @@ pub const UnixMMap = struct {
     const Self = @This();
     data: []u8,
 
-    pub fn open(path: []const u8) !Self {
-        const file = try std.Io.Dir.cwd().openFile(rt.io(), path, .{});
-        defer file.close(rt.io());
+    pub fn open(io: std.Io, path: []const u8) !Self {
+        const file = try std.Io.Dir.cwd().openFile(io, path, .{});
+        defer file.close(io);
 
-        const file_size = (try file.stat(rt.io())).size;
+        const file_size = (try file.stat(io)).size;
 
         if (file_size == 0) return Self{
             .data = &[_]u8{},

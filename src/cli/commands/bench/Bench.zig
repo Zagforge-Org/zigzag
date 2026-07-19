@@ -5,7 +5,7 @@ const std = @import("std");
 const Config = @import("../config/config.zig").Config;
 const Cache = @import("../../../cache/Cache.zig");
 const runner = @import("../runner.zig");
-const lg = @import("../../../utils/utils.zig");
+const log = @import("../../../utils/logger/Logger.zig");
 const BenchResult = @import("BenchResult.zig");
 const Table = @import("Table.zig");
 
@@ -25,13 +25,13 @@ pub fn run(self: Self) !void {
     const cache_path = try std.fs.path.join(self.allocator, cache_dir);
     defer self.allocator.free(cache_path);
 
-    lg.printStep("Loading cache...", .{});
+    log.step(self.io, "Loading cache...", .{});
     var cache = try Cache.init(self.allocator, self.io, cache_path, self.cfg.small_threshold);
     defer cache.deinit();
     if (cache.entryCount() > 0)
-        lg.printSuccess("Cache: {d} entries", .{cache.entryCount()});
+        log.success(self.io, "Cache: {d} entries", .{cache.entryCount()});
 
     var result: BenchResult = .{};
-    try runner.exec(self.cfg, &cache, self.allocator, &result);
+    try runner.exec(self.io, self.cfg, &cache, self.allocator, &result);
     Table.init(&result).print(self.io);
 }

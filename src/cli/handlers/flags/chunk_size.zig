@@ -1,7 +1,7 @@
 const std = @import("std");
 const Config = @import("../../commands/config/config.zig").Config;
 
-pub fn handleChunkSize(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+pub fn handleChunkSize(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     const raw = value orelse return;
     const trimmed = std.mem.trim(u8, raw, &std.ascii.whitespace);

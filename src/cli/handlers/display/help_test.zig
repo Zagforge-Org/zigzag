@@ -1,10 +1,9 @@
 const std = @import("std");
-const printHelp = @import("./help.zig").printHelp;
-const makeTestConfig = @import("../internal/test_config.zig").makeTestConfig;
+const writeHelp = @import("./help.zig").writeHelp;
 
-test "printHelp runs without error" {
-    const allocator = std.testing.allocator;
-    var cfg = makeTestConfig(allocator);
-    defer cfg.deinit();
-    try printHelp(&cfg, allocator, null);
+test "writeHelp writes usage text" {
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    try writeHelp(&aw.writer);
+    try std.testing.expect(std.mem.indexOf(u8, aw.written(), "Usage: zigzag") != null);
 }

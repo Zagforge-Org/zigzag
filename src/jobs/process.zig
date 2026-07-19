@@ -1,5 +1,4 @@
 const std = @import("std");
-const rt = @import("../runtime.zig");
 const Job = @import("job.zig").Job;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
@@ -146,6 +145,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const file_entries = job.file_entries;
     const binary_entries = job.binary_entries;
     const entries_mutex = job.entries_mutex;
+    const io = job.io;
 
     if (file_ctx) |ctx| {
         if (shouldIgnore(path, ctx.ignore_list)) {
@@ -157,7 +157,7 @@ pub fn processFileJob(job: Job) anyerror!void {
     const allocator = job.allocator;
 
     // Check if file still exists
-    const stat = std.Io.Dir.cwd().statFile(rt.io(), path, .{}) catch |err| {
+    const stat = std.Io.Dir.cwd().statFile(io, path, .{}) catch |err| {
         if (err == error.FileNotFound) {
             std.log.debug(
                 "File not found (may have been moved/deleted): {s}",
@@ -225,7 +225,7 @@ pub fn processFileJob(job: Job) anyerror!void {
                 counted_as_cached = false;
                 _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-                const original = fs.readFileAlloc(allocator, path) catch |read_err| {
+                const original = fs.readFileAlloc(io, allocator, path) catch |read_err| {
                     std.log.err(
                         "Failed to read {s}: {}",
                         .{ path, read_err },
@@ -250,7 +250,7 @@ pub fn processFileJob(job: Job) anyerror!void {
             );
             _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-            content = fs.readFileAlloc(allocator, path) catch |err| {
+            content = fs.readFileAlloc(io, allocator, path) catch |err| {
                 std.log.debug(
                     "Failed to read {s}: {}",
                     .{ path, err },
@@ -284,7 +284,7 @@ pub fn processFileJob(job: Job) anyerror!void {
         );
         _ = stats.processed_files.fetchAdd(1, .monotonic);
 
-        content = fs.readFileAlloc(allocator, path) catch |err| {
+        content = fs.readFileAlloc(io, allocator, path) catch |err| {
             std.log.debug(
                 "Failed to read {s}: {}",
                 .{ path, err },
@@ -312,8 +312,8 @@ pub fn processFileJob(job: Job) anyerror!void {
             _ = stats.processed_files.fetchSub(1, .monotonic);
         }
 
-        entries_mutex.lockUncancelable(rt.io());
-        defer entries_mutex.unlock(rt.io());
+        entries_mutex.lockUncancelable(io);
+        defer entries_mutex.unlock(io);
 
         const path_copy = try allocator.dupe(u8, path);
         const ext_copy = try allocator.dupe(u8, extension);
@@ -334,8 +334,8 @@ pub fn processFileJob(job: Job) anyerror!void {
     // =========================
     // Store result
     // =========================
-    entries_mutex.lockUncancelable(rt.io());
-    defer entries_mutex.unlock(rt.io());
+    entries_mutex.lockUncancelable(io);
+    defer entries_mutex.unlock(io);
 
     const path_copy = try allocator.dupe(u8, path);
     const ext_copy = try allocator.dupe(u8, extension);
