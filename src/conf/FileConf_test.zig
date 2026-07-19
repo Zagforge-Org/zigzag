@@ -1,4 +1,4 @@
-const FileConf = @import("./file.zig").FileConf;
+const FileConf = @import("./FileConf.zig");
 const std = @import("std");
 
 test "loadFromPath returns null for non-existent file" {
@@ -389,6 +389,6 @@ test "FileConf old 'ignore_patterns' key is silently ignored" {
     const result = try FileConf.loadFromPath(std.testing.io, allocator, tmp_path);
     try std.testing.expect(result != null);
     defer result.?.deinit();
-    // Old key is unknown field — parsed as null
+    // Old key is unknown field; parsed as null
     try std.testing.expect(result.?.value.ignores == null);
 }

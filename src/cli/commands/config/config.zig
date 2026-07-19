@@ -1,6 +1,6 @@
 const std = @import("std");
 const flags = @import("../../flags.zig").flags;
-const FileConf = @import("../../../conf/file.zig").FileConf;
+const FileConf = @import("../../../conf/FileConf.zig");
 const parseTimezoneStr = @import("./timezone/timezone.zig").parseTimezoneStr;
 
 pub const VERSION = @import("options").version_string;
