@@ -2,6 +2,7 @@ const std = @import("std");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessWriter = @import("../cli/commands/writer.zig").TProcessWriter;
 const Context = @import("../walker/Context.zig");
+const JobContext = @import("../workers/Pool.zig").JobContext;
 
 pub const WalkError = error{
     NotADirectory,
@@ -11,6 +12,7 @@ pub const WalkError = error{
 /// path ownership is transferred in; freed here on completion.
 /// WaitGroup is balanced by the pool's Closure.runFn — do NOT call wg.finish().
 fn walkSubtreeJob(
+    _: JobContext,
     walk_self: Walk,
     path: []const u8,
     depth: usize,
@@ -97,10 +99,10 @@ pub const Walk = struct {
                     } else {
                         // Ownership of full_path transfers to the spawned job.
                         const path_owned = full_path;
-                        walker_ctx.pool.spawnWg(walker_ctx.wg, walkSubtreeJob, .{
+                        walker_ctx.pool.spawn(walker_ctx.wg, walkSubtreeJob, .{
                             self, path_owned, depth + 1, callback, ctx, walker_ctx,
                         }) catch {
-                            // spawnWg ran inline on alloc failure — path freed by job; wg balanced.
+                            // spawn ran inline on alloc failure; path freed by job; wg balanced.
                             // If the inline run failed, log and free path defensively.
                             self.allocator.free(path_owned);
                         };

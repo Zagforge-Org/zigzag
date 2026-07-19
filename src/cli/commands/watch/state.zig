@@ -4,8 +4,8 @@ const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
 const processFileJob = @import("../../../jobs/process.zig").processFileJob;
 const Config = @import("../config/config.zig").Config;
 const FileContext = @import("../../context.zig").FileContext;
-const Pool = @import("../../../workers/pool.zig").Pool;
-const WaitGroup = @import("../../../workers/wait_group.zig").WaitGroup;
+const Pool = @import("../../../workers/Pool.zig");
+const WaitGroup = @import("../../../workers/WaitGroup.zig");
 const Cache = @import("../../../cache/Cache.zig");
 const ProcessStats = @import("../stats.zig").ProcessStats;
 const Job = @import("../../../jobs/job.zig").Job;
@@ -185,11 +185,10 @@ pub const State = struct {
             .binary_entries = &self.binary_entries,
             .entries_mutex = &self.entries_mutex,
             .allocator = self.allocator,
-            .thread_allocator = self.allocator, // placeholder; Task 2.3 wires real arena
         };
 
         var wg = WaitGroup.init(self.io);
-        try pool.spawnWg(&wg, processFileJob, .{job});
+        try pool.spawn(&wg, processFileJob, .{job});
         wg.wait();
     }
 

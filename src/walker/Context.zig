@@ -1,7 +1,7 @@
 const std = @import("std");
 
-const Pool = @import("../workers/pool.zig").Pool;
-const WaitGroup = @import("../workers/wait_group.zig").WaitGroup;
+const Pool = @import("../workers/Pool.zig");
+const WaitGroup = @import("../workers/WaitGroup.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const Cache = @import("../cache/Cache.zig");
 const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;

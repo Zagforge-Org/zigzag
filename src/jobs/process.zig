@@ -1,4 +1,5 @@
 const std = @import("std");
+const JobContext = @import("../workers/Pool.zig").JobContext;
 const Job = @import("job.zig").Job;
 const BinaryEntry = @import("entry.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
@@ -132,7 +133,7 @@ fn countLines(content: []const u8) usize {
     return count;
 }
 
-pub fn processFileJob(job: Job) anyerror!void {
+pub fn processFileJob(_: JobContext, job: Job) anyerror!void {
     defer {
         var mutable_job = job;
         mutable_job.deinit();

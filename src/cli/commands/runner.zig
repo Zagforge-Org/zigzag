@@ -3,7 +3,7 @@ const scan_mod = @import("./runner/scan.zig");
 const reports_mod = @import("./runner/reports.zig");
 const Config = @import("config/config.zig").Config;
 const Cache = @import("../../cache/Cache.zig");
-const Pool = @import("../../workers/pool.zig").Pool;
+const Pool = @import("../../workers/Pool.zig");
 const log = @import("../../utils/logger/Logger.zig");
 
 pub const BenchResult = @import("./bench/BenchResult.zig");
