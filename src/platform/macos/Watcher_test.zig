@@ -37,7 +37,7 @@ test "addSkipDir suppresses events from skipped subdirectory" {
     try tmp.dir.createDir(std.testing.io, "skip_me", .default_dir);
     try tmp.dir.createDir(std.testing.io, "keep_me", .default_dir);
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
 
     try w.addSkipDir("skip_me");
@@ -63,7 +63,7 @@ test "addSkipDir suppresses events from skipped subdirectory" {
 
 test "addSkipDir accepts a full path and extracts basename" {
     const alloc = std.testing.allocator;
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.addSkipDir("/some/long/path/to/output-dir");
     try w.addSkipDir("relative/nested/cache");
@@ -79,7 +79,7 @@ test "poll emits created event on new file" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -110,7 +110,7 @@ test "poll emits deleted event on file removal" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -144,7 +144,7 @@ test "mtime fallback detects in-place file modification" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -185,7 +185,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -220,7 +220,7 @@ test "mtime scan advances round-robin cursor" {
     try tmp.dir.createDir(std.testing.io, "dir_b", .default_dir);
     try tmp.dir.createDir(std.testing.io, "dir_c", .default_dir);
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -252,7 +252,7 @@ test "poll returns 0 events when no files changed" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 
@@ -276,7 +276,7 @@ test "watchDir deduplicates overlapping paths by inode" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
 
     try w.watchDir(path);
@@ -299,7 +299,7 @@ test "poll detects file created in subdirectory" {
 
     try tmp.dir.createDir(std.testing.io, "subdir", .default_dir);
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
 

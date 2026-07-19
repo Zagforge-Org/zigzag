@@ -13,7 +13,7 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
     try tmp.dir.createDir(std.testing.io, "skip_me", .default_dir);
     try tmp.dir.createDir(std.testing.io, "keep_me", .default_dir);
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
 
     try w.addSkipDir("skip_me");
@@ -53,7 +53,7 @@ test "Watcher.addSkipDir suppresses events from skipped subdirectory" {
 
 test "Watcher.addSkipDir accepts a full path and extracts basename" {
     const alloc = std.testing.allocator;
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.addSkipDir("C:\\some\\path\\output-dir");
     try w.addSkipDir("relative\\nested\\cache");
@@ -73,7 +73,7 @@ test "Watcher.poll emits modified event on file write" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
@@ -118,7 +118,7 @@ test "Watcher.poll emits deleted event on file removal" {
         f.close(std.testing.io);
     }
 
-    var w = try Watcher.init(alloc);
+    var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
     // Let the background thread start and enter ReadDirectoryChangesW
