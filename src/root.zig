@@ -63,7 +63,7 @@ test {
     _ = @import("./cache/Cache_test.zig");
 
     _ = @import("./fs/directory_test.zig");
-    _ = @import("./fs/watcher.zig");
+    _ = @import("./platform/watcher.zig");
     _ = @import("./jobs/entries_test.zig");
     _ = @import("./jobs/inspect_test.zig");
 
@@ -80,13 +80,13 @@ test {
 
     switch (builtin.os.tag) {
         .linux => {
-            _ = @import("./fs/watcher/linux_test.zig");
+            _ = @import("./platform/linux/Watcher_test.zig");
         },
         .macos, .freebsd, .netbsd, .openbsd, .dragonfly => {
-            _ = @import("./fs/watcher/macos_test.zig");
+            _ = @import("./platform/macos/Watcher_test.zig");
         },
         .windows => {
-            _ = @import("./fs/watcher/windows_test.zig");
+            _ = @import("./platform/windows/Watcher_test.zig");
         },
         else => {},
     }

@@ -1,11 +1,9 @@
 const std = @import("std");
-const Watcher = @import("./macos.zig").Watcher;
-const WatchEvent = @import("./macos.zig").WatchEvent;
-const WatchEventKind = @import("./macos.zig").WatchEventKind;
+const Watcher = @import("./Watcher.zig");
+const WatchEvent = @import("./Watcher.zig").WatchEvent;
+const WatchEventKind = @import("./Watcher.zig").WatchEventKind;
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 fn freeEvents(alloc: std.mem.Allocator, events: *std.ArrayList(WatchEvent)) void {
     for (events.items) |ev| alloc.free(ev.path);
@@ -26,9 +24,7 @@ fn hasEventAnyKind(events: []const WatchEvent, suffix: []const u8) bool {
     return false;
 }
 
-// ---------------------------------------------------------------------------
 // Skip-dir tests
-// ---------------------------------------------------------------------------
 
 test "addSkipDir suppresses events from skipped subdirectory" {
     const alloc = std.testing.allocator;
@@ -73,9 +69,7 @@ test "addSkipDir accepts a full path and extracts basename" {
     try w.addSkipDir("relative/nested/cache");
 }
 
-// ---------------------------------------------------------------------------
 // Create / delete tests (kqueue instant detection)
-// ---------------------------------------------------------------------------
 
 test "poll emits created event on new file" {
     const alloc = std.testing.allocator;
@@ -130,12 +124,10 @@ test "poll emits deleted event on file removal" {
     try std.testing.expect(hasEvent(events.items, "to_delete.txt", .deleted));
 }
 
-// ---------------------------------------------------------------------------
-// In-place modification test (mtime fallback — the bug that was fixed)
+// In-place modification test
 //
 // kqueue NOTE_WRITE on a directory fd does NOT fire when an existing file's
 // content is modified in-place. The mtime fallback scan must detect it.
-// ---------------------------------------------------------------------------
 
 test "mtime fallback detects in-place file modification" {
     const alloc = std.testing.allocator;
@@ -174,7 +166,7 @@ test "mtime fallback detects in-place file modification" {
     _ = try w.poll(&events, 500);
 
     // The change must be detected (kind may be .modified or .created depending
-    // on whether kqueue also fired — either way, detection is what matters).
+    // on whether kqueue also fired).
     try std.testing.expect(hasEventAnyKind(events.items, "existing.txt"));
 }
 
@@ -214,9 +206,7 @@ test "mtime fallback detects in-place modification in subdirectory" {
     try std.testing.expect(hasEventAnyKind(events.items, "config.txt"));
 }
 
-// ---------------------------------------------------------------------------
 // Round-robin batching
-// ---------------------------------------------------------------------------
 
 test "mtime scan advances round-robin cursor" {
     const alloc = std.testing.allocator;
@@ -246,9 +236,7 @@ test "mtime scan advances round-robin cursor" {
     try std.testing.expect(w.mtime_scan_cursor > 0);
 }
 
-// ---------------------------------------------------------------------------
 // No spurious events
-// ---------------------------------------------------------------------------
 
 test "poll returns 0 events when no files changed" {
     const alloc = std.testing.allocator;
@@ -278,9 +266,7 @@ test "poll returns 0 events when no files changed" {
     try std.testing.expectEqual(@as(usize, 0), n);
 }
 
-// ---------------------------------------------------------------------------
 // Inode deduplication
-// ---------------------------------------------------------------------------
 
 test "watchDir deduplicates overlapping paths by inode" {
     const alloc = std.testing.allocator;
@@ -301,9 +287,7 @@ test "watchDir deduplicates overlapping paths by inode" {
     try std.testing.expectEqual(count_after_first, w.dir_fds.items.len);
 }
 
-// ---------------------------------------------------------------------------
 // Subdirectory file creation (kqueue)
-// ---------------------------------------------------------------------------
 
 test "poll detects file created in subdirectory" {
     const alloc = std.testing.allocator;
