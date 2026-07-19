@@ -4,7 +4,7 @@ pub const colorCode = @import("./colors/colors.zig").colorCode;
 
 pub const fmtBytes = @import("./fmt/fmt.zig").fmtBytes;
 pub const fmtElapsed = @import("./fmt/fmt.zig").fmtElapsed;
-pub const fmtDuration = @import("./fmt/fmt.zig").fmtDuration;
+pub const fmtMilliseconds = @import("./fmt/fmt.zig").fmtMilliseconds;
 
 pub const ProgressBar = @import("./progress/progress.zig").ProgressBar;
 

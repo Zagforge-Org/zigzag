@@ -1,51 +1,88 @@
 const std = @import("std");
 
+const KB: u64 = 1024;
+const MB: u64 = KB * 1024;
+
+const ns_per_ms = std.time.ns_per_ms;
+const ns_per_s = std.time.ns_per_s;
+
 /// Formats a byte count into a human-readable string.
-/// Writes into `buf` and returns a slice backed by it.
-/// Caller must consume the result before reusing `buf`.
 ///
-/// `html` appends " (w/ content)" when an HTML content sidecar exists.
-/// Returns "—" for zero bytes.
-pub fn fmtBytes(buf: []u8, n: u64, html: bool) []const u8 {
-    if (n == 0) return "—";
+/// Writes into `buf` and returns a slice backed by it.
+/// The returned slice is valid until `buf` is reused.
+///
+/// Examples:
+/// - "—"
+/// - "512 B"
+/// - "1.5 KB"
+/// - "12.8 MB"
+///
+/// When `html` is true, appends " (w/ content)".
+pub fn fmtBytes(buf: []u8, bytes: u64, html: bool) []const u8 {
+    if (bytes == 0)
+        return "—";
 
-    const suffix: []const u8 = if (html) " (w/ content)" else "";
+    const suffix = if (html) " (w/ content)" else "";
 
-    const value: f64 = @floatFromInt(n);
-    const fmt: []const u8, const size: f64 = if (n >= 1024 * 1024)
-        .{ "MB", value / (1024 * 1024) }
-    else if (n >= 1024)
-        .{ "KB", value / 1024 }
-    else
-        return std.fmt.bufPrint(buf, "{d} B{s}", .{ n, suffix }) catch "?";
+    if (bytes < KB)
+        return std.fmt.bufPrint(buf, "{d} B{s}", .{
+            bytes,
+            suffix,
+        }) catch "?";
 
-    return std.fmt.bufPrint(buf, "{d:.1} {s}{s}", .{ size, fmt, suffix }) catch "?";
+    var value: f64 = @floatFromInt(bytes);
+    var unit: []const u8 = "KB";
+
+    if (bytes >= MB) {
+        value /= MB;
+        unit = "MB";
+    } else {
+        value /= KB;
+    }
+
+    return std.fmt.bufPrint(buf, "{d:.1} {s}{s}", .{
+        value,
+        unit,
+        suffix,
+    }) catch "?";
 }
 
-/// Formats a nanosecond duration as "< 1 ms" or "{d} ms".
-pub fn fmtDuration(buf: []u8, ns: u64) []const u8 {
-    const ns_per_ms = std.time.ns_per_ms;
+/// Formats a duration in milliseconds.
+///
+/// Examples:
+/// - "< 1 ms"
+/// - "42 ms"
+pub fn fmtMilliseconds(buf: []u8, ns: u64) []const u8 {
     const ms = ns / ns_per_ms;
 
-    if (ms == 0) return "< 1 ms";
+    if (ms == 0)
+        return "< 1 ms";
 
-    return std.fmt.bufPrint(buf, "{d} ms", .{ms}) catch "? ms";
+    return std.fmt.bufPrint(buf, "{d} ms", .{ms}) catch "?";
 }
 
-/// Formats an integer with thousands separators (e.g. 1234567 -> "1,234,567").
-pub fn fmtThousands(buf: []u8, n: usize) []const u8 {
+/// Formats an integer with thousands separators.
+///
+/// Example:
+/// 1234567 -> "1,234,567"
+pub fn fmtThousands(buf: []u8, value: usize) []const u8 {
     var tmp: [32]u8 = undefined;
-    const digits = std.fmt.bufPrint(&tmp, "{d}", .{n}) catch return "";
+    const digits = std.fmt.bufPrint(&tmp, "{d}", .{value}) catch return "?";
 
     var out: usize = 0;
+
     for (digits, 0..) |c, i| {
-        if (i > 0 and (digits.len - i) % 3 == 0) {
-            if (out >= buf.len) return buf[0..out];
+        if (i != 0 and (digits.len - i) % 3 == 0) {
+            if (out >= buf.len)
+                return buf[0..out];
+
             buf[out] = ',';
             out += 1;
         }
 
-        if (out >= buf.len) return buf[0..out];
+        if (out >= buf.len)
+            return buf[0..out];
+
         buf[out] = c;
         out += 1;
     }
@@ -53,24 +90,27 @@ pub fn fmtThousands(buf: []u8, n: usize) []const u8 {
     return buf[0..out];
 }
 
-/// Formats a nanosecond duration into a human-readable string.
+/// Formats an elapsed duration.
 ///
-/// Writes into `buf` and returns a slice backed by it.
-///
-/// - `< 1ms`
-/// - `{d}ms`
-/// - `{d}.{d:0>2}s`
+/// Examples:
+/// - "< 1ms"
+/// - "42ms"
+/// - "1.53s"
+/// - "12.08s"
 pub fn fmtElapsed(buf: []u8, ns: u64) []const u8 {
-    if (ns < std.time.ns_per_ms)
+    if (ns < ns_per_ms)
         return "< 1ms";
 
-    if (ns < std.time.ns_per_s) {
-        const ms = ns / std.time.ns_per_ms;
-        return std.fmt.bufPrint(buf, "{d}ms", .{ms}) catch "";
+    if (ns < ns_per_s) {
+        const ms = ns / ns_per_ms;
+        return std.fmt.bufPrint(buf, "{d}ms", .{ms}) catch "?";
     }
 
-    const secs = ns / std.time.ns_per_s;
-    const hundredths = (ns % std.time.ns_per_s) / (std.time.ns_per_s / 100);
+    const secs = ns / ns_per_s;
+    const hundredths = (ns % ns_per_s) / (ns_per_s / 100);
 
-    return std.fmt.bufPrint(buf, "{d}.{d:0>2}s", .{ secs, hundredths }) catch "";
+    return std.fmt.bufPrint(buf, "{d}.{d:0>2}s", .{
+        secs,
+        hundredths,
+    }) catch "?";
 }

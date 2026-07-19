@@ -46,5 +46,5 @@ pub fn writeMetric(self: Self, w: *std.Io.Writer, metric: Metric, ctx_buf: []u8)
 fn writeRow(self: Self, w: *std.Io.Writer, name: []const u8, phase_ns: u64, ctx: []const u8) !void {
     var dur_buf: [16]u8 = undefined;
     const pct = phase_ns * 100 / self.total_ns;
-    try w.print("  {s:<16} {s:>10}   {s:<24} {d:>7}%\n", .{ name, fmt_utils.fmtDuration(&dur_buf, phase_ns), ctx, pct });
+    try w.print("  {s:<16} {s:>10}   {s:<24} {d:>7}%\n", .{ name, fmt_utils.fmtMilliseconds(&dur_buf, phase_ns), ctx, pct });
 }

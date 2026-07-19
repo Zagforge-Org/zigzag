@@ -42,6 +42,20 @@ test "fmtBytes html suffix" {
     try std.testing.expectEqualStrings("1.0 KB (w/ content)", fmt_utils.fmtBytes(&buf, 1_024, true));
 }
 
+test "fmtMilliseconds sub-ms returns < 1 ms" {
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("< 1 ms", fmt_utils.fmtMilliseconds(&buf, 0));
+    try std.testing.expectEqualStrings("< 1 ms", fmt_utils.fmtMilliseconds(&buf, 500_000));
+    try std.testing.expectEqualStrings("< 1 ms", fmt_utils.fmtMilliseconds(&buf, 999_999));
+}
+
+test "fmtMilliseconds ms range" {
+    var buf: [32]u8 = undefined;
+    try std.testing.expectEqualStrings("1 ms", fmt_utils.fmtMilliseconds(&buf, 1_000_000));
+    try std.testing.expectEqualStrings("42 ms", fmt_utils.fmtMilliseconds(&buf, 42_000_000));
+    try std.testing.expectEqualStrings("1500 ms", fmt_utils.fmtMilliseconds(&buf, 1_500_000_000));
+}
+
 test "fmtElapsed sub-ms returns < 1ms" {
     var buf: [32]u8 = undefined;
     try std.testing.expectEqualStrings("< 1ms", fmt_utils.fmtElapsed(&buf, 0));

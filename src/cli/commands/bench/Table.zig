@@ -51,5 +51,5 @@ pub fn write(self: Self, io: std.Io, w: *std.Io.Writer) !void {
 
     var dur_buf: [16]u8 = undefined;
     try w.print("{s}\n", .{separator});
-    try w.print("  {s:<16} {s:>10}\n\n", .{ "total", lg.fmtDuration(&dur_buf, self.total_ns) });
+    try w.print("  {s:<16} {s:>10}\n\n", .{ "total", lg.fmtMilliseconds(&dur_buf, self.total_ns) });
 }
