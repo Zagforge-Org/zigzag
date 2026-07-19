@@ -15,7 +15,7 @@ ignored: usize,
 /// Prints a colored summary block to stderr.
 pub fn summary(io: std.Io, args: Self) void {
     var cw = ConsoleWriter.init(io);
-    // On TTY the ProgressBar's success line already shows scanned count; skip the full block.
+    // On TTY the Progress success line already shows scanned count; skip the full block.
     if (cw.isTty()) return;
     cw.print("\n{s} ══ Summary: {s}{s}{s} ══{s}\n", .{
         colors.colorCode(.BrightCyan),

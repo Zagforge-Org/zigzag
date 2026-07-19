@@ -46,7 +46,7 @@ pub fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
     self.write(msg);
 }
 
-/// Same width as the ProgressBar separator.
+/// Same width as the Progress separator.
 pub fn separator(self: *Self) void {
     self.write(Style.rule);
 }

@@ -12,7 +12,7 @@ const SseServer = @import("server.zig").SseServer;
 const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
 const log = @import("../../../utils/logger/Logger.zig");
-const ProgressBar = lg.ProgressBar;
+const Progress = lg.Progress;
 const ProcessStats = @import("../stats.zig").ProcessStats;
 
 inline fn nsElapsed(io: std.Io, start: i128) u64 {
@@ -44,7 +44,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
         const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
         if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
         var stats = ProcessStats.init();
-        var pb = ProgressBar.init(io, &stats); // pb must not be moved after this line
+        var pb = Progress.init(io, &stats); // pb must not be moved after this line
         try pb.start();
         const state = blk: {
             if (State.init(io, &stats, cfg, cache, path, &pool, allocator)) |s| {

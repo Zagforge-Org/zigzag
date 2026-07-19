@@ -147,7 +147,7 @@ pub fn scanPath(
     const walker = try walk.init(io, allocator);
     const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
 
-    var pb = lg.ProgressBar.init(io, &stats); // pb must not be moved after this line
+    var pb = lg.Progress.init(io, &stats); // pb must not be moved after this line
     try pb.start();
     try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
