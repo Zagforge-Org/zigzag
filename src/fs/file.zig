@@ -1,13 +1,13 @@
 const std = @import("std");
-const winMmap = @import("./mmap/windows/Mmap.zig");
-const unixMmap = @import("./mmap/unix/Mmap.zig");
+const winMmap = @import("../platform/mmap/windows/Mmap.zig");
+const unixMmap = @import("../platform/mmap/unix/Mmap.zig");
 const api = @import("../platform/windows/api.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
 const TProcessChunk = @import("../cli/commands/writer.zig").TProcessWriter;
 const MappedFile = @import("MappedFile.zig");
 
-const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB (16 * 2^20)
-const CHUNK_SIZE: usize = 8 << 10; // 64 KiB (64 * 2^10)
+const SMALL_FILE_THRESHOLD: usize = 16 << 20; // 16 MiB
+const CHUNK_SIZE: usize = 8 << 10; // 64 KiB
 const MMAP_THRESHOLD: usize = 16 << 20; // 16 MiB
 
 const FileError = error{
