@@ -67,7 +67,7 @@ test {
     _ = @import("./jobs/entries_test.zig");
     _ = @import("./jobs/inspect_test.zig");
 
-    _ = @import("./cli/commands/serve_test.zig");
+    _ = @import("./cli/commands/serve/serve_test.zig");
     _ = @import("./utils/colors/colors_test.zig");
     _ = @import("./utils/skip_dirs/skip_dirs_test.zig");
     _ = @import("./logger/Logger_test.zig");
