@@ -6,7 +6,7 @@ const Pool = @import("../../../workers/Pool.zig");
 const Cache = @import("../../../cache/Cache.zig");
 const watcher_mod = @import("../../../platform/watcher.zig");
 const Watcher = watcher_mod.Watcher;
-const WatchEvent = watcher_mod.WatchEvent;
+const WatchLoop = @import("WatchLoop.zig");
 const report = @import("../report.zig");
 const Server = @import("Server.zig");
 const isPortListening = @import("port_listening.zig").isPortListening;
@@ -37,26 +37,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     }
 
     for (cfg.paths.items) |path| {
-        const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
-        if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
-        var stats = Stats.init();
-        var pb = Progress.init(io, &stats); // pb must not be moved after this line
-        try pb.start();
-        const state = blk: {
-            if (State.init(allocator, io, &stats, cfg, cache, path, &pool)) |s| {
-                pb.stop();
-                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "{d} files", .{s.file_entries.count()});
-                break :blk s;
-            } else |err| {
-                pb.stop();
-                if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "", .{});
-                switch (err) {
-                    error.NotADirectory => log.err(io, "Path '{s}' is not a directory", .{path}),
-                    else => log.err(io, "Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
-                }
-                continue;
-            }
-        };
+        const state = (try scanPath(io, cfg, cache, &pool, path, is_tty, allocator)) orelse continue;
         try states.append(allocator, state);
         // Write initial reports (no SSE server yet — will be started after all paths init)
         reporter.writeAllReports(io, state, cfg, null, &.{}, allocator);
@@ -110,134 +91,43 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
 
     log.success(io, "Watching {d} path(s) — press Ctrl+C to stop", .{states.items.len});
 
-    // Event loop with debounce to group multiple events into a single update.
-    // Ensures that updates are not triggered by rapid-fire events and preserves CPU resources.
-    var events: std.ArrayList(WatchEvent) = .empty;
-    defer events.deinit(allocator);
+    var loop = try WatchLoop.init(allocator, io, cfg, cache, &pool, states.items, sse_server, base_out_dir, &watcher);
+    defer loop.deinit();
+    loop.run();
+}
 
-    // Per-state dirty flags so only changed paths get their reports rebuilt.
-    const dirty_states = try allocator.alloc(bool, states.items.len);
-    defer allocator.free(dirty_states);
-    @memset(dirty_states, false);
-    var any_dirty = false;
+/// Scan one configured path into a State, driving the progress bar and phase logging.
+/// Returns null (after logging) when the path can't be initialized; the outer error is
+/// reserved for progress-bar startup failures, which abort the whole watch.
+fn scanPath(
+    io: std.Io,
+    cfg: *const Config,
+    cache: ?*Cache,
+    pool: *Pool,
+    path: []const u8,
+    is_tty: bool,
+    allocator: std.mem.Allocator,
+) !?*State {
+    const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
+    if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
 
-    // Track which file paths changed in the current debounce window so the report
-    // writer only re-writes those content sidecar files instead of all of them.
-    // On overflow (events lost) we fall back to writing all sidecars.
-    var changed_paths: std.ArrayList([]const u8) = .empty;
-    defer {
-        for (changed_paths.items) |p| allocator.free(p);
-        changed_paths.deinit(allocator);
-    }
-    var any_overflow = false;
+    var stats = Stats.init();
+    var pb = Progress.init(io, &stats); // pb must not be moved after this line
+    try pb.start();
 
-    const DEBOUNCE_MS: i32 = 50;
-
-    while (true) {
-        events.clearRetainingCapacity();
-
-        const timeout: i32 = if (any_dirty) DEBOUNCE_MS else -1;
-        const n = watcher.poll(&events, timeout) catch |err| {
-            log.err(io, "Watcher poll error: {s}", .{@errorName(err)});
-            continue;
-        };
-
-        // Handle inotify queue overflow: mark all states dirty and let the debounce
-        // flush rebuild reports from current in-memory state.
-        //
-        // Do NOT rescan or re-watch here. Both block the event loop for seconds (full
-        // directory walk + thread-pool cache writes), which generates more inotify events
-        // while the kernel queue is still full — causing the queue to overflow again
-        // immediately, creating an infinite overflow → heavy-work → overflow loop.
-        //
-        // The kernel does not remove existing watches on overflow, so all directory
-        // watches remain valid. Any new directories created during the overflow window
-        // will be picked up automatically when the next CREATE+ISDIR event arrives.
-        if (watcher.overflow) {
-            watcher.overflow = false;
-            any_overflow = true;
-            for (0..states.items.len) |i| dirty_states[i] = true;
-            any_dirty = true;
+    const state = State.init(allocator, io, &stats, cfg, cache, path, pool) catch |err| {
+        pb.stop();
+        if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "", .{});
+        switch (err) {
+            error.NotADirectory => log.err(io, "Path '{s}' is not a directory", .{path}),
+            else => log.err(io, "Failed to init watch state for '{s}': {s}", .{ path, @errorName(err) }),
         }
+        return null;
+    };
 
-        if (n > 0) {
-            for (events.items) |event| {
-                defer allocator.free(event.path);
-
-                if (isIgnoredEventPath(event.path, base_out_dir)) continue;
-
-                for (states.items, 0..) |state, i| {
-                    if (!std.mem.startsWith(u8, event.path, state.root_path)) continue;
-
-                    switch (event.kind) {
-                        .created, .modified => {
-                            state.updateFile(event.path, cache, &pool) catch |err| {
-                                log.err(io, "Failed to process {s}: {s}", .{ event.path, @errorName(err) });
-                            };
-                            // Track the changed path for selective sidecar writes on debounce.
-                            const path_copy = allocator.dupe(u8, event.path) catch null;
-                            if (path_copy) |p| changed_paths.append(allocator, p) catch allocator.free(p);
-                            // Broadcast a small KB-sized delta immediately — no need to wait for debounce.
-                            if (sse_server) |srv| {
-                                state.entries_mutex.lockUncancelable(io);
-                                const entry_opt = state.file_entries.get(event.path);
-                                state.entries_mutex.unlock(io);
-                                if (entry_opt) |entry| {
-                                    const delta = report.buildFileDeltaPayload(allocator, &entry) catch null;
-                                    if (delta) |d| {
-                                        defer allocator.free(d);
-                                        srv.broadcast(d);
-                                    }
-                                }
-                            }
-                        },
-                        .deleted => {
-                            state.removeFile(event.path);
-                            if (sse_server) |srv| {
-                                const delta = report.buildFileDeletePayload(allocator, event.path) catch null;
-                                if (delta) |d| {
-                                    defer allocator.free(d);
-                                    srv.broadcast(d);
-                                }
-                            }
-                        },
-                    }
-                    dirty_states[i] = true;
-                    any_dirty = true;
-                    break;
-                }
-            }
-        } else if (any_dirty) {
-            // Quiet period elapsed — write reports only for paths that actually changed.
-            // Write combined report FIRST so it is on disk before the SSE "report" event
-            // fires and causes connected browsers to reload combined.html.
-            var combined_needed = false;
-            for (0..states.items.len) |i| {
-                if (dirty_states[i]) {
-                    combined_needed = true;
-                    break;
-                }
-            }
-            // On overflow, changed_paths is incomplete — pass empty slice so all sidecars
-            // get written, ensuring the content directory is consistent.
-            const paths_for_write: []const []const u8 = if (any_overflow) &.{} else changed_paths.items;
-            if (combined_needed and states.items.len > 1) {
-                // Only write and signal the combined dashboard in multi-path mode.
-                // Single-path watch uses SSE deltas and the per-state report event instead.
-                // writeCombinedReport handles the broadcastCombined SSE push internally.
-                reporter.writeCombinedReport(io, states.items, cfg, sse_server, paths_for_write, allocator);
-            }
-            for (states.items, 0..) |state, i| {
-                if (!dirty_states[i]) continue;
-                reporter.writeAllReports(io, state, cfg, sse_server, paths_for_write, allocator);
-                dirty_states[i] = false;
-            }
-            any_dirty = false;
-            any_overflow = false;
-            for (changed_paths.items) |p| allocator.free(p);
-            changed_paths.clearRetainingCapacity();
-        }
-    }
+    pb.stop();
+    if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "{d} files", .{state.file_entries.count()});
+    return state;
 }
 
 /// Bring up the SSE dev server: probe from cfg.serve_port for a free port, bind, start
@@ -263,45 +153,7 @@ fn startServer(
     };
     const default_page: []const u8 = if (multi) "combined.html" else "report.html";
 
-    // Try the configured port; if already in use, increment up to 9 more times.
-    // Use a TCP connection probe rather than relying on bind() error codes —
-    // SO_REUSEADDR can allow duplicate binds on some OS/kernel configurations.
-    const max_port_attempts = 10;
-    var sse_server: ?*Server = null;
-    var port = cfg.serve_port;
-    for (0..max_port_attempts) |i| {
-        if (isPortListening(io, port)) {
-            if (i == 0) {
-                log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
-            }
-            if (i == max_port_attempts - 1) {
-                log.err(io, "Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
-                break;
-            }
-            port += 1;
-            continue;
-        }
-        if (Server.init(io, port, srv_root, default_page, allocator)) |srv| {
-            sse_server = srv;
-            if (port != cfg.serve_port) {
-                cfg.serve_port = port; // propagate to HTML/SSE-URL generation
-            }
-            break;
-        } else |err| {
-            // Bind still failed (race condition or other error); treat as occupied.
-            if (err == error.AddressInUse) {
-                if (i == 0) {
-                    log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
-                }
-                port += 1;
-            } else {
-                log.warn(io, "SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
-                break;
-            }
-        }
-    }
-
-    const srv = sse_server orelse return null;
+    const srv = bindServer(io, cfg, srv_root, default_page, allocator) orelse return null;
 
     srv.start() catch |err| {
         log.warn(io, "SSE server thread failed: {s}", .{@errorName(err)});
@@ -312,25 +164,62 @@ fn startServer(
     log.success(io, "Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
     if (cfg.open_browser) srv.openBrowser();
 
-    // Broadcast initial payload so connecting clients get data immediately.
-    const first = states[0];
-    var init_data = report.ReportData.init(io, allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
-    if (init_data) |*d| {
-        defer d.deinit();
-        const payload = report.buildSsePayload(d, first.root_path, cfg, allocator) catch null;
-        if (payload) |p| {
-            defer allocator.free(p);
-            srv.broadcast(p);
-        }
-    }
-
+    broadcastInitialSnapshot(io, cfg, states, srv, allocator);
     return srv;
 }
 
-/// Filesystem events under the cache or report-output directories are self-inflicted
-/// (we write there ourselves) and must never trigger a rebuild.
-fn isIgnoredEventPath(path: []const u8, base_out_dir: []const u8) bool {
-    return std.mem.indexOf(u8, path, ".cache") != null or
-        std.mem.indexOf(u8, path, ".zig-cache") != null or
-        std.mem.indexOf(u8, path, base_out_dir) != null;
+/// Probe upward from cfg.serve_port for a free port and bind the server there.
+/// Updates cfg.serve_port when it lands on a fallback port so HTML/SSE-URL generation
+/// stays in sync. Returns null when every candidate port is occupied or bind fails.
+///
+/// Uses a TCP connection probe rather than relying on bind() error codes.
+/// SO_REUSEADDR can allow duplicate binds on some OS/kernel configurations.
+fn bindServer(
+    io: std.Io,
+    cfg: *Config,
+    srv_root: []const u8,
+    default_page: []const u8,
+    allocator: std.mem.Allocator,
+) ?*Server {
+    const max_port_attempts = 10;
+    var port = cfg.serve_port;
+    for (0..max_port_attempts) |i| {
+        if (isPortListening(io, port)) {
+            if (i == 0) {
+                log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+            }
+            if (i == max_port_attempts - 1) {
+                log.err(io, "Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
+                return null;
+            }
+            port += 1;
+            continue;
+        }
+        if (Server.init(io, port, srv_root, default_page, allocator)) |srv| {
+            if (port != cfg.serve_port) cfg.serve_port = port; // propagate to HTML/SSE-URL generation
+            return srv;
+        } else |err| {
+            // Bind still failed (race condition or other error); treat as occupied.
+            if (err == error.AddressInUse) {
+                if (i == 0) {
+                    log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                }
+                port += 1;
+            } else {
+                log.warn(io, "SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
+                return null;
+            }
+        }
+    }
+    return null;
+}
+
+/// Broadcast the first state's full payload so clients that connect immediately get data.
+fn broadcastInitialSnapshot(io: std.Io, cfg: *const Config, states: []const *State, srv: *Server, allocator: std.mem.Allocator) void {
+    const first = states[0];
+    var init_data = report.ReportData.init(io, allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch return;
+    defer init_data.deinit();
+    const payload = report.buildSsePayload(&init_data, first.root_path, cfg, allocator) catch return;
+    defer allocator.free(payload);
+    srv.broadcast(payload);
 }

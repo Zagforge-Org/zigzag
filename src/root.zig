@@ -43,6 +43,7 @@ test {
     _ = @import("./cli/commands/watch/Server_test.zig");
     _ = @import("./cli/commands/watch/reporter_test.zig");
     _ = @import("./cli/commands/watch/exec_test.zig");
+    _ = @import("./cli/commands/watch/WatchLoop_test.zig");
     _ = @import("./cli/version/version_test.zig");
     _ = @import("./cli/commands/stats/stats_test.zig");
     _ = @import("./cli/commands/watch/port_listening_test.zig");
