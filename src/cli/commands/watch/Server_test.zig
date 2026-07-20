@@ -75,3 +75,26 @@ test "Server.deinit frees pending_payload without leak" {
     srv.broadcast("pending data that must be freed");
     srv.deinit(); // must not leak
 }
+
+test "Server.broadcastDelta queues all deltas; broadcast does not displace them" {
+    const alloc = std.testing.allocator;
+    const srv = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    defer srv.deinit();
+
+    srv.broadcastDelta("delta-1");
+    srv.broadcast("full snapshot");
+    srv.broadcastDelta("delta-2");
+
+    srv.mu.lockUncancelable(std.testing.io);
+    const n_deltas = srv.pending_deltas.items.len;
+    const first = srv.pending_deltas.items[0];
+    const second = srv.pending_deltas.items[1];
+    const payload = srv.pending_payload;
+    srv.mu.unlock(std.testing.io);
+
+    try std.testing.expectEqual(@as(usize, 2), n_deltas);
+    try std.testing.expectEqualStrings("delta-1", first);
+    try std.testing.expectEqualStrings("delta-2", second);
+    try std.testing.expect(payload != null);
+    try std.testing.expectEqualStrings("full snapshot", payload.?);
+}
