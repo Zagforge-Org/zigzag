@@ -10,6 +10,7 @@ pub const writeJsonReport = @import("report/writers/json/json.zig").writeJsonRep
 pub const writeHtmlReport = @import("report/writers/html/html.zig").writeHtmlReport;
 pub const writeContentJson = @import("report/writers/html/html.zig").writeContentJson;
 pub const writeLlmReport = @import("report/writers/llm/llm.zig").writeLlmReport;
+pub const LlmMemo = @import("report/writers/llm/llm.zig").Memo;
 pub const buildSsePayload = @import("report/writers/sse/sse.zig").buildSsePayload;
 pub const buildCombinedSsePayload = @import("report/writers/sse/sse.zig").buildCombinedSsePayload;
 pub const buildFileDeltaPayload = @import("report/writers/sse/sse.zig").buildFileDeltaPayload;
