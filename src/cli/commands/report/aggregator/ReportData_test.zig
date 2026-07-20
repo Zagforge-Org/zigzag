@@ -1,7 +1,7 @@
 const std = @import("std");
 const JobEntry = @import("../../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../../jobs/entries.zig").BinaryEntry;
-const ReportData = @import("../aggregator.zig").ReportData;
+const ReportData = @import("ReportData.zig");
 
 test "ReportData.init aggregates language stats" {
     const alloc = std.testing.allocator;

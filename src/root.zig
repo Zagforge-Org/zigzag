@@ -49,7 +49,7 @@ test {
     _ = @import("./cli/commands/watch/port_listening_test.zig");
 
     // report sub-module tests
-    _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
+    _ = @import("./cli/commands/report/aggregator/ReportData_test.zig");
     _ = @import("./cli/commands/report/content/content_test.zig");
     _ = @import("./cli/commands/report/paths/paths_test.zig");
     _ = @import("./cli/commands/report/writers/markdown/markdown_test.zig");

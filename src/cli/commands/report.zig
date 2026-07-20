@@ -1,5 +1,5 @@
 /// Facade — re-exports the public surface used by runner.zig and watch.zig.
-pub const ReportData = @import("report/aggregator/aggregator.zig").ReportData;
+pub const ReportData = @import("report/aggregator/ReportData.zig");
 pub const resolveOutputPath = @import("report/paths/paths.zig").resolveOutputPath;
 pub const deriveJsonPath = @import("report/paths/paths.zig").deriveJsonPath;
 pub const deriveHtmlPath = @import("report/paths/paths.zig").deriveHtmlPath;
