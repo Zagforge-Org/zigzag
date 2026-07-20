@@ -4,6 +4,7 @@ const std = @import("std");
 const Config = @import("../../../config/Config.zig");
 const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
 const Analysis = @import("Analysis.zig");
+const Chunk = @import("../ast/ast_chunker.zig").Chunk;
 const FileContent = Analysis.FileContent;
 
 /// Lines shown per condensed file.
@@ -103,4 +104,11 @@ fn getLineRange(content: []const u8, start_line: u32, end_line: u32) []const u8 
         if (content[i] == '\n') line += 1;
     }
     return content[start_byte..i];
+}
+
+/// The declaration's opening line(s), up to and including the first `{` or `;`
+pub fn signatureSlice(content: []const u8, chunk: Chunk) []const u8 {
+    const decl = getLineRange(content, chunk.start_line, chunk.end_line);
+    const end = std.mem.indexOfAny(u8, decl, "{;") orelse return decl;
+    return decl[0 .. end + 1];
 }
