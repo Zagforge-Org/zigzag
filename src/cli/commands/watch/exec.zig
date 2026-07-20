@@ -39,8 +39,6 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     for (cfg.paths.items) |path| {
         const state = (try scanPath(io, cfg, cache, &pool, path, is_tty, allocator)) orelse continue;
         try states.append(allocator, state);
-        // Write initial reports (no SSE server yet — will be started after all paths init)
-        reporter.writeAllReports(io, state, cfg, null, &.{}, allocator, &pool);
     }
 
     if (states.items.len == 0) return;
@@ -51,28 +49,22 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     // Without this, defer cache.deinit() in main.zig never runs on SIGINT.
     if (cache) |c| c.saveToDisk() catch {};
 
-    // Write combined HTML report (initial, before SSE server starts).
-    reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
-
-    // Start the SSE dev server (port probe + initial broadcast) when --html is active.
-    const requested_port = cfg.serve_port;
+    // Start the SSE dev server first (port probe + initial broadcast) when --html
+    // is active: the dashboard only needs report.html plus the in-memory SSE
+    // snapshot, so the full report suite need not delay startup.
     const sse_server: ?*Server = if (cfg.html_output)
         startServer(io, cfg, states.items, base_out_dir, allocator)
     else
         null;
     defer if (sse_server) |srv| srv.deinit();
 
-    // The initial write baked cfg.serve_port into the HTML sse_url. Only when port
-    // fallback moved the server to a different port do the reports need a re-write;
-    // rewriting unconditionally doubles startup cost on large trees.
-    if (sse_server != null and cfg.serve_port != requested_port) {
-        for (states.items) |state| {
-            reporter.writeAllReports(io, state, cfg, null, &.{}, allocator, &pool);
-        }
-        if (states.items.len > 1) {
-            reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
-        }
+    // Fast first paint: write only the dashboard HTML, with the final (possibly
+    // fallback) port already baked into its sse_url. Everything else: markdown,
+    // JSON, LLM, content sidecars is queued on the watch loop's flusher below.
+    for (states.items) |state| {
+        reporter.writeDashboardOnly(io, state, cfg, allocator);
     }
+    reporter.writeCombinedDashboardOnly(io, states.items, cfg, allocator);
 
     // Set up OS-level filesystem watcher
     var watcher = try Watcher.init(io, allocator);
@@ -94,6 +86,9 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
 
     var loop = try WatchLoop.init(allocator, io, cfg, cache, &pool, states.items, sse_server, base_out_dir, &watcher);
     defer loop.deinit();
+    // The initial full report pass runs on the flusher thread right after the
+    // loop starts, keeping event handling live from the first second.
+    loop.markAllDirty();
     loop.run();
 }
 
