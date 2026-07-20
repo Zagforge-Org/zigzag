@@ -4,8 +4,15 @@
 const std = @import("std");
 const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
 
-/// Per-path entry for the combined content writers.
+/// Per-path entry for the combined content writers. Holds a ReportData
+/// snapshot slice so writers never touch the live entry maps.
 pub const CombinedContentPath = struct {
+    root_path: []const u8,
+    entries: []const JobEntry,
+};
+
+/// Map-based variant used by the single-shot combined JSON sidecar.
+pub const CombinedContentMapPath = struct {
     root_path: []const u8,
     file_entries: *const std.StringHashMap(JobEntry),
 };
@@ -55,7 +62,7 @@ pub fn writeContentJson(
 /// Write a merged content sidecar for the combined report.
 pub fn writeCombinedContentJson(
     io: std.Io,
-    paths: []const CombinedContentPath,
+    paths: []const CombinedContentMapPath,
     content_path: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
@@ -114,30 +121,34 @@ fn writeContentFile(io: std.Io, content_dir: []const u8, key: []const u8, conten
 /// Unchanged files (sidecar newer than source) are skipped.
 pub fn writeContentFiles(
     io: std.Io,
-    file_entries: *const std.StringHashMap(JobEntry),
+    entries: []const JobEntry,
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
-    var it = file_entries.iterator();
-    while (it.next()) |kv| {
-        try writeContentFile(io, content_dir, kv.key_ptr.*, kv.value_ptr.content, kv.value_ptr.mtime, allocator);
+    for (entries) |*entry| {
+        try writeContentFile(io, content_dir, entry.path, entry.content, entry.mtime, allocator);
     }
 }
 
 /// Write content sidecars only for `changed_paths` (watch-mode incremental update).
-/// Paths absent from file_entries (deleted or owned by another state) are skipped.
+/// Paths absent from `entries` (deleted or owned by another state) are skipped.
 pub fn writeChangedContentFiles(
     io: std.Io,
-    file_entries: *const std.StringHashMap(JobEntry),
+    entries: []const JobEntry,
     changed_paths: []const []const u8,
     content_dir: []const u8,
     allocator: std.mem.Allocator,
 ) !void {
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
-    for (changed_paths) |path| {
-        const entry = file_entries.get(path) orelse continue;
-        try writeContentFile(io, content_dir, path, entry.content, entry.mtime, allocator);
+
+    var changed = std.StringHashMap(void).init(allocator);
+    defer changed.deinit();
+    for (changed_paths) |path| try changed.put(path, {});
+
+    for (entries) |*entry| {
+        if (!changed.contains(entry.path)) continue;
+        try writeContentFile(io, content_dir, entry.path, entry.content, entry.mtime, allocator);
     }
 }
 
@@ -151,11 +162,10 @@ pub fn writeCombinedContentFiles(
 ) !void {
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
     for (paths) |p| {
-        var it = p.file_entries.iterator();
-        while (it.next()) |kv| {
-            const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
+        for (p.entries) |*entry| {
+            const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, entry.path });
             defer allocator.free(combined_key);
-            try writeContentFile(io, content_dir, combined_key, kv.value_ptr.content, kv.value_ptr.mtime, allocator);
+            try writeContentFile(io, content_dir, combined_key, entry.content, entry.mtime, allocator);
         }
     }
 }
@@ -170,19 +180,17 @@ pub fn writeCombinedChangedContentFiles(
     allocator: std.mem.Allocator,
 ) !void {
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
-    for (changed_file_paths) |changed_path| {
-        var owning_path: ?CombinedContentPath = null;
-        for (paths) |p| {
-            if (std.mem.startsWith(u8, changed_path, p.root_path)) {
-                owning_path = p;
-                break;
-            }
-        }
-        const p = owning_path orelse continue;
-        const entry = p.file_entries.get(changed_path) orelse continue;
 
-        const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, changed_path });
-        defer allocator.free(combined_key);
-        try writeContentFile(io, content_dir, combined_key, entry.content, entry.mtime, allocator);
+    var changed = std.StringHashMap(void).init(allocator);
+    defer changed.deinit();
+    for (changed_file_paths) |path| try changed.put(path, {});
+
+    for (paths) |p| {
+        for (p.entries) |*entry| {
+            if (!changed.contains(entry.path)) continue;
+            const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, entry.path });
+            defer allocator.free(combined_key);
+            try writeContentFile(io, content_dir, combined_key, entry.content, entry.mtime, allocator);
+        }
     }
 }
