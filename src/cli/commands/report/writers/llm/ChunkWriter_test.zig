@@ -1,6 +1,6 @@
 const std = @import("std");
-const ChunkWriter = @import("chunk_writer.zig").ChunkWriter;
-const chunkFileName = @import("chunk_writer.zig").chunkFileName;
+const ChunkWriter = @import("ChunkWriter.zig");
+const chunkFileName = ChunkWriter.chunkFileName;
 
 test "chunkFileName: chunk 1 = base.md" {
     const name = try chunkFileName("report.llm", 1, std.testing.allocator);

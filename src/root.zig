@@ -55,7 +55,7 @@ test {
     _ = @import("./cli/commands/report/writers/json/json_test.zig");
     _ = @import("./cli/commands/report/writers/html/html_test.zig");
     _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/chunk_writer_test.zig");
+    _ = @import("./cli/commands/report/writers/llm/ChunkWriter_test.zig");
     _ = @import("./cli/commands/report/writers/ast/ast_chunker_test.zig");
     _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
