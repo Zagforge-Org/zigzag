@@ -27,6 +27,9 @@ bound_port: u16,
 mu: std.Io.Mutex = .init,
 pending_payload: ?[]u8 = null, // next "report" broadcast queued by broadcast()
 pending_combined: ?[]u8 = null, // next "combined_update" broadcast queued by broadcastCombined()
+// Per-file delta events queued by broadcastDelta(). A FIFO, not a replace-slot:
+// every delta must reach clients even when a full snapshot lands in between.
+pending_deltas: std.ArrayList([]u8) = .empty,
 pending_reload: bool = false, // next "reload" event queued by broadcastReload()
 stopped: bool = false,
 
@@ -84,6 +87,18 @@ pub fn broadcast(self: *Server, payload: []const u8) void {
 
     if (self.pending_payload) |old| self.allocator.free(old);
     self.pending_payload = copy;
+}
+
+/// Queue a per-file delta "report" event. Unlike broadcast(), deltas queue in
+/// order and are all delivered; a concurrent full-snapshot broadcast (from the
+/// background flusher) must never displace them.
+pub fn broadcastDelta(self: *Server, payload: []const u8) void {
+    const copy = self.allocator.dupe(u8, payload) catch return;
+
+    self.mu.lockUncancelable(self.io);
+    defer self.mu.unlock(self.io);
+
+    self.pending_deltas.append(self.allocator, copy) catch self.allocator.free(copy);
 }
 
 /// Queue a "combined_update" SSE event. Returns immediately; the event loop delivers it.
@@ -156,6 +171,8 @@ pub fn deinit(self: *Server) void {
 
         if (self.pending_payload) |p| self.allocator.free(p);
         if (self.pending_combined) |p| self.allocator.free(p);
+        for (self.pending_deltas.items) |d| self.allocator.free(d);
+        self.pending_deltas.deinit(self.allocator);
     }
 
     if (self.current_payload) |p| self.allocator.free(p);
@@ -233,6 +250,9 @@ fn eventLoop(self: *Server) void {
             self.handleNewConn(conn, &clients);
         }
 
+        var deltas: std.ArrayList([]u8) = .empty;
+        defer deltas.deinit(self.allocator);
+
         self.mu.lockUncancelable(self.io);
         const payload = self.pending_payload;
         self.pending_payload = null;
@@ -240,7 +260,14 @@ fn eventLoop(self: *Server) void {
         self.pending_combined = null;
         const reload = self.pending_reload;
         self.pending_reload = false;
+        std.mem.swap(std.ArrayList([]u8), &deltas, &self.pending_deltas);
         self.mu.unlock(self.io);
+
+        // Deltas first, in order; the snapshot (if any) already includes them.
+        for (deltas.items) |d| {
+            writePartsToAll(self.io, &clients, &.{ "event: report\ndata: ", d, "\n\n" });
+            self.allocator.free(d);
+        }
 
         if (payload) |p| {
             defer self.allocator.free(p);
