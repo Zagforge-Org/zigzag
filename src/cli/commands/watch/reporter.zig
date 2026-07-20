@@ -99,7 +99,7 @@ pub fn writeCombinedReport(
     }
 }
 
-/// Write only the HTML dashboard (and watch stamp) for `state` — the minimum
+/// Write only the HTML dashboard (and watch stamp) for `state`; the minimum
 /// needed for a usable dashboard at startup. The full report suite (md, json,
 /// llm, sidecars) is deferred to the background flusher.
 pub fn writeDashboardOnly(io: std.Io, state: *State, cfg: *const Config, allocator: std.mem.Allocator) void {
