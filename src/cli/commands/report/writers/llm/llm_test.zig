@@ -38,7 +38,7 @@ test "writeLlmReport creates report with correct structure" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null);
+    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null, null);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -85,7 +85,7 @@ test "writeLlmReport omits boilerplate files" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null);
+    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null, null);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -120,7 +120,7 @@ test "writeLlmReport includes llm_description when set" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null);
+    try writeLlmReport(std.testing.io, &data, binary_entries.count(), llm_path, "src", &cfg, 0, alloc, null, null);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
@@ -170,7 +170,7 @@ test "writeLlmReport emits AST chunks for Python files" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeLlmReport(std.testing.io, &data, 0, llm_path, "src", &cfg, 0, alloc, null);
+    try writeLlmReport(std.testing.io, &data, 0, llm_path, "src", &cfg, 0, alloc, null, null);
 
     const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
     defer alloc.free(written);
