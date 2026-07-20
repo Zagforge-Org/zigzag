@@ -206,9 +206,13 @@ test "mtime fallback detects in-place modification in subdirectory" {
     try std.testing.expect(hasEventAnyKind(events.items, "config.txt"));
 }
 
-// Round-robin batching
+// Full-sweep coverage
 
-test "mtime scan advances round-robin cursor" {
+test "one mtime sweep covers every watched directory" {
+    // Regression guard: the sweep previously rotated through directories in
+    // batches of 256 per cycle, so an in-place edit in a late directory went
+    // undetected for minutes on large trees. A single sweep must cover all
+    // directories regardless of their count.
     const alloc = std.testing.allocator;
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
@@ -216,24 +220,47 @@ test "mtime scan advances round-robin cursor" {
     var path_buf: [std.fs.max_path_bytes]u8 = undefined;
     const path = path_buf[0..try tmp.dir.realPathFile(std.testing.io, ".", &path_buf)];
 
-    try tmp.dir.createDir(std.testing.io, "dir_a", .default_dir);
-    try tmp.dir.createDir(std.testing.io, "dir_b", .default_dir);
-    try tmp.dir.createDir(std.testing.io, "dir_c", .default_dir);
+    // One fd is held per watched directory and macOS defaults to a 256-fd
+    // soft limit, so raise it (best-effort) before registering 300 watches.
+    if (std.posix.getrlimit(.NOFILE)) |lim| {
+        const want = @min(lim.max, 4096);
+        std.posix.setrlimit(.NOFILE, .{ .cur = want, .max = lim.max }) catch {};
+    } else |_| {}
+
+    // More directories than the old batch size (256); the probe file lives in
+    // the last one, past where the first batched cycle used to stop.
+    var name_buf: [16]u8 = undefined;
+    for (0..300) |i| {
+        const name = try std.fmt.bufPrint(&name_buf, "d{d:0>3}", .{i});
+        try tmp.dir.createDir(std.testing.io, name, .default_dir);
+    }
+    {
+        const f = try tmp.dir.createFile(std.testing.io, "d299/probe.txt", .{});
+        try f.writeStreamingAll(std.testing.io, "v1");
+        f.close(std.testing.io);
+    }
 
     var w = try Watcher.init(std.testing.io, alloc);
     defer w.deinit();
     try w.watchDir(path);
+    // If the environment can't hold enough fds the regression isn't testable.
+    if (w.dir_fds.items.len < 300) return error.SkipZigTest;
 
-    // At least root + 3 subdirs
-    try std.testing.expect(w.dir_fds.items.len >= 4);
+    std.Io.sleep(std.testing.io, .fromNanoseconds(10 * std.time.ns_per_ms), .awake) catch {};
+    {
+        const f = try tmp.dir.createFile(std.testing.io, "d299/probe.txt", .{ .truncate = true });
+        try f.writeStreamingAll(std.testing.io, "v2 changed");
+        f.close(std.testing.io);
+    }
 
     w.last_mtime_scan = 0;
     var events: std.ArrayList(WatchEvent) = .empty;
     defer freeEvents(alloc, &events);
     _ = try w.poll(&events, 100);
 
-    // Cursor should have advanced
-    try std.testing.expect(w.mtime_scan_cursor > 0);
+    try std.testing.expect(hasEventAnyKind(events.items, "probe.txt"));
+    // A slow sweep may stretch the interval, but never below the base 2 s.
+    try std.testing.expect(w.mtime_scan_interval >= 2 * std.time.ns_per_s);
 }
 
 // No spurious events

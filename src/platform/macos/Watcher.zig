@@ -19,12 +19,15 @@ const Self = @This();
 /// This periodic scan catches in-place modifications by comparing mtimes.
 const MTIME_POLL_INTERVAL_NS: i128 = 2 * std.time.ns_per_s;
 
-/// Maximum number of directories to scan per mtime poll cycle.
-/// For large codebases (thousands of directories), scanning all dirs every
-/// cycle would be expensive. Instead, we scan in batches and rotate through
-/// all directories across multiple cycles. With 2-second intervals and
-/// batches of 256, a project with 2560 dirs completes a full sweep in ~20s.
-const MTIME_BATCH_SIZE: usize = 256;
+/// The sweep covers EVERY watched directory each cycle so an in-place edit is
+/// detected within one interval. (A previous design rotated through directories
+/// in batches of 256, which stretched worst-case detection to minutes on large
+/// trees — e.g. ~105 s for the ~13k watched dirs of a Next.js checkout and
+/// made the dashboard feel unresponsive to plain in-place saves.)
+/// To keep the poll thread's duty cycle bounded on pathological trees, the
+/// interval stretches adaptively to SWEEP_DUTY_FACTOR x the measured sweep
+/// duration when a sweep is slow.
+const SWEEP_DUTY_FACTOR: i128 = 5;
 
 /// Per-directory state: open fd + current file snapshot (name -> mtime)
 const DirState = struct {
@@ -56,8 +59,8 @@ overflow: bool = false,
 skip_dirs: std.ArrayList([]const u8),
 /// Timestamp of last mtime fallback scan.
 last_mtime_scan: i128 = 0,
-/// Round-robin cursor for mtime batch scanning.
-mtime_scan_cursor: usize = 0,
+/// Current scan interval; MTIME_POLL_INTERVAL_NS unless sweeps measure slow.
+mtime_scan_interval: i128 = MTIME_POLL_INTERVAL_NS,
 
 pub fn init(io: std.Io, allocator: std.mem.Allocator) !Self {
     var skip_dirs: std.ArrayList([]const u8) = .empty;
@@ -199,37 +202,32 @@ pub fn poll(self: *Self, out: *std.ArrayList(WatchEvent), timeout_ms: i32) !usiz
         try self.diffAndEmit(state, out);
     }
 
-    // Periodic mtime scan to catch in-place file modifications.
-    // Uses round-robin batching: each cycle scans up to MTIME_BATCH_SIZE
-    // directories, advancing a cursor. For small projects (< MTIME_BATCH_SIZE
-    // dirs), all directories are scanned every cycle. For large projects,
-    // the full sweep is spread across multiple cycles.
+    // Periodic mtime sweep to catch in-place file modifications. Covers every
+    // watched directory so detection latency is bounded by one interval; the
+    // interval stretches when a sweep measures slow (huge trees, cold caches).
     const now = std.Io.Timestamp.now(self.io, .real).nanoseconds;
-    if (now - self.last_mtime_scan >= MTIME_POLL_INTERVAL_NS) {
-        self.last_mtime_scan = now;
-        const total_dirs = self.dir_fds.items.len;
-        if (total_dirs > 0) {
-            const batch = @min(MTIME_BATCH_SIZE, total_dirs);
-            for (0..batch) |_| {
-                if (self.mtime_scan_cursor >= total_dirs) self.mtime_scan_cursor = 0;
-                const fd = self.dir_fds.items[self.mtime_scan_cursor];
-                self.mtime_scan_cursor += 1;
-
-                // Skip if this fd was already processed via kqueue event
-                var already_diffed = false;
-                for (events[0..n]) |ev| {
-                    if (@as(posix.fd_t, @intCast(ev.ident)) == fd) {
-                        already_diffed = true;
-                        break;
-                    }
-                }
-                if (already_diffed) continue;
-
-                if (self.dir_states.getPtr(fd)) |state_ptr| {
-                    try self.diffAndEmit(state_ptr.*, out);
+    if (now - self.last_mtime_scan >= self.mtime_scan_interval) {
+        for (self.dir_fds.items) |fd| {
+            // Skip dirs already diffed via a kqueue event this poll.
+            var already_diffed = false;
+            for (events[0..n]) |ev| {
+                if (@as(posix.fd_t, @intCast(ev.ident)) == fd) {
+                    already_diffed = true;
+                    break;
                 }
             }
+            if (already_diffed) continue;
+
+            if (self.dir_states.getPtr(fd)) |state_ptr| {
+                try self.diffAndEmit(state_ptr.*, out);
+            }
         }
+
+        // Measure from sweep end so slow sweeps never overlap, and keep the
+        // poll thread's sweep duty cycle at or below 1/SWEEP_DUTY_FACTOR.
+        const done = std.Io.Timestamp.now(self.io, .real).nanoseconds;
+        self.last_mtime_scan = done;
+        self.mtime_scan_interval = @max(MTIME_POLL_INTERVAL_NS, (done - now) * SWEEP_DUTY_FACTOR);
     }
 
     return out.items.len - before;
