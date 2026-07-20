@@ -20,10 +20,17 @@ fn testState(alloc: std.mem.Allocator, root_path: []const u8, md_path: []const u
     state.entries_mutex = .init;
     state.allocator = alloc;
     state.file_ctx = .{ .io = testing.io, .ignore_list = .empty, .md = undefined, .md_mutex = undefined };
+    state.llm_memo = .init(alloc);
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
     return state;
 }
 
 fn deinitTestState(state: *State, alloc: std.mem.Allocator) void {
+    state.llm_memo.deinit();
+    state.graveyard_files.deinit(alloc);
+    state.graveyard_binaries.deinit(alloc);
     state.file_entries.deinit();
     state.binary_entries.deinit();
     state.file_ctx.ignore_list.deinit(alloc);
@@ -299,4 +306,26 @@ test "isIgnoredEventPath filters cache and output-dir events" {
     // A real source file must not be filtered and "cache" without the dot is fine.
     try testing.expect(!WatchLoop.isIgnoredEventPath("src/main.zig", "zigzag-reports"));
     try testing.expect(!WatchLoop.isIgnoredEventPath("src/cache_helpers.zig", "zigzag-reports"));
+}
+
+test "markAllDirty queues every state for the next flush" {
+    const alloc = testing.allocator;
+    var s0 = testState(alloc, "src", "a.md");
+    defer deinitTestState(&s0, alloc);
+    var s1 = testState(alloc, "lib", "b.md");
+    defer deinitTestState(&s1, alloc);
+    var states = [_]*State{ &s0, &s1 };
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+    var pool: Pool = .{};
+    var watcher: Watcher = undefined;
+
+    var loop = try WatchLoop.init(alloc, testing.io, &cfg, null, &pool, states[0..], null, "zigzag-reports", &watcher);
+    defer loop.deinit();
+
+    loop.markAllDirty();
+
+    try testing.expect(loop.any_dirty);
+    for (loop.dirty_states) |d| try testing.expect(d);
 }
