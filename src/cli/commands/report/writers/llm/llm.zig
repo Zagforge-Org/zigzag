@@ -7,7 +7,7 @@ const content_mod = @import("../content.zig");
 const isBoilerplate = content_mod.isBoilerplate;
 const condenseContent = content_mod.condenseContent;
 const ChunkWriter = @import("chunk_writer.zig").ChunkWriter;
-const ast_chunker = @import("ast_chunker.zig");
+const ast_chunker = @import("../ast/ast_chunker.zig");
 
 const VERSION = @import("../../../config/Config.zig").VERSION;
 

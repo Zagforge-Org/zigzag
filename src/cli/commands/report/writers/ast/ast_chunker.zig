@@ -1,7 +1,6 @@
+//! Extern declarations matching chunker.h / tree_sitter/api.h
 const std = @import("std");
 
-// Extern declarations matching chunker.h / tree_sitter/api.h
-// Using opaque type for TSLanguage — we never inspect its internals.
 const TSLanguage = opaque {};
 
 const CChunk = extern struct {
@@ -166,7 +165,7 @@ const LanguageConfig = struct {
 };
 
 fn languageConfig(ext: []const u8) ?LanguageConfig {
-    // entry.extension always has a leading dot — strip it
+    // entry.extension always has a leading dot
     const e = if (ext.len > 0 and ext[0] == '.') ext[1..] else ext;
     if (std.mem.eql(u8, e, "py")) {
         return .{
