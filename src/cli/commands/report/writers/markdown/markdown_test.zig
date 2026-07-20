@@ -44,7 +44,7 @@ test "writeReport creates file with header, TOC and file entries" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeReport(std.testing.io, &data, &file_entries, md_path, "src", &cfg, alloc);
+    try writeReport(std.testing.io, &data, md_path, "src", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
@@ -82,7 +82,7 @@ test "writeReport handles empty entries map" {
     var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeReport(std.testing.io, &data, &file_entries, md_path, "empty_dir", &cfg, alloc);
+    try writeReport(std.testing.io, &data, md_path, "empty_dir", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
@@ -113,7 +113,7 @@ test "writeReport overwrites existing file" {
     try file_entries1.put("first.zig", JobEntry{ .path = "first.zig", .content = @constCast("// first"), .size = 7, .mtime = 0, .extension = ".zig", .line_count = 1 });
     var data1 = try ReportData.init(std.testing.io, alloc, &file_entries1, &binary_entries1, null);
     defer data1.deinit();
-    try writeReport(std.testing.io, &data1, &file_entries1, md_path, ".", &cfg, alloc);
+    try writeReport(std.testing.io, &data1, md_path, ".", &cfg, alloc);
 
     var file_entries2 = std.StringHashMap(JobEntry).init(alloc);
     defer file_entries2.deinit();
@@ -122,7 +122,7 @@ test "writeReport overwrites existing file" {
     try file_entries2.put("second.zig", JobEntry{ .path = "second.zig", .content = @constCast("// second"), .size = 8, .mtime = 0, .extension = ".zig", .line_count = 1 });
     var data2 = try ReportData.init(std.testing.io, alloc, &file_entries2, &binary_entries2, null);
     defer data2.deinit();
-    try writeReport(std.testing.io, &data2, &file_entries2, md_path, ".", &cfg, alloc);
+    try writeReport(std.testing.io, &data2, md_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.md", alloc, .limited(1 << 20));
     defer alloc.free(content);
