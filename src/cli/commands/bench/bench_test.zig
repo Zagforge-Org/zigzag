@@ -1,8 +1,9 @@
 const std = @import("std");
-const bench = @import("../bench.zig");
+const BenchResult = @import("BenchResult.zig");
+const Table = @import("Table.zig");
 
-test "printTable does not panic with populated BenchResult" {
-    var result = bench.BenchResult{
+test "Table.write renders a populated BenchResult" {
+    var result = BenchResult{
         .scan_ns = 340_000_000,
         .aggregate_ns = 12_000_000,
         .write_md_ns = 8_000_000,
@@ -18,10 +19,17 @@ test "printTable does not panic with populated BenchResult" {
         .html_bytes = 2_202_009,
         .llm_bytes = 0,
     };
-    bench.printTable(&result);
+
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    try Table.init(&result).write(std.testing.io, &aw.writer);
+    try std.testing.expect(std.mem.indexOf(u8, aw.written(), "Phase") != null);
 }
 
-test "printTable with all-zero BenchResult does not panic" {
-    var result: bench.BenchResult = .{};
-    bench.printTable(&result);
+test "Table.write with all-zero BenchResult does not panic" {
+    var result: BenchResult = .{};
+
+    var aw: std.Io.Writer.Allocating = .init(std.testing.allocator);
+    defer aw.deinit();
+    try Table.init(&result).write(std.testing.io, &aw.writer);
 }

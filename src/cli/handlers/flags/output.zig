@@ -1,8 +1,8 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handleOutput sets the output filename for the generated report.
-pub fn handleOutput(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+pub fn handleOutput(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     if (value) |filename| {
         const trimmed = std.mem.trim(u8, filename, " \t\n\r");
         if (trimmed.len == 0) return;

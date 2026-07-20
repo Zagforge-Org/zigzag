@@ -1,11 +1,10 @@
-const WalkerCtx = @import("../walker/context.zig").WalkerCtx;
+const Context = @import("./Context.zig");
 const FileContext = @import("../cli/context.zig").FileContext;
-const Job = @import("../jobs/job.zig").Job;
-const processFileJob = @import("../jobs/process.zig").processFileJob;
+const Job = @import("../jobs/Job.zig");
 
 pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
     if (ctx) |c| {
-        const walker_ctx: *WalkerCtx = @ptrCast(@alignCast(c));
+        const walker_ctx: *Context = @ptrCast(@alignCast(c));
         const path_copy = try walker_ctx.allocator.dupe(u8, path);
         errdefer walker_ctx.allocator.free(path_copy);
 
@@ -18,9 +17,8 @@ pub fn walkerCallback(ctx: ?*FileContext, path: []const u8) anyerror!void {
             .binary_entries = walker_ctx.binary_entries,
             .entries_mutex = walker_ctx.entries_mutex,
             .allocator = walker_ctx.allocator,
-            .thread_allocator = walker_ctx.allocator, // placeholder; Task 2.3 wires real arena
         };
 
-        try walker_ctx.pool.spawnWg(walker_ctx.wg, processFileJob, .{job});
+        try walker_ctx.pool.spawn(walker_ctx.wg, Job.process, .{job});
     }
 }

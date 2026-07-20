@@ -91,7 +91,7 @@ TTY detection (`isatty`) is used to suppress phase start/done lines during the i
 
 If the configured port is already in use, the SSE server probes it via a non-blocking TCP connection check and increments the port, retrying up to 10 times. The port can also be set manually in the JSON settings file.
 
-On macOS and BSD, kqueue `NOTE_WRITE` on a directory fd does not fire when an existing file is modified in-place — it only fires for creates, deletes, and renames. To compensate, the macOS watcher runs a periodic mtime scan every 2 seconds to catch in-place modifications. **This is a known platform limitation.**
+On macOS and BSD, kqueue `NOTE_WRITE` on a directory fd does not fire when an existing file is modified in-place; it only fires for creates, deletes, and renames. To compensate, the macOS watcher runs a periodic mtime sweep that covers **every** watched directory, so an in-place edit is detected within one sweep interval (2 seconds by default). When a sweep measures slow on very large trees, the interval stretches adaptively to keep the poll thread's sweep duty cycle bounded. **This is a known platform limitation.**
 
 The watch loop uses a 50ms debounce window to group rapid-fire filesystem events into a single update, preserving CPU resources and avoiding redundant report writes.
 

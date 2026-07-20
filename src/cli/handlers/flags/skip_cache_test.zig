@@ -7,6 +7,6 @@ test "handleSkipCache handles skip-cache option" {
     const allocator = std.testing.allocator;
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
-    try handleSkipCache(&cfg, allocator, null);
+    try handleSkipCache(std.testing.io, &cfg, allocator, null);
     try testing.expectEqual(true, cfg.skip_cache);
 }

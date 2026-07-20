@@ -1,1 +1,1 @@
-pub const SseServer = @import("watch/server.zig").SseServer;
+pub const Server = @import("watch/Server.zig");

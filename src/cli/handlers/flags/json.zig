@@ -1,8 +1,8 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handleJson enables JSON report output alongside the markdown report.
-pub fn handleJson(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+pub fn handleJson(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     _ = value;
     cfg.json_output = true;

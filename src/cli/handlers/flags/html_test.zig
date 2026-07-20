@@ -7,6 +7,6 @@ test "handleHtml sets html_output to true" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
     try std.testing.expect(!cfg.html_output);
-    try handleHtml(&cfg, allocator, null);
+    try handleHtml(std.testing.io, &cfg, allocator, null);
     try std.testing.expect(cfg.html_output);
 }

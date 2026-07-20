@@ -8,7 +8,7 @@ test "handleOutput sets output filename" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleOutput(&cfg, allocator, "custom.md");
+    try handleOutput(std.testing.io, &cfg, allocator, "custom.md");
     try testing.expectEqualStrings("custom.md", cfg.output.?);
 }
 
@@ -17,7 +17,7 @@ test "handleOutput trims whitespace" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleOutput(&cfg, allocator, "  output.md  ");
+    try handleOutput(std.testing.io, &cfg, allocator, "  output.md  ");
     try testing.expectEqualStrings("output.md", cfg.output.?);
 }
 
@@ -26,7 +26,7 @@ test "handleOutput ignores empty filename" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleOutput(&cfg, allocator, "   ");
+    try handleOutput(std.testing.io, &cfg, allocator, "   ");
     try testing.expect(cfg.output == null);
 }
 
@@ -35,7 +35,7 @@ test "handleOutput replaces previous output value" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
 
-    try handleOutput(&cfg, allocator, "first.md");
-    try handleOutput(&cfg, allocator, "second.md");
+    try handleOutput(std.testing.io, &cfg, allocator, "first.md");
+    try handleOutput(std.testing.io, &cfg, allocator, "second.md");
     try testing.expectEqualStrings("second.md", cfg.output.?);
 }

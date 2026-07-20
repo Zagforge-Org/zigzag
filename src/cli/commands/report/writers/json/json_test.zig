@@ -1,7 +1,7 @@
 const std = @import("std");
-const Config = @import("../../../config/config.zig").Config;
-const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
+const Config = @import("../../../config/Config.zig");
+const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
 const writeJsonReport = @import("./json.zig").writeJsonReport;
 
@@ -23,10 +23,10 @@ test "writeJsonReport creates file with summary stats" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeJsonReport(&data, json_path, ".", &cfg, alloc);
+    try writeJsonReport(std.testing.io, &data, json_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
@@ -59,10 +59,10 @@ test "writeJsonReport includes language stats" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeJsonReport(&data, json_path, ".", &cfg, alloc);
+    try writeJsonReport(std.testing.io, &data, json_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
@@ -93,10 +93,10 @@ test "writeJsonReport files array is sorted by path" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeJsonReport(&data, json_path, ".", &cfg, alloc);
+    try writeJsonReport(std.testing.io, &data, json_path, ".", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);
@@ -124,10 +124,10 @@ test "writeJsonReport meta includes scanned path and version" {
     var cfg = Config.default(alloc);
     defer cfg.deinit();
 
-    var data = try ReportData.init(alloc, &file_entries, &binary_entries, null);
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
     defer data.deinit();
 
-    try writeJsonReport(&data, json_path, "my/project", &cfg, alloc);
+    try writeJsonReport(std.testing.io, &data, json_path, "my/project", &cfg, alloc);
 
     const content = try tmp.dir.readFileAlloc(std.testing.io, "report.json", alloc, .limited(1 << 20));
     defer alloc.free(content);

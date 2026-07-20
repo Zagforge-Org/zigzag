@@ -1,8 +1,8 @@
 const std = @import("std");
 const testing = std.testing;
 const handleInit = @import("./init.zig").handleInit;
-const FileConf = @import("../../../conf/file.zig").FileConf;
-const DEFAULT_CONF_FILENAME = @import("../../../conf/file.zig").DEFAULT_CONF_FILENAME;
+const FileConf = @import("../../../conf/FileConf.zig");
+const DEFAULT_CONF_FILE = @import("../../../conf/FileConf.zig").DEFAULT_CONF_FILE;
 
 test "handleInit creates file with default content" {
     const allocator = std.testing.allocator;
@@ -10,10 +10,10 @@ test "handleInit creates file with default content" {
     var tmp_dir = std.testing.tmpDir(.{});
     defer tmp_dir.cleanup();
 
-    try handleInit(allocator, tmp_dir.dir);
+    try handleInit(std.testing.io, allocator, tmp_dir.dir);
 
     // Verify file was created with valid default JSON
-    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
+    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILE, allocator, .limited(1 << 20));
     defer allocator.free(content);
 
     try testing.expect(content.len > 0);
@@ -38,15 +38,15 @@ test "handleInit does not overwrite existing file" {
 
     // Create the file with custom content first
     {
-        const f = try tmp_dir.dir.createFile(std.testing.io, DEFAULT_CONF_FILENAME, .{});
+        const f = try tmp_dir.dir.createFile(std.testing.io, DEFAULT_CONF_FILE, .{});
         defer f.close(std.testing.io);
         try f.writeStreamingAll(std.testing.io, "{\"watch\": true}");
     }
 
     // handleInit should not overwrite
-    try handleInit(allocator, tmp_dir.dir);
+    try handleInit(std.testing.io, allocator, tmp_dir.dir);
 
-    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILENAME, allocator, .limited(1 << 20));
+    const content = try tmp_dir.dir.readFileAlloc(std.testing.io, DEFAULT_CONF_FILE, allocator, .limited(1 << 20));
     defer allocator.free(content);
 
     try testing.expectEqualStrings("{\"watch\": true}", content);

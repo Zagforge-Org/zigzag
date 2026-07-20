@@ -100,12 +100,12 @@ test "resolveCombinedHtmlPath returns combined.html in base output dir" {
     const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
-    var cfg = @import("../../config/config.zig").Config.default(allocator);
+    var cfg = @import("../../config/Config.zig").default(allocator);
     defer cfg.deinit();
     cfg.output_dir = try allocator.dupe(u8, tmp_abs);
     cfg._output_dir_allocated = true;
 
-    const result = try @import("paths.zig").resolveCombinedHtmlPath(allocator, &cfg);
+    const result = try @import("paths.zig").resolveCombinedHtmlPath(std.testing.io, allocator, &cfg);
     defer allocator.free(result);
 
     try std.testing.expect(std.mem.endsWith(u8, result, "combined.html"));
@@ -119,12 +119,12 @@ test "resolveCombinedContentPath returns combined-content.json in base output di
     const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
-    var cfg = @import("../../config/config.zig").Config.default(allocator);
+    var cfg = @import("../../config/Config.zig").default(allocator);
     defer cfg.deinit();
     cfg.output_dir = try allocator.dupe(u8, tmp_abs);
     cfg._output_dir_allocated = true;
 
-    const result = try @import("paths.zig").resolveCombinedContentPath(allocator, &cfg);
+    const result = try @import("paths.zig").resolveCombinedContentPath(std.testing.io, allocator, &cfg);
     defer allocator.free(result);
 
     try std.testing.expect(std.mem.endsWith(u8, result, "combined-content.json"));
@@ -152,12 +152,12 @@ test "resolveOutputPath returns path under configured output_dir" {
     const tmp_abs = try tmp.dir.realPathFileAlloc(std.testing.io, ".", allocator);
     defer allocator.free(tmp_abs);
 
-    var cfg = @import("../../config/config.zig").Config.default(allocator);
+    var cfg = @import("../../config/Config.zig").default(allocator);
     defer cfg.deinit();
     cfg.output_dir = try allocator.dupe(u8, tmp_abs);
     cfg._output_dir_allocated = true;
 
-    const result = try resolveOutputPath(allocator, &cfg, "./src", "report.md");
+    const result = try resolveOutputPath(std.testing.io, allocator, &cfg, "./src", "report.md");
     defer allocator.free(result);
 
     try std.testing.expect(std.mem.indexOf(u8, result, "src") != null);

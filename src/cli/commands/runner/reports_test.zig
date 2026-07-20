@@ -1,18 +1,18 @@
 const std = @import("std");
 const reports = @import("./reports.zig");
 const scan = @import("./scan.zig");
-const Config = @import("../config/config.zig").Config;
-const Pool = @import("../../../workers/pool.zig").Pool;
-const ProcessStats = @import("../stats.zig").ProcessStats;
-const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
+const Config = @import("../config/Config.zig");
+const Pool = @import("../../../workers/Pool.zig");
+const Stats = @import("../stats.zig").Stats;
+const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 
 fn makeEmptyResult(alloc: std.mem.Allocator, root_path: []const u8) scan.ScanResult {
     return .{
         .root_path = root_path,
         .file_entries = std.StringHashMap(JobEntry).init(alloc),
         .binary_entries = std.StringHashMap(BinaryEntry).init(alloc),
-        .stats = ProcessStats.init(),
+        .stats = Stats.init(),
     };
 }
 
@@ -30,13 +30,13 @@ test "writePathReports creates markdown report file" {
     cfg._output_dir_allocated = true;
 
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
     var result = makeEmptyResult(alloc, tmp_path);
     defer result.deinit(alloc);
 
-    try reports.writePathReports(&result, &cfg, &pool, alloc, null, null, false);
+    try reports.writePathReports(std.testing.io, &result, &cfg, &pool, alloc, null, false);
 
     // resolveOutputPath produces {output_dir}/{basename(root_path)}/report.md
     const basename = std.fs.path.basename(tmp_path);
@@ -82,13 +82,13 @@ test "writePathReports with scanned files produces non-empty report" {
     cfg._output_dir_allocated = true;
 
     var pool = Pool{};
-    try pool.init(.{ .allocator = alloc, .n_jobs = 1 });
+    try pool.init(std.testing.io, .{ .allocator = alloc, .n_jobs = 1 });
     defer pool.deinit();
 
-    var scan_result = try scan.scanPath(&cfg, null, scan_path, &pool, alloc, null);
+    var scan_result = try scan.scanPath(std.testing.io, &cfg, null, scan_path, &pool, alloc);
     defer scan_result.deinit(alloc);
 
-    try reports.writePathReports(&scan_result, &cfg, &pool, alloc, null, null, false);
+    try reports.writePathReports(std.testing.io, &scan_result, &cfg, &pool, alloc, null, false);
 
     const basename = std.fs.path.basename(scan_path);
     const report_path = try std.fmt.allocPrint(alloc, "{s}/{s}/report.md", .{ out_path, basename });

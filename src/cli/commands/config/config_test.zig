@@ -1,6 +1,6 @@
 const std = @import("std");
-const Config = @import("./config.zig").Config;
-const FileConf = @import("../../../conf/file.zig").FileConf;
+const Config = @import("./Config.zig");
+const FileConf = @import("../../../conf/FileConf.zig");
 
 test "Config.default has expected defaults" {
     const allocator = std.testing.allocator;

@@ -7,6 +7,6 @@ test "handleOpen sets open_browser" {
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
     try std.testing.expect(!cfg.open_browser);
-    try handleOpen(&cfg, allocator, null);
+    try handleOpen(std.testing.io, &cfg, allocator, null);
     try std.testing.expect(cfg.open_browser);
 }

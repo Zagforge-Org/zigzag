@@ -31,7 +31,7 @@ test {
     _ = @import("./cli/handlers/display/version_test.zig");
     // handler tests — init/ (previously undiscovered — adds 2 tests)
     _ = @import("./cli/handlers/init/init_test.zig");
-    _ = @import("./cli/commands/config/config.zig");
+    _ = @import("./cli/commands/config/Config.zig");
     _ = @import("./cli/commands/runner.zig");
 
     // runner sub-module tests
@@ -39,57 +39,55 @@ test {
     _ = @import("./cli/commands/runner/reports_test.zig");
 
     // watch sub-module tests
-    _ = @import("./cli/commands/watch/state_test.zig");
-    _ = @import("./cli/commands/watch/server_test.zig");
+    _ = @import("./cli/commands/watch/State_test.zig");
+    _ = @import("./cli/commands/watch/Server_test.zig");
     _ = @import("./cli/commands/watch/reporter_test.zig");
     _ = @import("./cli/commands/watch/exec_test.zig");
+    _ = @import("./cli/commands/watch/WatchLoop_test.zig");
     _ = @import("./cli/version/version_test.zig");
     _ = @import("./cli/commands/stats/stats_test.zig");
     _ = @import("./cli/commands/watch/port_listening_test.zig");
 
     // report sub-module tests
-    _ = @import("./cli/commands/report/aggregator/aggregator_test.zig");
+    _ = @import("./cli/commands/report/aggregator/ReportData_test.zig");
     _ = @import("./cli/commands/report/content/content_test.zig");
     _ = @import("./cli/commands/report/paths/paths_test.zig");
     _ = @import("./cli/commands/report/writers/markdown/markdown_test.zig");
     _ = @import("./cli/commands/report/writers/json/json_test.zig");
     _ = @import("./cli/commands/report/writers/html/html_test.zig");
     _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/chunk_writer_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/ast_chunker_test.zig");
+    _ = @import("./cli/commands/report/writers/llm/ChunkWriter_test.zig");
+    _ = @import("./cli/commands/report/writers/ast/ast_chunker_test.zig");
     _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
 
-    _ = @import("./conf/file_test.zig");
-    _ = @import("./cache/impl_test.zig");
+    _ = @import("./conf/FileConf_test.zig");
+    _ = @import("./cache/Cache_test.zig");
 
-    _ = @import("./fs/directory_test.zig");
-    _ = @import("./fs/watcher.zig");
-    _ = @import("./jobs/entry.zig");
-    _ = @import("./jobs/process.zig");
+    _ = @import("./platform/watcher.zig");
+    _ = @import("./jobs/entries_test.zig");
+    _ = @import("./jobs/inspect_test.zig");
 
-    _ = @import("./cli/commands/serve_test.zig");
+    _ = @import("./cli/commands/serve/serve_test.zig");
     _ = @import("./utils/colors/colors_test.zig");
     _ = @import("./utils/skip_dirs/skip_dirs_test.zig");
-    _ = @import("./utils/logger/print/print_test.zig");
-    _ = @import("./utils/logger/summary/summary_test.zig");
-    _ = @import("./utils/logger/phase/phase_test.zig");
-    _ = @import("./utils/logger/cpu/cpu_test.zig");
-    _ = @import("./utils/logger/file_logger/file_logger_test.zig");
+    _ = @import("./logger/Logger_test.zig");
+    _ = @import("./utils/host_test.zig");
     _ = @import("./utils/fmt/fmt_test.zig");
-    _ = @import("./utils/progress/progress_test.zig");
+    _ = @import("./utils/time/time_test.zig");
+    _ = @import("./progress/progress_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
-    _ = @import("./cli/commands/config/timezone/timezone_test.zig");
+    _ = @import("./cli/commands/config/timezone_test.zig");
     _ = @import("./cli/commands/bench/bench_test.zig");
 
     switch (builtin.os.tag) {
         .linux => {
-            _ = @import("./fs/watcher/linux_test.zig");
+            _ = @import("./platform/linux/Watcher_test.zig");
         },
         .macos, .freebsd, .netbsd, .openbsd, .dragonfly => {
-            _ = @import("./fs/watcher/macos_test.zig");
+            _ = @import("./platform/macos/Watcher_test.zig");
         },
         .windows => {
-            _ = @import("./fs/watcher/windows_test.zig");
+            _ = @import("./platform/windows/Watcher_test.zig");
         },
         else => {},
     }

@@ -1,11 +1,11 @@
 const std = @import("std");
-const Config = @import("../../commands/config/config.zig").Config;
+const Config = @import("../../commands/config/Config.zig");
 
 /// handleIgnores handles the ignore option - can be called multiple times.
 /// Accepts comma-separated patterns in a single value.
 /// When called via CLI, the first invocation replaces any file-config patterns.
 /// Subsequent CLI invocations accumulate additional patterns.
-pub fn handleIgnores(cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
+pub fn handleIgnores(_: std.Io, cfg: *Config, allocator: std.mem.Allocator, value: ?[]const u8) anyerror!void {
     _ = allocator;
     if (value) |raw| {
         // First CLI --ignore call: replace file-loaded patterns (CLI overrides file config)

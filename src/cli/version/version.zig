@@ -3,7 +3,6 @@
 // Written with tests for both binary and runtime modes.
 
 const std = @import("std");
-const rt = @import("../../runtime.zig");
 
 const DEFAULT_MAX_ZON_BYTES = 1 << 20; // 1 MiB
 const DEFAULT_BUILD_PATH = "build.zig.zon";
@@ -48,11 +47,11 @@ pub fn getVersion(allocator: std.mem.Allocator) ![]const u8 {
 
 // readZonVersion reads the version from build.zig.zon.
 // It returns an error if the file is not found or too big.
-pub fn readZonVersion(allocator: std.mem.Allocator, opts: ReadOptions) VersionError![]u8 {
+pub fn readZonVersion(io: std.Io, allocator: std.mem.Allocator, opts: ReadOptions) VersionError![]u8 {
     const file_path = opts.path orelse DEFAULT_BUILD_PATH;
     const max_bytes = opts.max_bytes orelse DEFAULT_MAX_ZON_BYTES;
 
-    const file_data = std.Io.Dir.cwd().readFileAlloc(rt.io(), file_path, allocator, .limited(max_bytes)) catch |err| {
+    const file_data = std.Io.Dir.cwd().readFileAlloc(io, file_path, allocator, .limited(max_bytes)) catch |err| {
         return switch (err) {
             error.StreamTooLong => VersionError.FileTooBig,
             error.FileNotFound => VersionError.FileNotFound,

@@ -7,6 +7,6 @@ test "handleSmall handles small option" {
     const allocator = std.testing.allocator;
     var cfg = makeTestConfig(allocator);
     defer cfg.deinit();
-    try handleSmall(&cfg, allocator, "1024");
+    try handleSmall(std.testing.io, &cfg, allocator, "1024");
     try testing.expectEqual(1024, cfg.small_threshold);
 }

@@ -1,43 +1,98 @@
 const std = @import("std");
 
+/// Exact filenames that are dependency lock files or generated manifests.
+const BOILERPLATE = [_][]const u8{
+    // JS/TS
+    "package-lock.json",  "npm-shrinkwrap.json", "yarn.lock",       "pnpm-lock.yaml",
+    "bun.lockb",          "bun.lock",
+    // Go
+               "go.sum",          "go.work.sum",
+    // Rust
+    "Cargo.lock",
+    // Ruby
+            "Gemfile.lock",
+    // Python
+           "poetry.lock",     "Pipfile.lock",
+    // PHP
+    "composer.lock",
+    // Elixir / Dart / Nix / Deno
+         "mix.lock",            "pubspec.lock",    "flake.lock",
+    "deno.lock",
+    // Swift / CocoaPods / Carthage
+             "Package.resolved",    "Podfile.lock",    "Cartfile.resolved",
+    // .NET / Java / Terraform
+    "packages.lock.json", "paket.lock",          "gradle.lockfile", ".terraform.lock.hcl",
+};
+
+/// Filename suffixes that mark minified, bundled, or generated files.
+const BOILERPLATE_EXTENSIONS = [_][]const u8{
+    ".lock",
+    ".min.js",
+    ".min.mjs",
+    ".min.css",
+    ".bundle.js",
+    ".chunk.js",
+    ".map",
+    ".pb.go",
+    ".pb.cc",
+    ".pb.h",
+    "_pb2.py",
+    "_pb2_grpc.py",
+    ".g.dart",
+    ".freezed.dart",
+    ".snap",
+};
+
+/// Extensions whose single-line comments start with `//`.
+const SLASH_COMMENT_EXTENSIONS = [_][]const u8{
+    ".zig",    ".js",    ".ts",  ".jsx",  ".tsx",  ".mjs",  ".cjs",
+    ".rs",     ".go",    ".c",   ".h",    ".cpp",  ".cc",   ".cxx",
+    ".hpp",    ".hh",    ".hxx", ".cu",   ".cuh",  ".java", ".scala",
+    ".swift",  ".kt",    ".kts", ".cs",   ".dart", ".php",  ".groovy",
+    ".gradle", ".proto", ".sol", ".glsl", ".hlsl", ".wgsl", ".mm",
+    ".jsonc",
+};
+
+/// Extensions whose single-line comments start with `#`.
+const HASH_COMMENT_EXTENSIONS = [_][]const u8{
+    ".py",    ".sh",   ".bash",    ".zsh", ".fish", ".ps1",
+    ".rb",    ".rake", ".gemspec", ".pl",  ".r",    ".jl",
+    ".ex",    ".exs",  ".nim",     ".cr",  ".tcl",  ".nix",
+    ".cmake", ".mk",   ".yaml",    ".yml", ".toml",
+};
+
+/// Extensions whose single-line comments start with `--`.
+const DASH_COMMENT_EXTENSIONS = [_][]const u8{
+    ".sql", ".lua", ".hs", ".elm", ".purs", ".vhd", ".vhdl", ".adb", ".ads",
+};
+
+/// Extensions whose single-line comments start with `%`.
+const PERCENT_COMMENT_EXTENSIONS = [_][]const u8{
+    ".tex", ".sty", ".cls", ".bib", ".erl", ".hrl",
+};
+
+fn matchesAny(needle: []const u8, haystack: []const []const u8) bool {
+    for (haystack) |item| {
+        if (std.mem.eql(u8, needle, item)) return true;
+    }
+    return false;
+}
+
 /// Returns true if the filename matches known boilerplate patterns.
 pub fn isBoilerplate(filename: []const u8) bool {
-    const boilerplate_exact = [_][]const u8{
-        "package-lock.json",
-        "go.sum",
-        "yarn.lock",
-        "Cargo.lock",
-        "Gemfile.lock",
-        "poetry.lock",
-        "pnpm-lock.yaml",
-        "composer.lock",
-    };
-    for (boilerplate_exact) |name| {
-        if (std.mem.eql(u8, filename, name)) return true;
-    }
-    const boilerplate_ext = [_][]const u8{ ".lock", ".min.js", ".pb.go" };
-    for (boilerplate_ext) |ext| {
+    if (matchesAny(filename, &BOILERPLATE)) return true;
+    for (BOILERPLATE_EXTENSIONS) |ext| {
         if (std.mem.endsWith(u8, filename, ext)) return true;
     }
-    if (std.mem.indexOf(u8, filename, ".generated.") != null) return true;
-    return false;
+    return std.mem.indexOf(u8, filename, ".generated.") != null;
 }
 
 /// Returns the single-line comment prefix for the given file extension, or null if unknown.
 pub fn getCommentPrefix(extension: []const u8) ?[]const u8 {
-    const slash_slash = [_][]const u8{ ".zig", ".js", ".ts", ".jsx", ".tsx", ".rs", ".go", ".c", ".h", ".cpp", ".cc", ".java", ".swift", ".kt", ".cs" };
-    for (slash_slash) |ext| {
-        if (std.mem.eql(u8, extension, ext)) return "//";
-    }
-    const hash = [_][]const u8{ ".py", ".sh", ".rb", ".pl", ".r", ".yaml", ".yml", ".toml" };
-    for (hash) |ext| {
-        if (std.mem.eql(u8, extension, ext)) return "#";
-    }
-    const dash_dash = [_][]const u8{ ".sql", ".lua" };
-    for (dash_dash) |ext| {
-        if (std.mem.eql(u8, extension, ext)) return "--";
-    }
-    if (std.mem.eql(u8, extension, ".tex")) return "%";
+    if (matchesAny(extension, &SLASH_COMMENT_EXTENSIONS)) return "//";
+    if (matchesAny(extension, &HASH_COMMENT_EXTENSIONS)) return "#";
+    if (matchesAny(extension, &DASH_COMMENT_EXTENSIONS)) return "--";
+    if (matchesAny(extension, &PERCENT_COMMENT_EXTENSIONS)) return "%";
     return null;
 }
 
@@ -54,7 +109,6 @@ pub fn condenseContent(
 ) ![]u8 {
     const comment_prefix = getCommentPrefix(extension);
 
-    // Phase 1: comment strip + blank collapse
     var condensed: std.ArrayList([]const u8) = .empty;
     defer condensed.deinit(allocator);
 
@@ -78,7 +132,6 @@ pub fn condenseContent(
         try condensed.append(allocator, line);
     }
 
-    // Phase 2: truncation
     // A trailing empty string from splitting a newline-terminated file is not
     // a real line; exclude it from the count but preserve it for the join so
     // that the output retains a trailing newline.

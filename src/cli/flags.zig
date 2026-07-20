@@ -1,5 +1,5 @@
 const std = @import("std");
-const Config = @import("./commands/config/config.zig").Config;
+const Config = @import("./commands/config/Config.zig");
 
 const versionHandler = @import("./handlers/display/version.zig").printVersion;
 const helpHandler = @import("./handlers/display/help.zig").printHelp;
@@ -25,7 +25,7 @@ const openHandler = @import("./handlers/flags/open.zig").handleOpen;
 pub const FlagsHandler = struct {
     name: []const u8,
     takes_value: bool,
-    handler: *const fn (*Config, std.mem.Allocator, ?[]const u8) anyerror!void,
+    handler: *const fn (std.Io, *Config, std.mem.Allocator, ?[]const u8) anyerror!void,
 };
 
 pub const flags = [_]FlagsHandler{

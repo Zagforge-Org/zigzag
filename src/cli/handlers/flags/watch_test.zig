@@ -9,6 +9,6 @@ test "handleWatch enables watch mode" {
     defer cfg.deinit();
 
     try testing.expect(!cfg.watch);
-    try handleWatch(&cfg, allocator, null);
+    try handleWatch(std.testing.io, &cfg, allocator, null);
     try testing.expect(cfg.watch);
 }

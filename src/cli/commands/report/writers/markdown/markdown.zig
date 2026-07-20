@@ -1,12 +1,12 @@
 const std = @import("std");
-const rt = @import("../../../../../runtime.zig");
-const Config = @import("../../../config/config.zig").Config;
-const JobEntry = @import("../../../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../../../jobs/entry.zig").BinaryEntry;
+const Config = @import("../../../config/Config.zig");
+const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
 const ReportData = @import("../aggregator.zig").ReportData;
 
 /// Write a single file entry to the report with metadata.
 fn writeFileEntry(
+    io: std.Io,
     md_file: *std.Io.File,
     entry: *const JobEntry,
     allocator: std.mem.Allocator,
@@ -35,7 +35,7 @@ fn writeFileEntry(
         },
     );
     defer allocator.free(header);
-    try md_file.writeStreamingAll(rt.io(), header);
+    try md_file.writeStreamingAll(io, header);
 
     const code_fence_start = if (lang.len > 0)
         try std.fmt.allocPrint(allocator, "```{s}\n", .{lang})
@@ -43,28 +43,29 @@ fn writeFileEntry(
         try allocator.dupe(u8, "```\n");
     defer allocator.free(code_fence_start);
 
-    try md_file.writeStreamingAll(rt.io(), code_fence_start);
-    try md_file.writeStreamingAll(rt.io(), entry.content);
+    try md_file.writeStreamingAll(io, code_fence_start);
+    try md_file.writeStreamingAll(io, entry.content);
 
     if (entry.content.len > 0 and entry.content[entry.content.len - 1] != '\n') {
-        try md_file.writeStreamingAll(rt.io(), "\n");
+        try md_file.writeStreamingAll(io, "\n");
     }
 
-    try md_file.writeStreamingAll(rt.io(), "```\n\n");
+    try md_file.writeStreamingAll(io, "```\n\n");
 }
 
 /// Serialize pre-aggregated data to a markdown report file.
-/// Called both from one-shot mode and watch mode.
+/// Called both from one-shot mode and watch mode. Reads only the ReportData
+/// snapshot so it can run while the live entry maps are being updated.
 pub fn writeReport(
+    io: std.Io,
     data: *const ReportData,
-    file_entries: *const std.StringHashMap(JobEntry),
     md_path: []const u8,
     root_path: []const u8,
     cfg: *const Config,
     allocator: std.mem.Allocator,
 ) !void {
-    var md_file = try std.Io.Dir.cwd().createFile(rt.io(), md_path, .{ .truncate = true });
-    defer md_file.close(rt.io());
+    var md_file = try std.Io.Dir.cwd().createFile(io, md_path, .{ .truncate = true });
+    defer md_file.close(io);
 
     // Header
     const header = try std.fmt.allocPrint(
@@ -75,37 +76,20 @@ pub fn writeReport(
         .{ root_path, data.generated_at_str },
     );
     defer allocator.free(header);
-    try md_file.writeStreamingAll(rt.io(), header);
+    try md_file.writeStreamingAll(io, header);
 
-    // Table of contents (built from the raw map for correct entry paths)
-    try md_file.writeStreamingAll(rt.io(), "## Table of Contents\n\n");
+    // Table of contents (sorted_files is already path-ordered)
+    try md_file.writeStreamingAll(io, "## Table of Contents\n\n");
 
-    var toc_list: std.ArrayList([]const u8) = .empty;
-    defer {
-        for (toc_list.items) |item| allocator.free(item);
-        toc_list.deinit(allocator);
+    for (data.sorted_files.items) |*entry| {
+        const toc_entry = try std.fmt.allocPrint(allocator, "- [{s}](#{s})\n", .{ entry.path, entry.path });
+        defer allocator.free(toc_entry);
+        try md_file.writeStreamingAll(io, toc_entry);
     }
-
-    var it = file_entries.iterator();
-    while (it.next()) |entry| {
-        const toc_entry = try std.fmt.allocPrint(allocator, "- [{s}](#{s})\n", .{
-            entry.value_ptr.path,
-            entry.value_ptr.path,
-        });
-        try toc_list.append(allocator, toc_entry);
-    }
-
-    std.mem.sort([]const u8, toc_list.items, {}, struct {
-        fn lessThan(_: void, a: []const u8, b: []const u8) bool {
-            return std.mem.lessThan(u8, a, b);
-        }
-    }.lessThan);
-
-    for (toc_list.items) |toc_entry| try md_file.writeStreamingAll(rt.io(), toc_entry);
-    try md_file.writeStreamingAll(rt.io(), "\n---\n\n");
+    try md_file.writeStreamingAll(io, "\n---\n\n");
 
     // Sorted file entries (use pre-sorted list from ReportData)
     for (data.sorted_files.items) |*entry| {
-        try writeFileEntry(&md_file, entry, allocator, cfg.timezone_offset);
+        try writeFileEntry(io, &md_file, entry, allocator, cfg.timezone_offset);
     }
 }

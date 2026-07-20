@@ -1,32 +1,25 @@
 const std = @import("std");
-const rt = @import("../../../runtime.zig");
-const walk = @import("../../../fs/walk.zig").Walk;
+const Walk = @import("../../../fs/Walk.zig");
 const walkerCallback = @import("../../../walker/callback.zig").walkerCallback;
-const Config = @import("../config/config.zig").Config;
+const Config = @import("../config/Config.zig");
 const FileContext = @import("../../context.zig").FileContext;
-const Pool = @import("../../../workers/pool.zig").Pool;
-const WaitGroup = @import("../../../workers/wait_group.zig").WaitGroup;
-const CacheImpl = @import("../../../cache/impl.zig").CacheImpl;
-const ProcessStats = @import("../stats.zig").ProcessStats;
-const JobEntry = @import("../../../jobs/entry.zig").JobEntry;
-const BinaryEntry = @import("../../../jobs/entry.zig").BinaryEntry;
-const WalkerCtx = @import("../../../walker/context.zig").WalkerCtx;
+const Pool = @import("../../../workers/Pool.zig");
+const WaitGroup = @import("../../../workers/WaitGroup.zig");
+const Cache = @import("../../../cache/Cache.zig");
+const Stats = @import("../stats.zig").Stats;
+const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
+const Context = @import("../../../walker/Context.zig");
 const report = @import("../report.zig");
 const lg = @import("../../../utils/utils.zig");
-const Logger = lg.Logger;
-
-/// Nanoseconds elapsed since `start` (from nanoTimestamp). Clamped to 0.
-pub inline fn nsElapsed(start: i128) u64 {
-    const delta = std.Io.Timestamp.now(rt.io(), .real).nanoseconds - start;
-    return @intCast(@max(0, delta));
-}
+const log = @import("../../../logger/Logger.zig");
 
 /// Owned result of scanning one path. Caller (exec) controls lifetime.
 pub const ScanResult = struct {
     root_path: []const u8, // not owned — points into cfg.paths item
     file_entries: std.StringHashMap(JobEntry),
     binary_entries: std.StringHashMap(BinaryEntry),
-    stats: ProcessStats,
+    stats: Stats,
 
     pub fn deinit(self: *ScanResult, allocator: std.mem.Allocator) void {
         var it = self.file_entries.iterator();
@@ -47,23 +40,24 @@ pub const ScanResult = struct {
 
 /// Scan a single directory path and return collected entries. Caller owns the result.
 pub fn scanPath(
+    io: std.Io,
     cfg: *const Config,
-    cache: ?*CacheImpl,
+    cache: ?*Cache,
     path: []const u8,
     pool: *Pool,
     allocator: std.mem.Allocator,
-    logger: ?*Logger,
 ) !ScanResult {
-    var dir = std.Io.Dir.cwd().openDir(rt.io(), path, .{}) catch {
+    var dir = std.Io.Dir.cwd().openDir(io, path, .{}) catch {
         return error.NotADirectory;
     };
-    defer dir.close(rt.io());
+    defer dir.close(io);
 
     const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
-    const md_path = try report.resolveOutputPath(allocator, cfg, path, output_filename);
+    const md_path = try report.resolveOutputPath(io, allocator, cfg, path, output_filename);
     defer allocator.free(md_path);
 
     var file_ctx = FileContext{
+        .io = io,
         .ignore_list = .empty,
         .md = undefined,
         .md_mutex = undefined,
@@ -106,8 +100,8 @@ pub fn scanPath(
         try file_ctx.ignore_list.append(allocator, owned_pattern);
     }
 
-    var wg = WaitGroup.init();
-    var stats = ProcessStats.init();
+    var wg = WaitGroup.init(io);
+    var stats = Stats.init();
 
     var file_entries = std.StringHashMap(JobEntry).init(allocator);
     errdefer {
@@ -132,7 +126,7 @@ pub fn scanPath(
 
     var entries_mutex = @as(std.Io.Mutex, .init);
 
-    var walker_ctx = WalkerCtx{
+    var walker_ctx = Context{
         .pool = pool,
         .wg = &wg,
         .file_ctx = &file_ctx,
@@ -144,20 +138,20 @@ pub fn scanPath(
         .allocator = allocator,
     };
 
-    const walker = try walk.init(allocator);
+    const walker = try Walk.init(io, allocator);
     const walk_ctx: ?*FileContext = @ptrCast(@alignCast(&walker_ctx));
 
-    var pb = lg.ProgressBar.init(&stats); // pb must not be moved after this line
+    var pb = lg.Progress.init(io, &stats); // pb must not be moved after this line
     try pb.start();
     try walker.walkDir(path, walkerCallback, walk_ctx);
     wg.wait();
     pb.stop();
 
     // Log each processed file to the log file
-    if (logger) |l| {
+    if (log.fileEnabled()) {
         var it = file_entries.iterator();
         while (it.next()) |entry| {
-            l.log("  file: {s} ({d} bytes, {d} lines)", .{
+            log.file(io, "  file: {s} ({d} bytes, {d} lines)", .{
                 entry.value_ptr.path,
                 entry.value_ptr.content.len,
                 entry.value_ptr.line_count,
