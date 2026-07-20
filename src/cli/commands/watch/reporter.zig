@@ -8,8 +8,8 @@ const log = @import("../../../logger/Logger.zig");
 /// Write the combined multi-path HTML dashboard and its content sidecar.
 /// No-op when html_output is false or fewer than 2 states are active.
 /// changed_paths: slice of absolute file paths modified in the current debounce window.
-///   - Empty slice → write ALL combined content sidecar files (initial scan or post-overflow).
-///   - Non-empty  → write only the listed paths' sidecars (incremental watch update).
+///   - Empty slice -> write ALL combined content sidecar files (initial scan or post-overflow).
+///   - Non-empty -> write only the listed paths' sidecars (incremental watch update).
 /// After writing, broadcasts a "combined_update" SSE event when sse_server is non-null.
 pub fn writeCombinedReport(
     io: std.Io,
@@ -104,8 +104,8 @@ pub fn writeCombinedReport(
 /// Build ReportData once and write all enabled report formats.
 /// The optional sse_server receives the SSE payload when html_output is active.
 /// changed_paths: slice of absolute file paths modified in the current debounce window.
-///   - Empty slice → write ALL content sidecar files (initial scan or post-overflow).
-///   - Non-empty  → write only the listed paths' sidecars (incremental watch update).
+///   - Empty slice -> write ALL content sidecar files (initial scan or post-overflow).
+///   - Non-empty -> write only the listed paths' sidecars (incremental watch update).
 pub fn writeAllReports(
     io: std.Io,
     state: *State,
@@ -132,62 +132,76 @@ pub fn writeAllReports(
     };
     log.step(io, "Rebuilt: {s}", .{std.fs.path.basename(state.md_path)});
 
-    if (cfg.json_output) {
-        const json_path = report.deriveJsonPath(allocator, state.md_path) catch null;
-        if (json_path) |jp| {
-            defer allocator.free(jp);
-            report.writeJsonReport(io, &report_data, jp, state.root_path, cfg, allocator) catch |err| {
-                log.err(io, "Failed to write JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-            };
-        }
+    if (cfg.json_output) writeJsonOutput(io, state, cfg, &report_data, allocator);
+    if (cfg.html_output) writeHtmlOutput(io, state, cfg, &report_data, sse_server, changed_paths, allocator);
+    if (cfg.llm_report) writeLlmOutput(io, state, cfg, &report_data, allocator);
+}
+
+/// Write the JSON report sidecar for `state`.
+fn writeJsonOutput(io: std.Io, state: *State, cfg: *const Config, report_data: *report.ReportData, allocator: std.mem.Allocator) void {
+    const json_path = report.deriveJsonPath(allocator, state.md_path) catch return;
+    defer allocator.free(json_path);
+    report.writeJsonReport(io, report_data, json_path, state.root_path, cfg, allocator) catch |err| {
+        log.err(io, "Failed to write JSON report for '{s}': {s}", .{ state.root_path, @errorName(err) });
+    };
+}
+
+/// Write the HTML dashboard, content sidecars, watch stamp, and SSE report event.
+fn writeHtmlOutput(
+    io: std.Io,
+    state: *State,
+    cfg: *const Config,
+    report_data: *report.ReportData,
+    sse_server: ?*Server,
+    changed_paths: []const []const u8,
+    allocator: std.mem.Allocator,
+) void {
+    const html_path = report.deriveHtmlPath(allocator, state.md_path) catch return;
+    defer allocator.free(html_path);
+
+    report.writeHtmlReport(io, report_data, html_path, state.root_path, cfg, allocator) catch |err| {
+        log.err(io, "Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
+    };
+
+    writeContentSidecars(io, state, html_path, changed_paths, allocator);
+
+    // Write stamp AFTER content sidecar files are ready so stamp polling never
+    // sees a new timestamp while content files are still being written.
+    if (cfg.watch) {
+        report.writeStampFile(io, html_path, report_data.generated_at_str, allocator) catch |err| {
+            log.err(io, "stamp file write failed: {s}", .{@errorName(err)});
+        };
     }
 
-    if (cfg.html_output) {
-        const html_path = report.deriveHtmlPath(allocator, state.md_path) catch null;
-        if (html_path) |hp| {
-            defer allocator.free(hp);
-            report.writeHtmlReport(io, &report_data, hp, state.root_path, cfg, allocator) catch |err| {
-                log.err(io, "Failed to write HTML report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-            };
-            const content_dir = report.deriveContentDir(allocator, hp) catch null;
-            if (content_dir) |cd| {
-                defer allocator.free(cd);
-                if (changed_paths.len > 0) {
-                    // Watch debounce: only write sidecars for files changed in this window.
-                    report.writeChangedContentFiles(io, &state.file_entries, changed_paths, cd, allocator) catch |err| {
-                        log.err(io, "content files write failed: {s}", .{@errorName(err)});
-                    };
-                } else {
-                    // Initial scan or post-overflow: write all sidecars.
-                    report.writeContentFiles(io, &state.file_entries, cd, allocator) catch |err| {
-                        log.err(io, "content files write failed: {s}", .{@errorName(err)});
-                    };
-                }
-            }
-            // Write stamp AFTER content sidecar files are ready so stamp polling never
-            // sees a new timestamp while content files are still being written.
-            if (cfg.watch) {
-                report.writeStampFile(io, hp, report_data.generated_at_str, allocator) catch |err| {
-                    log.err(io, "stamp file write failed: {s}", .{@errorName(err)});
-                };
-            }
-            if (sse_server) |srv| {
-                const payload = report.buildSsePayload(&report_data, state.root_path, cfg, allocator) catch null;
-                if (payload) |p| {
-                    defer allocator.free(p);
-                    srv.broadcast(p);
-                }
-            }
+    if (sse_server) |srv| {
+        const payload = report.buildSsePayload(report_data, state.root_path, cfg, allocator) catch null;
+        if (payload) |p| {
+            defer allocator.free(p);
+            srv.broadcast(p);
         }
     }
+}
 
-    if (cfg.llm_report) {
-        const llm_path = report.deriveLlmPath(allocator, state.md_path) catch null;
-        if (llm_path) |lp| {
-            defer allocator.free(lp);
-            report.writeLlmReport(io, &report_data, state.binary_entries.count(), lp, state.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
-                log.err(io, "Failed to write LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
-            };
-        }
+/// Write content sidecars: only changed_paths, or all of them when the slice is empty.
+fn writeContentSidecars(io: std.Io, state: *State, html_path: []const u8, changed_paths: []const []const u8, allocator: std.mem.Allocator) void {
+    const content_dir = report.deriveContentDir(allocator, html_path) catch return;
+    defer allocator.free(content_dir);
+    if (changed_paths.len > 0) {
+        report.writeChangedContentFiles(io, &state.file_entries, changed_paths, content_dir, allocator) catch |err| {
+            log.err(io, "content files write failed: {s}", .{@errorName(err)});
+        };
+    } else {
+        report.writeContentFiles(io, &state.file_entries, content_dir, allocator) catch |err| {
+            log.err(io, "content files write failed: {s}", .{@errorName(err)});
+        };
     }
+}
+
+/// Write the LLM report sidecar for `state`.
+fn writeLlmOutput(io: std.Io, state: *State, cfg: *const Config, report_data: *report.ReportData, allocator: std.mem.Allocator) void {
+    const llm_path = report.deriveLlmPath(allocator, state.md_path) catch return;
+    defer allocator.free(llm_path);
+    report.writeLlmReport(io, report_data, state.binary_entries.count(), llm_path, state.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
+        log.err(io, "Failed to write LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
+    };
 }
