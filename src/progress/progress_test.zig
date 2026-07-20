@@ -1,5 +1,5 @@
 const std = @import("std");
-const ProcessStats = @import("../cli/commands/stats/stats.zig").ProcessStats;
+const Stats = @import("../cli/commands/stats/Stats.zig");
 const Progress = @import("./Progress.zig");
 
 test "fillFor: total=0 → fill=0, no div-by-zero" {
@@ -25,19 +25,19 @@ test "fillFor: large counts — fill caps below full width" {
 }
 
 test "stop() before start() does not panic" {
-    var stats = ProcessStats.init();
+    var stats = Stats.init();
     var pb = Progress{ .io = std.testing.io, .stats = &stats, .is_tty = false };
     pb.stop();
 }
 
 test "stop() with thread=null (simulates failed start()) does not panic" {
-    var stats = ProcessStats.init();
+    var stats = Stats.init();
     var pb = Progress{ .io = std.testing.io, .stats = &stats, .is_tty = false };
     pb.stop();
 }
 
 test "non-TTY: start() leaves thread null" {
-    var stats = ProcessStats.init();
+    var stats = Stats.init();
     var pb = Progress{ .io = std.testing.io, .stats = &stats, .is_tty = false };
     try pb.start();
     try std.testing.expect(pb.thread == null);
@@ -45,7 +45,7 @@ test "non-TTY: start() leaves thread null" {
 }
 
 test "non-TTY: start()+stop() cycle completes without spawning thread" {
-    var stats = ProcessStats.init();
+    var stats = Stats.init();
     _ = stats.processed_files.fetchAdd(42, .monotonic);
     var pb = Progress{ .io = std.testing.io, .stats = &stats, .is_tty = false };
     try pb.start();

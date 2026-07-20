@@ -1,9 +1,12 @@
-//! JSON section writers for the dashboard payload
+//! Shared JSON section writers for the report dashboard schema. The HTML dashboard
+//! embeds this as __ZIGZAG_DATA__ and the SSE writer streams the same shape, so both
+//! draw from these builders.
+
 const std = @import("std");
-const Config = @import("../../../config/Config.zig");
-const JobEntry = @import("../../../../../jobs/entries.zig").JobEntry;
-const BinaryEntry = @import("../../../../../jobs/entries.zig").BinaryEntry;
-const LanguageStat = @import("../aggregator.zig").LanguageStat;
+const Config = @import("../../config/Config.zig");
+const JobEntry = @import("../../../../jobs/entries.zig").JobEntry;
+const BinaryEntry = @import("../../../../jobs/entries.zig").BinaryEntry;
+const LanguageStat = @import("aggregator.zig").LanguageStat;
 
 /// version + watch_mode + (in watch mode) the SSE url.
 fn writeBuildInfo(ws: *std.json.Stringify, allocator: std.mem.Allocator, cfg: *const Config) !void {

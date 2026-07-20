@@ -12,7 +12,7 @@ test "buildFileDeltaPayload file_update contains type, path, content" {
         .extension = ".zig",
         .line_count = 1,
     };
-    const payload = try sse.buildFileDeltaPayload(alloc, &entry, .updated);
+    const payload = try sse.buildFileDeltaPayload(alloc, &entry);
     defer alloc.free(payload);
 
     const parsed = try std.json.parseFromSlice(std.json.Value, alloc, payload, .{});

@@ -13,7 +13,7 @@ const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
 const log = @import("../../../logger/Logger.zig");
 const Progress = lg.Progress;
-const ProcessStats = @import("../stats.zig").ProcessStats;
+const Stats = @import("../stats.zig").Stats;
 
 inline fn nsElapsed(io: std.Io, start: i128) u64 {
     const delta = std.Io.Timestamp.now(io, .real).nanoseconds - start;
@@ -43,7 +43,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     for (cfg.paths.items) |path| {
         const t_scan = std.Io.Timestamp.now(io, .real).nanoseconds;
         if (!is_tty) log.phaseStart(io, "Scanning {s}...", .{path});
-        var stats = ProcessStats.init();
+        var stats = Stats.init();
         var pb = Progress.init(io, &stats); // pb must not be moved after this line
         try pb.start();
         const state = blk: {
@@ -264,7 +264,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
                                 const entry_opt = state.file_entries.get(event.path);
                                 state.entries_mutex.unlock(io);
                                 if (entry_opt) |entry| {
-                                    const delta = report.buildFileDeltaPayload(allocator, &entry, .updated) catch null;
+                                    const delta = report.buildFileDeltaPayload(allocator, &entry) catch null;
                                     if (delta) |d| {
                                         defer allocator.free(d);
                                         srv.broadcast(d);

@@ -6,7 +6,7 @@ const FileContext = @import("../../context.zig").FileContext;
 const Pool = @import("../../../workers/Pool.zig");
 const WaitGroup = @import("../../../workers/WaitGroup.zig");
 const Cache = @import("../../../cache/Cache.zig");
-const ProcessStats = @import("../stats.zig").ProcessStats;
+const Stats = @import("../stats.zig").Stats;
 const Job = @import("../../../jobs/Job.zig");
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
@@ -29,7 +29,7 @@ pub const State = struct {
     /// Run initial full directory scan and return heap-allocated state.
     pub fn init(
         io: std.Io,
-        stats: *ProcessStats,
+        stats: *Stats,
         cfg: *const Config,
         cache: ?*Cache,
         path: []const u8,
@@ -149,7 +149,7 @@ pub const State = struct {
         }
 
         var wg = WaitGroup.init(self.io);
-        var stats = ProcessStats.init();
+        var stats = Stats.init();
         var walker_ctx = Context{
             .pool = pool,
             .wg = &wg,
@@ -173,7 +173,7 @@ pub const State = struct {
         self.removeFile(file_path);
 
         const path_copy = try self.allocator.dupe(u8, file_path);
-        var stats = ProcessStats.init();
+        var stats = Stats.init();
         const job = Job{
             .path = path_copy,
             .file_ctx = &self.file_ctx,

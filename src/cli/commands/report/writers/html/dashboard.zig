@@ -3,7 +3,7 @@
 const std = @import("std");
 const Config = @import("../../../config/Config.zig");
 const ReportData = @import("../aggregator.zig").ReportData;
-const json = @import("json.zig");
+const json = @import("../schema.zig");
 
 const dashboard_template = @embedFile("../../../../../templates/dashboard.html");
 const combined_dashboard_template = @embedFile("../../../../../templates/combined-dashboard.html");

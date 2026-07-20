@@ -2,7 +2,7 @@ const std = @import("std");
 const scan = @import("./scan.zig");
 const Config = @import("../config/Config.zig");
 const Pool = @import("../../../workers/Pool.zig");
-const ProcessStats = @import("../stats.zig").ProcessStats;
+const Stats = @import("../stats.zig").Stats;
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 
@@ -26,7 +26,7 @@ test "ScanResult.deinit on empty maps does not leak" {
         .root_path = "./",
         .file_entries = std.StringHashMap(JobEntry).init(alloc),
         .binary_entries = std.StringHashMap(BinaryEntry).init(alloc),
-        .stats = ProcessStats.init(),
+        .stats = Stats.init(),
     };
     result.deinit(alloc);
 }

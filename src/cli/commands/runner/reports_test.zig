@@ -3,7 +3,7 @@ const reports = @import("./reports.zig");
 const scan = @import("./scan.zig");
 const Config = @import("../config/Config.zig");
 const Pool = @import("../../../workers/Pool.zig");
-const ProcessStats = @import("../stats.zig").ProcessStats;
+const Stats = @import("../stats.zig").Stats;
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 
@@ -12,7 +12,7 @@ fn makeEmptyResult(alloc: std.mem.Allocator, root_path: []const u8) scan.ScanRes
         .root_path = root_path,
         .file_entries = std.StringHashMap(JobEntry).init(alloc),
         .binary_entries = std.StringHashMap(BinaryEntry).init(alloc),
-        .stats = ProcessStats.init(),
+        .stats = Stats.init(),
     };
 }
 

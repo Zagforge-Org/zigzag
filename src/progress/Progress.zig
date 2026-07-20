@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const fmt_utils = @import("../utils/fmt/fmt.zig");
-const ProcessStats = @import("../cli/commands/stats/stats.zig").ProcessStats;
+const Stats = @import("../cli/commands/stats/Stats.zig");
 
 const SPINNERS = [_][]const u8{
     "⠋",
@@ -33,7 +33,7 @@ const BAR_MAX_FILL = BAR_WIDTH - 1;
 const UPDATE_INTERVAL_NS = 100 * std.time.ns_per_ms;
 
 io: std.Io,
-stats: *const ProcessStats,
+stats: *const Stats,
 done: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 thread: ?std.Thread = null,
 is_tty: bool,
@@ -41,7 +41,7 @@ start_ns: i128 = 0,
 
 const Self = @This();
 
-pub fn init(io: std.Io, stats: *const ProcessStats) Self {
+pub fn init(io: std.Io, stats: *const Stats) Self {
     return .{
         .io = io,
         .stats = stats,

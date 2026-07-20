@@ -6,7 +6,7 @@ const FileContext = @import("../../context.zig").FileContext;
 const Pool = @import("../../../workers/Pool.zig");
 const WaitGroup = @import("../../../workers/WaitGroup.zig");
 const Cache = @import("../../../cache/Cache.zig");
-const ProcessStats = @import("../stats.zig").ProcessStats;
+const Stats = @import("../stats.zig").Stats;
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 const Context = @import("../../../walker/Context.zig");
@@ -25,7 +25,7 @@ pub const ScanResult = struct {
     root_path: []const u8, // not owned — points into cfg.paths item
     file_entries: std.StringHashMap(JobEntry),
     binary_entries: std.StringHashMap(BinaryEntry),
-    stats: ProcessStats,
+    stats: Stats,
 
     pub fn deinit(self: *ScanResult, allocator: std.mem.Allocator) void {
         var it = self.file_entries.iterator();
@@ -107,7 +107,7 @@ pub fn scanPath(
     }
 
     var wg = WaitGroup.init(io);
-    var stats = ProcessStats.init();
+    var stats = Stats.init();
 
     var file_entries = std.StringHashMap(JobEntry).init(allocator);
     errdefer {

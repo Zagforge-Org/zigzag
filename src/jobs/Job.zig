@@ -4,7 +4,7 @@ const std = @import("std");
 
 const FileContext = @import("../cli/context.zig").FileContext;
 const Cache = @import("../cache/Cache.zig");
-const ProcessStats = @import("../cli/commands/stats.zig").ProcessStats;
+const Stats = @import("../cli/commands/stats.zig").Stats;
 const JobEntry = @import("entries.zig").JobEntry;
 const BinaryEntry = @import("entries.zig").BinaryEntry;
 const fs = @import("../fs/file.zig");
@@ -18,7 +18,7 @@ const Self = @This();
 path: []const u8,
 file_ctx: ?*FileContext,
 cache: ?*Cache,
-stats: *ProcessStats,
+stats: *Stats,
 file_entries: *std.StringHashMap(JobEntry),
 binary_entries: *std.StringHashMap(BinaryEntry),
 entries_mutex: *std.Io.Mutex,
