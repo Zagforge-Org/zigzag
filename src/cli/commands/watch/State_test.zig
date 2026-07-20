@@ -6,6 +6,10 @@ const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 test "State.removeFile removes file entry and frees memory" {
     var state: State = undefined;
     state.entries_mutex = .init;
+    state.io = std.testing.io;
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -33,6 +37,10 @@ test "State.removeFile removes file entry and frees memory" {
 test "State.removeFile is a no-op for unknown paths" {
     var state: State = undefined;
     state.entries_mutex = .init;
+    state.io = std.testing.io;
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -46,6 +54,10 @@ test "State.removeFile is a no-op for unknown paths" {
 test "State.removeFile removes binary entry and frees memory" {
     var state: State = undefined;
     state.entries_mutex = .init;
+    state.io = std.testing.io;
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -70,6 +82,10 @@ test "State.removeFile removes binary entry and frees memory" {
 test "State.removeFile handles both file and binary entries for the same path" {
     var state: State = undefined;
     state.entries_mutex = .init;
+    state.io = std.testing.io;
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
     state.allocator = std.testing.allocator;
     state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
     defer state.file_entries.deinit();
@@ -100,4 +116,48 @@ test "State.removeFile handles both file and binary entries for the same path" {
     state.removeFile("ambiguous");
     try std.testing.expectEqual(@as(usize, 0), state.file_entries.count());
     try std.testing.expectEqual(@as(usize, 0), state.binary_entries.count());
+}
+
+test "removeFile during a flush window retires the entry; endFlush frees it" {
+    var state: State = undefined;
+    state.entries_mutex = .init;
+    state.io = std.testing.io;
+    state.defer_frees = false;
+    state.graveyard_files = .empty;
+    state.graveyard_binaries = .empty;
+    state.allocator = std.testing.allocator;
+    state.file_entries = std.StringHashMap(JobEntry).init(std.testing.allocator);
+    defer state.file_entries.deinit();
+    state.binary_entries = std.StringHashMap(BinaryEntry).init(std.testing.allocator);
+    defer state.binary_entries.deinit();
+    defer state.graveyard_files.deinit(std.testing.allocator);
+    defer state.graveyard_binaries.deinit(std.testing.allocator);
+
+    const path = try std.testing.allocator.dupe(u8, "src/live.zig");
+    const content = try std.testing.allocator.dupe(u8, "pub fn live() void {}");
+    const ext = try std.testing.allocator.dupe(u8, ".zig");
+    try state.file_entries.put(path, JobEntry{
+        .path = path,
+        .content = content,
+        .size = 21,
+        .mtime = 0,
+        .extension = ext,
+        .line_count = 1,
+    });
+
+    // Snapshot enters the deferred-free window.
+    var data = try state.beginFlush(std.testing.allocator, null);
+    defer data.deinit();
+    const snapshot_content = data.sorted_files.items[0].content;
+
+    // A concurrent event removes the file: entry must be retired, not freed,
+    // so the snapshot's borrowed content stays readable.
+    state.removeFile("src/live.zig");
+    try std.testing.expectEqual(@as(usize, 0), state.file_entries.count());
+    try std.testing.expectEqual(@as(usize, 1), state.graveyard_files.items.len);
+    try std.testing.expectEqualStrings("pub fn live() void {}", snapshot_content);
+
+    // Leaving the window releases the retired entry (testing allocator verifies).
+    state.endFlush();
+    try std.testing.expectEqual(@as(usize, 0), state.graveyard_files.items.len);
 }
