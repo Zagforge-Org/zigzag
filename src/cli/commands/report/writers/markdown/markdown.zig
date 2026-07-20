@@ -54,11 +54,11 @@ fn writeFileEntry(
 }
 
 /// Serialize pre-aggregated data to a markdown report file.
-/// Called both from one-shot mode and watch mode.
+/// Called both from one-shot mode and watch mode. Reads only the ReportData
+/// snapshot so it can run while the live entry maps are being updated.
 pub fn writeReport(
     io: std.Io,
     data: *const ReportData,
-    file_entries: *const std.StringHashMap(JobEntry),
     md_path: []const u8,
     root_path: []const u8,
     cfg: *const Config,
@@ -78,31 +78,14 @@ pub fn writeReport(
     defer allocator.free(header);
     try md_file.writeStreamingAll(io, header);
 
-    // Table of contents (built from the raw map for correct entry paths)
+    // Table of contents (sorted_files is already path-ordered)
     try md_file.writeStreamingAll(io, "## Table of Contents\n\n");
 
-    var toc_list: std.ArrayList([]const u8) = .empty;
-    defer {
-        for (toc_list.items) |item| allocator.free(item);
-        toc_list.deinit(allocator);
+    for (data.sorted_files.items) |*entry| {
+        const toc_entry = try std.fmt.allocPrint(allocator, "- [{s}](#{s})\n", .{ entry.path, entry.path });
+        defer allocator.free(toc_entry);
+        try md_file.writeStreamingAll(io, toc_entry);
     }
-
-    var it = file_entries.iterator();
-    while (it.next()) |entry| {
-        const toc_entry = try std.fmt.allocPrint(allocator, "- [{s}](#{s})\n", .{
-            entry.value_ptr.path,
-            entry.value_ptr.path,
-        });
-        try toc_list.append(allocator, toc_entry);
-    }
-
-    std.mem.sort([]const u8, toc_list.items, {}, struct {
-        fn lessThan(_: void, a: []const u8, b: []const u8) bool {
-            return std.mem.lessThan(u8, a, b);
-        }
-    }.lessThan);
-
-    for (toc_list.items) |toc_entry| try md_file.writeStreamingAll(io, toc_entry);
     try md_file.writeStreamingAll(io, "\n---\n\n");
 
     // Sorted file entries (use pre-sorted list from ReportData)
