@@ -39,8 +39,8 @@ test {
     _ = @import("./cli/commands/runner/reports_test.zig");
 
     // watch sub-module tests
-    _ = @import("./cli/commands/watch/state_test.zig");
-    _ = @import("./cli/commands/watch/server_test.zig");
+    _ = @import("./cli/commands/watch/State_test.zig");
+    _ = @import("./cli/commands/watch/Server_test.zig");
     _ = @import("./cli/commands/watch/reporter_test.zig");
     _ = @import("./cli/commands/watch/exec_test.zig");
     _ = @import("./cli/version/version_test.zig");
@@ -72,6 +72,7 @@ test {
     _ = @import("./logger/Logger_test.zig");
     _ = @import("./utils/host_test.zig");
     _ = @import("./utils/fmt/fmt_test.zig");
+    _ = @import("./utils/time/time_test.zig");
     _ = @import("./progress/progress_test.zig");
     _ = @import("./cli/commands/config/config_test.zig");
     _ = @import("./cli/commands/config/timezone_test.zig");

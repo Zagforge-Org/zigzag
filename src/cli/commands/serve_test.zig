@@ -48,7 +48,7 @@ test "serve.isPortListening detects port occupied even with SO_REUSEADDR on seco
     defer listener.deinit(std.testing.io);
     const port = listener.socket.address.getPort();
 
-    // Attempt duplicate bind with SO_REUSEADDR — mirrors what SseServer.init does.
+    // Attempt duplicate bind with SO_REUSEADDR: mirrors what Server.init does.
     const addr2 = try std.Io.net.IpAddress.parse("127.0.0.1", port);
     if (addr2.listen(std.testing.io, .{ .reuse_address = true })) |second| {
         var s = second;

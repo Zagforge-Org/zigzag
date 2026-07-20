@@ -1,6 +1,6 @@
 const std = @import("std");
 const isPortListening = @import("./port_listening.zig").isPortListening;
-const SseServer = @import("./server.zig").SseServer;
+const Server = @import("./Server.zig");
 
 // --- isPortListening tests ---
 
@@ -19,8 +19,8 @@ test "isPortListening returns false for an occupied port" {
 
 test "isPortListening returns true for an actively listening port" {
     const alloc = std.testing.allocator;
-    // SseServer.init binds to an OS-assigned ephemeral port when port == 0.
-    const srv = try SseServer.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    // Server.init binds to an OS-assigned ephemeral port when port == 0.
+    const srv = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
     defer srv.deinit();
     const actual_port = srv.listener.socket.address.getPort();
     try std.testing.expect(isPortListening(std.testing.io, actual_port));
@@ -28,9 +28,9 @@ test "isPortListening returns true for an actively listening port" {
 
 test "isPortListening correctly detects two independent servers" {
     const alloc = std.testing.allocator;
-    const srv1 = try SseServer.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    const srv1 = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
     defer srv1.deinit();
-    const srv2 = try SseServer.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    const srv2 = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
     defer srv2.deinit();
 
     const p1 = srv1.listener.socket.address.getPort();
@@ -46,7 +46,7 @@ test "port probe works even when SO_REUSEADDR would allow duplicate bind" {
     // This is the core regression test: verify that isPortListening detects an
     // occupied port even when a second bind() with SO_REUSEADDR would succeed.
     const alloc = std.testing.allocator;
-    const srv = try SseServer.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    const srv = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
     defer srv.deinit();
 
     const occupied_port = srv.listener.socket.address.getPort();
@@ -69,8 +69,8 @@ test "port probe works even when SO_REUSEADDR would allow duplicate bind" {
 test "port selection skips an occupied port and binds to next free port" {
     const alloc = std.testing.allocator;
 
-    // Occupy a port via SseServer.
-    const occupier = try SseServer.init(std.testing.io, 0, "/tmp", "report.html", alloc);
+    // Occupy a port via Server.
+    const occupier = try Server.init(std.testing.io, 0, "/tmp", "report.html", alloc);
     defer occupier.deinit();
     const occupied_port = occupier.listener.socket.address.getPort();
 

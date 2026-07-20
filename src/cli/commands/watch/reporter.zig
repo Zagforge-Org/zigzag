@@ -1,6 +1,6 @@
 const std = @import("std");
-const State = @import("state.zig").State;
-const SseServer = @import("server.zig").SseServer;
+const State = @import("State.zig");
+const Server = @import("Server.zig");
 const Config = @import("../config/Config.zig");
 const report = @import("../report.zig");
 const log = @import("../../../logger/Logger.zig");
@@ -15,7 +15,7 @@ pub fn writeCombinedReport(
     io: std.Io,
     states: []*State,
     cfg: *const Config,
-    sse_server: ?*SseServer,
+    sse_server: ?*Server,
     changed_paths: []const []const u8,
     allocator: std.mem.Allocator,
 ) void {
@@ -110,7 +110,7 @@ pub fn writeAllReports(
     io: std.Io,
     state: *State,
     cfg: *const Config,
-    sse_server: ?*SseServer,
+    sse_server: ?*Server,
     changed_paths: []const []const u8,
     allocator: std.mem.Allocator,
 ) void {

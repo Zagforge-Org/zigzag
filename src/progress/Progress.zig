@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const fmt_utils = @import("../utils/fmt/fmt.zig");
+const nsElapsed = @import("../utils/time/time.zig").nsElapsed;
 const Stats = @import("../cli/commands/stats/Stats.zig");
 
 const SPINNERS = [_][]const u8{
@@ -50,10 +51,7 @@ pub fn init(io: std.Io, stats: *const Stats) Self {
 }
 
 fn elapsedNs(self: *const Self) u64 {
-    const delta =
-        std.Io.Timestamp.now(self.io, .real).nanoseconds - self.start_ns;
-
-    return @intCast(@max(0, delta));
+    return nsElapsed(self.io, self.start_ns);
 }
 
 /// Spawn render thread if TTY.

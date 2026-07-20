@@ -9,7 +9,7 @@ const log = @import("../../logger/Logger.zig");
 pub const BenchResult = @import("./bench/BenchResult.zig");
 
 const ScanResult = scan_mod.ScanResult;
-const nsElapsed = scan_mod.nsElapsed;
+const nsElapsed = @import("../../utils/utils.zig").nsElapsed;
 
 /// Executes the runner command for all configured paths.
 pub fn exec(io: std.Io, cfg: *const Config, cache: ?*Cache, allocator: std.mem.Allocator, bench: ?*BenchResult) !void {

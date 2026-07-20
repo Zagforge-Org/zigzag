@@ -6,18 +6,6 @@ const Stats = @import("../stats.zig").Stats;
 const JobEntry = @import("../../../jobs/entries.zig").JobEntry;
 const BinaryEntry = @import("../../../jobs/entries.zig").BinaryEntry;
 
-// ── nsElapsed ─────────────────────────────────────────────────────────────────
-
-test "nsElapsed clamps future timestamp to 0" {
-    const future = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds + 1_000_000_000_000;
-    try std.testing.expectEqual(@as(u64, 0), scan.nsElapsed(std.testing.io, future));
-}
-
-test "nsElapsed returns positive for past timestamp" {
-    const past = std.Io.Timestamp.now(std.testing.io, .real).nanoseconds - 1_000_000;
-    try std.testing.expect(scan.nsElapsed(std.testing.io, past) > 0);
-}
-
 // ── ScanResult ────────────────────────────────────────────────────────────────
 
 test "ScanResult.deinit on empty maps does not leak" {

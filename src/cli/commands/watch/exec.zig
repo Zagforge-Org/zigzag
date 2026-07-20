@@ -1,5 +1,5 @@
 const std = @import("std");
-const State = @import("state.zig").State;
+const State = @import("State.zig");
 const reporter = @import("reporter.zig");
 const Config = @import("../config/Config.zig");
 const Pool = @import("../../../workers/Pool.zig");
@@ -8,17 +8,13 @@ const watcher_mod = @import("../../../platform/watcher.zig");
 const Watcher = watcher_mod.Watcher;
 const WatchEvent = watcher_mod.WatchEvent;
 const report = @import("../report.zig");
-const SseServer = @import("server.zig").SseServer;
+const Server = @import("Server.zig");
 const isPortListening = @import("port_listening.zig").isPortListening;
 const lg = @import("../../../utils/utils.zig");
 const log = @import("../../../logger/Logger.zig");
 const Progress = lg.Progress;
 const Stats = @import("../stats.zig").Stats;
-
-inline fn nsElapsed(io: std.Io, start: i128) u64 {
-    const delta = std.Io.Timestamp.now(io, .real).nanoseconds - start;
-    return @intCast(@max(0, delta));
-}
+const nsElapsed = lg.nsElapsed;
 
 /// Event-driven watch mode: uses OS filesystem events (inotify/kqueue/ReadDirectoryChangesW)
 /// for incremental updates. Keeps all file content in memory; only re-read changed files.
@@ -47,7 +43,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
         var pb = Progress.init(io, &stats); // pb must not be moved after this line
         try pb.start();
         const state = blk: {
-            if (State.init(io, &stats, cfg, cache, path, &pool, allocator)) |s| {
+            if (State.init(allocator, io, &stats, cfg, cache, path, &pool)) |s| {
                 pb.stop();
                 if (!is_tty) log.phaseDone(io, nsElapsed(io, t_scan), "{d} files", .{s.file_entries.count()});
                 break :blk s;
@@ -68,6 +64,8 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
 
     if (states.items.len == 0) return;
 
+    const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
+
     // Flush cache to disk now so it survives Ctrl+C during the watch loop.
     // Without this, defer cache.deinit() in main.zig never runs on SIGINT.
     if (cache) |c| c.saveToDisk() catch {};
@@ -75,84 +73,11 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     // Write combined HTML report (initial, before SSE server starts).
     reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
 
-    // Start SSE dev server when both --watch and --html are active
-    var sse_server: ?*SseServer = null;
-    if (cfg.html_output) {
-        const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-        const multi = states.items.len > 1;
-
-        // For multi-path: serve from base output dir so combined-content.json is at root.
-        // For single path: serve from per-path subdir so report-content.json is at root.
-        var first_html_buf: ?[]u8 = null;
-        defer if (first_html_buf) |b| allocator.free(b);
-        const srv_root: []const u8 = if (multi) base_out_dir else blk: {
-            first_html_buf = report.deriveHtmlPath(allocator, states.items[0].md_path) catch null;
-            if (first_html_buf) |hp| break :blk std.fs.path.dirname(hp) orelse base_out_dir;
-            break :blk base_out_dir;
-        };
-        const default_page: []const u8 = if (multi) "combined.html" else "report.html";
-
-        {
-            // Try the configured port; if already in use, increment up to 9 more times.
-            // Use a TCP connection probe rather than relying on bind() error codes —
-            // SO_REUSEADDR can allow duplicate binds on some OS/kernel configurations.
-            const max_port_attempts = 10;
-            var port = cfg.serve_port;
-            for (0..max_port_attempts) |i| {
-                if (isPortListening(io, port)) {
-                    if (i == 0) {
-                        log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
-                    }
-                    if (i == max_port_attempts - 1) {
-                        log.err(io, "Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
-                        break;
-                    }
-                    port += 1;
-                    continue;
-                }
-                if (SseServer.init(io, port, srv_root, default_page, allocator)) |srv| {
-                    sse_server = srv;
-                    if (port != cfg.serve_port) {
-                        cfg.serve_port = port; // propagate to HTML/SSE-URL generation
-                    }
-                    break;
-                } else |err| {
-                    // Bind still failed (race condition or other error); treat as occupied.
-                    if (err == error.AddressInUse) {
-                        if (i == 0) {
-                            log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
-                        }
-                        port += 1;
-                    } else {
-                        log.warn(io, "SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
-                        break;
-                    }
-                }
-            }
-            if (sse_server) |srv| {
-                srv.start() catch |err| {
-                    log.warn(io, "SSE server thread failed: {s}", .{@errorName(err)});
-                    srv.deinit();
-                    sse_server = null;
-                };
-                if (sse_server != null) {
-                    log.success(io, "Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
-                    if (cfg.open_browser) sse_server.?.openBrowser();
-                    // Broadcast initial payload so connecting clients get data immediately.
-                    const first = states.items[0];
-                    var init_data = report.ReportData.init(io, allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
-                    if (init_data) |*d| {
-                        defer d.deinit();
-                        const payload = report.buildSsePayload(d, first.root_path, cfg, allocator) catch null;
-                        if (payload) |p| {
-                            defer allocator.free(p);
-                            sse_server.?.broadcast(p);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Start the SSE dev server (port probe + initial broadcast) when --html is active.
+    const sse_server: ?*Server = if (cfg.html_output)
+        startServer(io, cfg, states.items, base_out_dir, allocator)
+    else
+        null;
     defer if (sse_server) |srv| srv.deinit();
 
     // Re-write reports now that the SSE server port is finalized.
@@ -175,10 +100,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     // Without this, every flush that writes content-sidecar JSON files (one per source
     // file) generates thousands of CLOSE_WRITE events into the inotify queue, easily
     // exceeding max_queued_events (default 16384) and causing a continuous overflow loop.
-    {
-        const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-        watcher.addSkipDir(base_out_dir) catch {};
-    }
+    watcher.addSkipDir(base_out_dir) catch {};
 
     for (states.items) |state| {
         watcher.watchDir(state.root_path) catch |err| {
@@ -242,10 +164,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
             for (events.items) |event| {
                 defer allocator.free(event.path);
 
-                if (std.mem.indexOf(u8, event.path, ".cache") != null) continue;
-                if (std.mem.indexOf(u8, event.path, ".zig-cache") != null) continue;
-                const base_out_dir: []const u8 = if (cfg.output_dir) |d| d else "zigzag-reports";
-                if (std.mem.indexOf(u8, event.path, base_out_dir) != null) continue;
+                if (isIgnoredEventPath(event.path, base_out_dir)) continue;
 
                 for (states.items, 0..) |state, i| {
                     if (!std.mem.startsWith(u8, event.path, state.root_path)) continue;
@@ -319,4 +238,99 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
             changed_paths.clearRetainingCapacity();
         }
     }
+}
+
+/// Bring up the SSE dev server: probe from cfg.serve_port for a free port, bind, start
+/// the broadcast thread, and push an initial snapshot. Returns null (server not started)
+/// on any failure; on success the caller owns the returned server and must deinit it.
+fn startServer(
+    io: std.Io,
+    cfg: *Config,
+    states: []const *State,
+    base_out_dir: []const u8,
+    allocator: std.mem.Allocator,
+) ?*Server {
+    const multi = states.len > 1;
+
+    // For multi-path: serve from base output dir so combined-content.json is at root.
+    // For single path: serve from per-path subdir so report-content.json is at root.
+    var first_html_buf: ?[]u8 = null;
+    defer if (first_html_buf) |b| allocator.free(b);
+    const srv_root: []const u8 = if (multi) base_out_dir else blk: {
+        first_html_buf = report.deriveHtmlPath(allocator, states[0].md_path) catch null;
+        if (first_html_buf) |hp| break :blk std.fs.path.dirname(hp) orelse base_out_dir;
+        break :blk base_out_dir;
+    };
+    const default_page: []const u8 = if (multi) "combined.html" else "report.html";
+
+    // Try the configured port; if already in use, increment up to 9 more times.
+    // Use a TCP connection probe rather than relying on bind() error codes —
+    // SO_REUSEADDR can allow duplicate binds on some OS/kernel configurations.
+    const max_port_attempts = 10;
+    var sse_server: ?*Server = null;
+    var port = cfg.serve_port;
+    for (0..max_port_attempts) |i| {
+        if (isPortListening(io, port)) {
+            if (i == 0) {
+                log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+            }
+            if (i == max_port_attempts - 1) {
+                log.err(io, "Ports {d}..{d} are all occupied. Cannot start SSE server.", .{ cfg.serve_port, port });
+                break;
+            }
+            port += 1;
+            continue;
+        }
+        if (Server.init(io, port, srv_root, default_page, allocator)) |srv| {
+            sse_server = srv;
+            if (port != cfg.serve_port) {
+                cfg.serve_port = port; // propagate to HTML/SSE-URL generation
+            }
+            break;
+        } else |err| {
+            // Bind still failed (race condition or other error); treat as occupied.
+            if (err == error.AddressInUse) {
+                if (i == 0) {
+                    log.warn(io, "Port {d} already in use, trying port {d}..{d}...", .{ port, port + 1, port + max_port_attempts - 1 });
+                }
+                port += 1;
+            } else {
+                log.warn(io, "SSE server failed to start on port {d}: {s}", .{ port, @errorName(err) });
+                break;
+            }
+        }
+    }
+
+    const srv = sse_server orelse return null;
+
+    srv.start() catch |err| {
+        log.warn(io, "SSE server thread failed: {s}", .{@errorName(err)});
+        srv.deinit();
+        return null;
+    };
+
+    log.success(io, "Dashboard  \x1b[4mhttp://127.0.0.1:{d}\x1b[0m", .{cfg.serve_port});
+    if (cfg.open_browser) srv.openBrowser();
+
+    // Broadcast initial payload so connecting clients get data immediately.
+    const first = states[0];
+    var init_data = report.ReportData.init(io, allocator, &first.file_entries, &first.binary_entries, cfg.timezone_offset) catch null;
+    if (init_data) |*d| {
+        defer d.deinit();
+        const payload = report.buildSsePayload(d, first.root_path, cfg, allocator) catch null;
+        if (payload) |p| {
+            defer allocator.free(p);
+            srv.broadcast(p);
+        }
+    }
+
+    return srv;
+}
+
+/// Filesystem events under the cache or report-output directories are self-inflicted
+/// (we write there ourselves) and must never trigger a rebuild.
+fn isIgnoredEventPath(path: []const u8, base_out_dir: []const u8) bool {
+    return std.mem.indexOf(u8, path, ".cache") != null or
+        std.mem.indexOf(u8, path, ".zig-cache") != null or
+        std.mem.indexOf(u8, path, base_out_dir) != null;
 }

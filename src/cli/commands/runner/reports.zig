@@ -1,6 +1,6 @@
 const std = @import("std");
 const ScanResult = @import("./scan.zig").ScanResult;
-const nsElapsed = @import("./scan.zig").nsElapsed;
+const nsElapsed = @import("../../../utils/utils.zig").nsElapsed;
 const Config = @import("../config/Config.zig");
 const Pool = @import("../../../workers/Pool.zig");
 const report = @import("../report.zig");
