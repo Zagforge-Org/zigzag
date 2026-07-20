@@ -22,6 +22,15 @@ file_entries: std.StringHashMap(JobEntry),
 binary_entries: std.StringHashMap(BinaryEntry),
 entries_mutex: std.Io.Mutex,
 file_ctx: FileContext,
+// Cross-flush cache of condensed LLM results; lets a debounce flush re-condense
+// only changed files and keeps flush memory flat.
+llm_memo: report.LlmMemo,
+// While a background flush writes from a snapshot, removed entries are retired
+// here instead of freed so the snapshot's borrowed content stays valid.
+// All three guarded by entries_mutex.
+defer_frees: bool,
+graveyard_files: std.ArrayList(JobEntry),
+graveyard_binaries: std.ArrayList(BinaryEntry),
 
 const Self = @This();
 
@@ -55,6 +64,10 @@ pub fn init(
             .md = undefined,
             .md_mutex = undefined,
         },
+        .llm_memo = .init(allocator),
+        .defer_frees = false,
+        .graveyard_files = .empty,
+        .graveyard_binaries = .empty,
         .allocator = allocator,
     };
 
@@ -129,6 +142,13 @@ pub fn deinit(self: *Self) void {
     for (self.file_ctx.ignore_list.items) |item| alloc.free(item);
     self.file_ctx.ignore_list.deinit(alloc);
 
+    self.llm_memo.deinit();
+
+    for (self.graveyard_files.items) |entry| freeJobEntry(entry, alloc);
+    self.graveyard_files.deinit(alloc);
+    for (self.graveyard_binaries.items) |entry| freeBinaryEntry(entry, alloc);
+    self.graveyard_binaries.deinit(alloc);
+
     alloc.destroy(self);
 }
 
@@ -188,12 +208,47 @@ pub fn updateFile(self: *Self, file_path: []const u8, cache: ?*Cache, pool: *Poo
     wg.wait();
 }
 
-/// Remove a deleted file's entry from the in-memory map.
+/// Remove a deleted file's entry from the in-memory map. During a flush window
+/// the entry is retired to the graveyard instead of freed.
 pub fn removeFile(self: *Self, file_path: []const u8) void {
     self.entries_mutex.lockUncancelable(self.io);
     defer self.entries_mutex.unlock(self.io);
-    if (self.file_entries.fetchRemove(file_path)) |kv| freeJobEntry(kv.value, self.allocator);
-    if (self.binary_entries.fetchRemove(file_path)) |kv| freeBinaryEntry(kv.value, self.allocator);
+    if (self.file_entries.fetchRemove(file_path)) |kv| {
+        if (self.defer_frees) {
+            self.graveyard_files.append(self.allocator, kv.value) catch freeJobEntry(kv.value, self.allocator);
+        } else {
+            freeJobEntry(kv.value, self.allocator);
+        }
+    }
+    if (self.binary_entries.fetchRemove(file_path)) |kv| {
+        if (self.defer_frees) {
+            self.graveyard_binaries.append(self.allocator, kv.value) catch freeBinaryEntry(kv.value, self.allocator);
+        } else {
+            freeBinaryEntry(kv.value, self.allocator);
+        }
+    }
+}
+
+/// Snapshot the aggregate report data under the entries lock and enter the
+/// deferred-free window. Pair with endFlush() once the snapshot's borrowed
+/// entry contents are no longer read.
+pub fn beginFlush(self: *Self, allocator: std.mem.Allocator, timezone_offset: ?i64) !report.ReportData {
+    self.entries_mutex.lockUncancelable(self.io);
+    defer self.entries_mutex.unlock(self.io);
+    const data = try report.ReportData.init(self.io, allocator, &self.file_entries, &self.binary_entries, timezone_offset);
+    self.defer_frees = true;
+    return data;
+}
+
+/// Leave the deferred-free window and release entries retired during it.
+pub fn endFlush(self: *Self) void {
+    self.entries_mutex.lockUncancelable(self.io);
+    defer self.entries_mutex.unlock(self.io);
+    self.defer_frees = false;
+    for (self.graveyard_files.items) |entry| freeJobEntry(entry, self.allocator);
+    self.graveyard_files.clearRetainingCapacity();
+    for (self.graveyard_binaries.items) |entry| freeBinaryEntry(entry, self.allocator);
+    self.graveyard_binaries.clearRetainingCapacity();
 }
 
 fn freeJobEntry(entry: JobEntry, allocator: std.mem.Allocator) void {
