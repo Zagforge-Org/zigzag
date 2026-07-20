@@ -30,18 +30,7 @@ pub fn writePathReports(
     const md_path = try report.resolveOutputPath(io, allocator, cfg, result.root_path, output_filename);
     defer allocator.free(md_path);
 
-    // HTML content sidecar — timing not tracked (see write-html block below).
-    if (cfg.html_output) {
-        const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
-        defer allocator.free(html_path_for_content);
-        const content_dir = try report.deriveContentDir(allocator, html_path_for_content);
-        defer allocator.free(content_dir);
-        try report.writeContentFiles(io, &result.file_entries, content_dir, allocator);
-        if (verbose) log.success(io, "Content dir:   {s}/", .{content_dir});
-        log.file(io, "Content files written: {s}/", .{content_dir});
-    }
-
-    // Aggregate — timer starts after content sidecar.
+    // Aggregate first; the writers below consume the snapshot, not the maps.
     const t_agg = std.Io.Timestamp.now(io, .real).nanoseconds;
     if (verbose) log.phaseStart(io, "Aggregating...", .{});
     var report_data = report.ReportData.init(io, allocator, &result.file_entries, &result.binary_entries, cfg.timezone_offset) catch |err| {
@@ -52,10 +41,21 @@ pub fn writePathReports(
     if (bench) |b| b.aggregate_ns += nsElapsed(io, t_agg);
     if (verbose) log.phaseDone(io, nsElapsed(io, t_agg), "", .{});
 
+    // HTML content sidecar; timing not tracked (see write-html block below).
+    if (cfg.html_output) {
+        const html_path_for_content = try report.deriveHtmlPath(allocator, md_path);
+        defer allocator.free(html_path_for_content);
+        const content_dir = try report.deriveContentDir(allocator, html_path_for_content);
+        defer allocator.free(content_dir);
+        try report.writeContentFiles(io, report_data.sorted_files.items, content_dir, allocator);
+        if (verbose) log.success(io, "Content dir:   {s}/", .{content_dir});
+        log.file(io, "Content files written: {s}/", .{content_dir});
+    }
+
     // write-md
     const t_md = std.Io.Timestamp.now(io, .real).nanoseconds;
     if (verbose) log.phaseStart(io, "Writing report...", .{});
-    report.writeReport(io, &report_data, &result.file_entries, md_path, result.root_path, cfg, allocator) catch |err| {
+    report.writeReport(io, &report_data, md_path, result.root_path, cfg, allocator) catch |err| {
         if (verbose) log.phaseDone(io, nsElapsed(io, t_md), "", .{});
         return err;
     };
@@ -111,7 +111,7 @@ pub fn writePathReports(
         defer allocator.free(llm_path);
         const t_llm = std.Io.Timestamp.now(io, .real).nanoseconds;
         if (verbose) log.phaseStart(io, "Writing LLM report...", .{});
-        report.writeLlmReport(io, &report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, cfg.llm_chunk_size, allocator, pool) catch |err| {
+        report.writeLlmReport(io, &report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, cfg.llm_chunk_size, allocator, pool, null) catch |err| {
             if (verbose) log.phaseDone(io, nsElapsed(io, t_llm), "", .{});
             return err;
         };
@@ -170,7 +170,7 @@ pub fn writeCombinedReports(
         );
         n_initialized += 1;
         path_data[i] = .{ .root_path = result.root_path, .data = &all_report_data[i] };
-        content_paths[i] = .{ .root_path = result.root_path, .file_entries = &result.file_entries };
+        content_paths[i] = .{ .root_path = result.root_path, .entries = all_report_data[i].sorted_files.items };
     }
 
     try report.writeCombinedContentFiles(io, content_paths, combined_content_dir, allocator);
