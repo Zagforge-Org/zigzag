@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd ..
+
 make build
 
 cd zig-out/bin

@@ -197,17 +197,21 @@ pub fn saveToDisk(self: *Self) !void {
     var file = try std.Io.Dir.cwd().createFile(self.io, temp_path, .{ .truncate = true });
     defer file.close(self.io);
 
+    // Assemble the whole index in memory and write it once; a syscall per entry
+    // is measurably slow with tens of thousands of entries.
+    var aw: std.Io.Writer.Allocating = .init(self.allocator);
+    defer aw.deinit();
+
     var it = self.memory_cache.iterator();
     while (it.next()) |entry| {
-        const line = try std.fmt.allocPrint(self.allocator, "{s}|{d}|{d}|{s}\n", .{
+        try aw.writer.print("{s}|{d}|{d}|{s}\n", .{
             entry.key_ptr.*,
             entry.value_ptr.mtime,
             entry.value_ptr.size,
             entry.value_ptr.cache_filename,
         });
-        defer self.allocator.free(line);
-        try file.writeStreamingAll(self.io, line);
     }
+    try file.writeStreamingAll(self.io, aw.written());
 
     try std.Io.Dir.cwd().rename(temp_path, std.Io.Dir.cwd(), cache_index_path, self.io);
 }

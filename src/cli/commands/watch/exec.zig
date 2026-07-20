@@ -40,7 +40,7 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
         const state = (try scanPath(io, cfg, cache, &pool, path, is_tty, allocator)) orelse continue;
         try states.append(allocator, state);
         // Write initial reports (no SSE server yet — will be started after all paths init)
-        reporter.writeAllReports(io, state, cfg, null, &.{}, allocator);
+        reporter.writeAllReports(io, state, cfg, null, &.{}, allocator, &pool);
     }
 
     if (states.items.len == 0) return;
@@ -55,18 +55,19 @@ pub fn execWatch(io: std.Io, cfg: *Config, cache: ?*Cache, allocator: std.mem.Al
     reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);
 
     // Start the SSE dev server (port probe + initial broadcast) when --html is active.
+    const requested_port = cfg.serve_port;
     const sse_server: ?*Server = if (cfg.html_output)
         startServer(io, cfg, states.items, base_out_dir, allocator)
     else
         null;
     defer if (sse_server) |srv| srv.deinit();
 
-    // Re-write reports now that the SSE server port is finalized.
-    // The initial write (before server start) may have baked in the default port,
-    // but port fallback can change cfg.serve_port — the HTML sse_url must match.
-    if (sse_server != null) {
+    // The initial write baked cfg.serve_port into the HTML sse_url. Only when port
+    // fallback moved the server to a different port do the reports need a re-write;
+    // rewriting unconditionally doubles startup cost on large trees.
+    if (sse_server != null and cfg.serve_port != requested_port) {
         for (states.items) |state| {
-            reporter.writeAllReports(io, state, cfg, null, &.{}, allocator);
+            reporter.writeAllReports(io, state, cfg, null, &.{}, allocator, &pool);
         }
         if (states.items.len > 1) {
             reporter.writeCombinedReport(io, states.items, cfg, null, &.{}, allocator);

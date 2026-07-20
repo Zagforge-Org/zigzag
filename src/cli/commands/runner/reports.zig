@@ -24,8 +24,6 @@ pub fn writePathReports(
     bench: ?*BenchResult,
     verbose: bool,
 ) !void {
-    _ = pool; // reserved for future use
-
     if (verbose) log.step(io, "{s}", .{std.fs.path.basename(result.root_path)});
 
     const output_filename: []const u8 = if (cfg.output) |o| o else "report.md";
@@ -113,7 +111,7 @@ pub fn writePathReports(
         defer allocator.free(llm_path);
         const t_llm = std.Io.Timestamp.now(io, .real).nanoseconds;
         if (verbose) log.phaseStart(io, "Writing LLM report...", .{});
-        report.writeLlmReport(io, &report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
+        report.writeLlmReport(io, &report_data, result.binary_entries.count(), llm_path, result.root_path, cfg, cfg.llm_chunk_size, allocator, pool) catch |err| {
             if (verbose) log.phaseDone(io, nsElapsed(io, t_llm), "", .{});
             return err;
         };

@@ -93,17 +93,25 @@ fn fnv1a32Hash(s: []const u8) u32 {
 }
 
 /// Write `content` to `content_dir`, named by the 8-char lowercase hex FNV-1a hash of `key`.
-fn writeContentFile(io: std.Io, content_dir: []const u8, key: []const u8, content: []const u8, allocator: std.mem.Allocator) !void {
+/// A sidecar already newer than the source (src_mtime_ns) is up to date and skipped where
+/// a stat is far cheaper than a rewrite, so warm full writes touch only stale files.
+fn writeContentFile(io: std.Io, content_dir: []const u8, key: []const u8, content: []const u8, src_mtime_ns: i128, allocator: std.mem.Allocator) !void {
     var hex_buf: [8]u8 = undefined;
     const hex = try std.fmt.bufPrint(&hex_buf, "{x:0>8}", .{fnv1a32Hash(key)});
     const fname = try std.fs.path.join(allocator, &.{ content_dir, hex });
     defer allocator.free(fname);
+
+    if (std.Io.Dir.cwd().statFile(io, fname, .{})) |st| {
+        if (st.mtime.nanoseconds >= src_mtime_ns) return;
+    } else |_| {}
+
     var f = try std.Io.Dir.cwd().createFile(io, fname, .{ .truncate = true });
     defer f.close(io);
     try f.writeStreamingAll(io, content);
 }
 
 /// Write source content as individual hash-named files in a flat content directory.
+/// Unchanged files (sidecar newer than source) are skipped.
 pub fn writeContentFiles(
     io: std.Io,
     file_entries: *const std.StringHashMap(JobEntry),
@@ -113,7 +121,7 @@ pub fn writeContentFiles(
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
     var it = file_entries.iterator();
     while (it.next()) |kv| {
-        try writeContentFile(io, content_dir, kv.key_ptr.*, kv.value_ptr.content, allocator);
+        try writeContentFile(io, content_dir, kv.key_ptr.*, kv.value_ptr.content, kv.value_ptr.mtime, allocator);
     }
 }
 
@@ -129,11 +137,12 @@ pub fn writeChangedContentFiles(
     try std.Io.Dir.cwd().createDirPath(io, content_dir);
     for (changed_paths) |path| {
         const entry = file_entries.get(path) orelse continue;
-        try writeContentFile(io, content_dir, path, entry.content, allocator);
+        try writeContentFile(io, content_dir, path, entry.content, entry.mtime, allocator);
     }
 }
 
 /// Write combined multi-path content as individual files.
+/// Unchanged files (sidecar newer than source) are skipped.
 pub fn writeCombinedContentFiles(
     io: std.Io,
     paths: []const CombinedContentPath,
@@ -146,7 +155,7 @@ pub fn writeCombinedContentFiles(
         while (it.next()) |kv| {
             const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, kv.key_ptr.* });
             defer allocator.free(combined_key);
-            try writeContentFile(io, content_dir, combined_key, kv.value_ptr.content, allocator);
+            try writeContentFile(io, content_dir, combined_key, kv.value_ptr.content, kv.value_ptr.mtime, allocator);
         }
     }
 }
@@ -174,6 +183,6 @@ pub fn writeCombinedChangedContentFiles(
 
         const combined_key = try std.fmt.allocPrint(allocator, "{s}:{s}", .{ p.root_path, changed_path });
         defer allocator.free(combined_key);
-        try writeContentFile(io, content_dir, combined_key, entry.content, allocator);
+        try writeContentFile(io, content_dir, combined_key, entry.content, entry.mtime, allocator);
     }
 }

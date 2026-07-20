@@ -5,8 +5,16 @@
 const std = @import("std");
 
 const ws2 = struct {
+    const WSAPOLLFD = extern struct {
+        fd: std.posix.socket_t,
+        events: c_short,
+        revents: c_short,
+    };
+    const POLLRDNORM: c_short = 0x0100;
+
     extern "ws2_32" fn recv(s: std.posix.socket_t, buf: [*]u8, len: c_int, flags: c_int) callconv(.winapi) c_int;
     extern "ws2_32" fn shutdown(s: std.posix.socket_t, how: c_int) callconv(.winapi) c_int;
+    extern "ws2_32" fn WSAPoll(fdArray: [*]WSAPOLLFD, fds: c_ulong, timeout: c_int) callconv(.winapi) c_int;
 };
 
 pub fn recv(handle: std.posix.socket_t, buf: []u8) !usize {
@@ -14,6 +22,15 @@ pub fn recv(handle: std.posix.socket_t, buf: []u8) !usize {
     const n = ws2.recv(handle, buf.ptr, @intCast(buf.len), 0);
     if (n < 0) return error.ConnectionResetByPeer;
     return @intCast(n);
+}
+
+/// recv() bounded by a WSAPoll timeout so a silent peer cannot block the caller.
+pub fn recvTimeout(handle: std.posix.socket_t, buf: []u8, timeout_ms: i32) !usize {
+    var pfds = [1]ws2.WSAPOLLFD{.{ .fd = handle, .events = ws2.POLLRDNORM, .revents = 0 }};
+    const n_ready = ws2.WSAPoll(&pfds, 1, timeout_ms);
+    if (n_ready < 0) return error.Timeout;
+    if (n_ready == 0) return error.Timeout;
+    return recv(handle, buf);
 }
 
 pub fn gracefulClose(io: std.Io, stream: std.Io.net.Stream) void {

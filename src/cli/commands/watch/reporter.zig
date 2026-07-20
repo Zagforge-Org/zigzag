@@ -4,6 +4,7 @@ const Server = @import("Server.zig");
 const Config = @import("../config/Config.zig");
 const report = @import("../report.zig");
 const log = @import("../../../logger/Logger.zig");
+const Pool = @import("../../../workers/Pool.zig");
 
 /// Write the combined multi-path HTML dashboard and its content sidecar.
 /// No-op when html_output is false or fewer than 2 states are active.
@@ -113,6 +114,7 @@ pub fn writeAllReports(
     sse_server: ?*Server,
     changed_paths: []const []const u8,
     allocator: std.mem.Allocator,
+    pool: ?*Pool,
 ) void {
     var report_data = report.ReportData.init(
         io,
@@ -134,7 +136,7 @@ pub fn writeAllReports(
 
     if (cfg.json_output) writeJsonOutput(io, state, cfg, &report_data, allocator);
     if (cfg.html_output) writeHtmlOutput(io, state, cfg, &report_data, sse_server, changed_paths, allocator);
-    if (cfg.llm_report) writeLlmOutput(io, state, cfg, &report_data, allocator);
+    if (cfg.llm_report) writeLlmOutput(io, state, cfg, &report_data, allocator, pool);
 }
 
 /// Write the JSON report sidecar for `state`.
@@ -198,10 +200,10 @@ fn writeContentSidecars(io: std.Io, state: *State, html_path: []const u8, change
 }
 
 /// Write the LLM report sidecar for `state`.
-fn writeLlmOutput(io: std.Io, state: *State, cfg: *const Config, report_data: *report.ReportData, allocator: std.mem.Allocator) void {
+fn writeLlmOutput(io: std.Io, state: *State, cfg: *const Config, report_data: *report.ReportData, allocator: std.mem.Allocator, pool: ?*Pool) void {
     const llm_path = report.deriveLlmPath(allocator, state.md_path) catch return;
     defer allocator.free(llm_path);
-    report.writeLlmReport(io, report_data, state.binary_entries.count(), llm_path, state.root_path, cfg, cfg.llm_chunk_size, allocator) catch |err| {
+    report.writeLlmReport(io, report_data, state.binary_entries.count(), llm_path, state.root_path, cfg, cfg.llm_chunk_size, allocator, pool) catch |err| {
         log.err(io, "Failed to write LLM report for '{s}': {s}", .{ state.root_path, @errorName(err) });
     };
 }

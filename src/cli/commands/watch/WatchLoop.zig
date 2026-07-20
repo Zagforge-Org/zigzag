@@ -161,7 +161,7 @@ pub fn flush(self: *Self) void {
     }
     for (self.states, 0..) |state, i| {
         if (!self.dirty_states[i]) continue;
-        reporter.writeAllReports(self.io, state, self.cfg, self.sse_server, paths_for_write, self.allocator);
+        reporter.writeAllReports(self.io, state, self.cfg, self.sse_server, paths_for_write, self.allocator, self.pool);
         self.dirty_states[i] = false;
     }
     self.any_dirty = false;

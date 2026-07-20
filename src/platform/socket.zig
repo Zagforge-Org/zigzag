@@ -12,6 +12,15 @@ pub fn recv(handle: std.posix.socket_t, buf: []u8) !usize {
     };
 }
 
+/// recv() that fails with error.
+/// Timeout when no data arrives within timeout_ms.
+pub fn recvTimeout(handle: std.posix.socket_t, buf: []u8, timeout_ms: i32) !usize {
+    return switch (comptime builtin.os.tag) {
+        .windows => @import("windows/socket.zig").recvTimeout(handle, buf, timeout_ms),
+        else => @import("unix/socket.zig").recvTimeout(handle, buf, timeout_ms),
+    };
+}
+
 /// Gracefully close a TCP connection, avoiding a RST on Windows.
 pub fn gracefulClose(io: std.Io, stream: std.Io.net.Stream) void {
     switch (comptime builtin.os.tag) {

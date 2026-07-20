@@ -5,6 +5,7 @@ const std = @import("std");
 const Config = @import("../../../config/Config.zig");
 const ReportData = @import("../aggregator.zig").ReportData;
 const Analysis = @import("Analysis.zig");
+const Pool = @import("../../../../../workers/Pool.zig");
 const single = @import("single.zig");
 const chunked = @import("chunked.zig");
 
@@ -20,8 +21,9 @@ pub fn writeLlmReport(
     cfg: *const Config,
     chunk_size: usize,
     allocator: std.mem.Allocator,
+    pool: ?*Pool,
 ) !void {
-    var analysis = try Analysis.compute(data, cfg, allocator);
+    var analysis = try Analysis.compute(data, cfg, allocator, pool);
     defer analysis.deinit();
 
     if (chunk_size > 0) {

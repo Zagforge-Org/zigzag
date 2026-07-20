@@ -278,12 +278,13 @@ fn handleNewConn(
     conn: std.Io.net.Stream,
     clients: *std.ArrayList(std.Io.net.Stream),
 ) void {
-    // Read HTTP request headers (blocking, but almost instant; browser sends
-    // all headers in one segment immediately after connect).
+    // Read HTTP request headers with a bounded wait. This runs on the event-loop
+    // thread: an accepted connection that never sends data (browser preconnect,
+    // WSL loopback relay, port scan) would otherwise block every SSE broadcast.
     var buf: [4096]u8 = undefined;
     var total: usize = 0;
     while (total < buf.len - 1) {
-        const n = socket.recv(conn.socket.handle, buf[total..]) catch {
+        const n = socket.recvTimeout(conn.socket.handle, buf[total..], 2000) catch {
             socket.gracefulClose(self.io, conn);
             return;
         };
