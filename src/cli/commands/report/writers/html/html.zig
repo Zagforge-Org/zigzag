@@ -17,3 +17,4 @@ pub const writeCombinedContentFiles = content.writeCombinedContentFiles;
 pub const writeCombinedChangedContentFiles = content.writeCombinedChangedContentFiles;
 pub const writeStampFile = content.writeStampFile;
 pub const CombinedContentPath = content.CombinedContentPath;
+pub const CombinedContentMapPath = content.CombinedContentMapPath;
