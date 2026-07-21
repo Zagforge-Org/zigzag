@@ -8,79 +8,17 @@ pub const options = @import("options");
 const builtin = @import("builtin");
 
 test {
-    // handler tests — flags/
-    _ = @import("./cli/handlers/flags/chunk_size_test.zig");
-    _ = @import("./cli/handlers/flags/html_test.zig");
-    _ = @import("./cli/handlers/flags/ignore_test.zig");
-    _ = @import("./cli/handlers/flags/json_test.zig");
-    _ = @import("./cli/handlers/flags/llm_report_test.zig");
-    _ = @import("./cli/handlers/flags/llm_signature_test.zig");
-    _ = @import("./cli/handlers/flags/log_test.zig");
-    _ = @import("./cli/handlers/flags/mmap_test.zig");
-    _ = @import("./cli/handlers/flags/no_watch_test.zig");
-    _ = @import("./cli/handlers/flags/open_test.zig");
-    _ = @import("./cli/handlers/flags/output_test.zig");
-    _ = @import("./cli/handlers/flags/output_dir_test.zig");
-    _ = @import("./cli/handlers/flags/path_test.zig");
-    _ = @import("./cli/handlers/flags/port_test.zig");
-    _ = @import("./cli/handlers/flags/skip_cache_test.zig");
-    _ = @import("./cli/handlers/flags/small_test.zig");
-    _ = @import("./cli/handlers/flags/timezone_test.zig");
-    _ = @import("./cli/handlers/flags/watch_test.zig");
-    // handler tests — display/
-    _ = @import("./cli/handlers/display/help_test.zig");
-    _ = @import("./cli/handlers/display/version_test.zig");
-    // handler tests — init/ (previously undiscovered — adds 2 tests)
-    _ = @import("./cli/handlers/init/init_test.zig");
+    // Every portable `*_test.zig` under src/ is auto-discovered by build.zig, which
+    // regenerates src/test_manifest.zig on each build. Add a *_test.zig file and it is
+    // picked up automatically.
+    _ = @import("test_manifest.zig");
+
+    // Non-test modules pulled in for compile-coverage under the test build.
     _ = @import("./cli/commands/config/Config.zig");
     _ = @import("./cli/commands/runner.zig");
-
-    // runner sub-module tests
-    _ = @import("./cli/commands/runner/scan_test.zig");
-    _ = @import("./cli/commands/runner/reports_test.zig");
-
-    // watch sub-module tests
-    _ = @import("./cli/commands/watch/State_test.zig");
-    _ = @import("./cli/commands/watch/Server_test.zig");
-    _ = @import("./cli/commands/watch/reporter_test.zig");
-    _ = @import("./cli/commands/watch/exec_test.zig");
-    _ = @import("./cli/commands/watch/WatchLoop_test.zig");
-    _ = @import("./cli/version/version_test.zig");
-    _ = @import("./cli/commands/stats/stats_test.zig");
-    _ = @import("./cli/commands/watch/port_listening_test.zig");
-
-    // report sub-module tests
-    _ = @import("./cli/commands/report/aggregator/ReportData_test.zig");
-    _ = @import("./cli/commands/report/content/content_test.zig");
-    _ = @import("./cli/commands/report/paths/paths_test.zig");
-    _ = @import("./cli/commands/report/writers/markdown/markdown_test.zig");
-    _ = @import("./cli/commands/report/writers/json/json_test.zig");
-    _ = @import("./cli/commands/report/writers/html/html_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/llm_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/sections_test.zig");
-    _ = @import("./cli/commands/report/writers/llm/ChunkWriter_test.zig");
-    _ = @import("./cli/commands/report/writers/ast/ast_chunker_test.zig");
-    _ = @import("./cli/commands/report/writers/sse/sse_test.zig");
-
-    _ = @import("./conf/FileConf_test.zig");
-    _ = @import("./cache/Cache_test.zig");
-
     _ = @import("./platform/watcher.zig");
-    _ = @import("./jobs/entries_test.zig");
-    _ = @import("./jobs/inspect_test.zig");
 
-    _ = @import("./cli/commands/serve/serve_test.zig");
-    _ = @import("./utils/colors/colors_test.zig");
-    _ = @import("./utils/skip_dirs/skip_dirs_test.zig");
-    _ = @import("./logger/Logger_test.zig");
-    _ = @import("./utils/host_test.zig");
-    _ = @import("./utils/fmt/fmt_test.zig");
-    _ = @import("./utils/time/time_test.zig");
-    _ = @import("./progress/progress_test.zig");
-    _ = @import("./cli/commands/config/config_test.zig");
-    _ = @import("./cli/commands/config/timezone_test.zig");
-    _ = @import("./cli/commands/bench/bench_test.zig");
-
+    // Platform-specific tests must stay gated on the target OS (the manifest excludes them).
     switch (builtin.os.tag) {
         .linux => {
             _ = @import("./platform/linux/Watcher_test.zig");
