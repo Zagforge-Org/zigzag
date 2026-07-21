@@ -11,6 +11,12 @@ pub fn build(b: *std.Build) void {
     // test file is picked up automatically instead of being silently forgotten.
     generateTestManifest(b);
 
+    // Cheap step that compiles nothing.
+    // The manifest is already written above at configure time. CI runs raw `zig test` (to reuse the prebuilt ts_ast.a and skip
+    // the tree-sitter recompile), so it must invoke this first to materialize the
+    // gitignored src/test_manifest.zig before the test binary imports it.
+    _ = b.step("test-manifest", "Regenerate src/test_manifest.zig");
+
     // Parse Version
     const version = std.SemanticVersion.parse(version_string) catch |err| {
         std.debug.print("Failed to parse version '{s}': {}\n", .{ version_string, err });
