@@ -332,9 +332,18 @@ jobs:
         needs: [sign-macos, build]
         if: startsWith(github.ref, 'refs/tags/')
         steps:
+            # checkout first so CHANGELOG.md is available; artifacts download into it after.
+            - uses: actions/checkout@v4
+
             - uses: actions/download-artifact@v5
               with:
                   merge-multiple: true
+
+            - name: Extract changelog section for this tag
+              run: |
+                  version="${GITHUB_REF_NAME#v}"
+                  awk -v ver="$version" 'index($0,"## ["ver"]")==1{f=1;print;next} f&&index($0,"## [")==1{exit} f{print}' CHANGELOG.md > RELEASE_NOTES.md
+                  echo "----- release notes -----"; cat RELEASE_NOTES.md
 
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
@@ -345,6 +354,8 @@ jobs:
                       zigzag-x86_64-macos.tar.gz
                       zigzag-aarch64-macos.tar.gz
                       zigzag-x86_64-windows.zip
+                  # this tag's CHANGELOG section on top; auto PR notes appended below it.
+                  body_path: RELEASE_NOTES.md
                   generate_release_notes: true
 
             - name: Update Homebrew formula
