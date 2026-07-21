@@ -44,6 +44,7 @@ llm_description: ?[]u8 = null, // Optional project description for LLM report pr
 llm_chunk_size: usize = 0, // Max lines per chunk for LLM report (0 = no chunking)
 serve_port: u16 = DEFAULT_SERVE_PORT, // Port for SSE/HTML dev server in watch+html mode
 open_browser: bool = false, // Open browser automatically on serve/watch
+llm_signatures: bool = false, // Emit declaration signatures + line ranges instead of condensed bodies
 
 // Internal tracking (not user-facing): records whether a field was set by CLI so
 // that CLI args override file-config values, and whether owned strings need freeing.
@@ -119,6 +120,7 @@ pub fn applyFileConf(self: *Self, conf: *const FileConf) !void {
     if (conf.json_output) |v| self.json_output = v;
     if (conf.html_output) |v| self.html_output = v;
     if (conf.llm_report) |v| self.llm_report = v;
+    if (conf.llm_signatures) |v| self.llm_signatures = v;
     if (conf.llm_max_lines) |v| self.llm_max_lines = v;
 
     if (conf.output) |out| {

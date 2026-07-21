@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-21
+
+### Added
+
+- `--llm-signatures` (config: `"llm_signatures"`) emit each declaration's signature and
+  exact source line range in the LLM report instead of its body, turning the report into a
+  token-cheap map of the codebase you read bodies from on demand (~3× smaller on a Zig tree).
+  The signature/body boundary is AST-accurate via tree-sitter — 16 of 17 grammars expose a
+  `body` field; the rest fall back to a `{`/`;` scan.
+
 ## [0.20.0] - 2026-07-20
 
 Watch-mode performance and correctness overhaul, measured against a Next.js-sized
@@ -107,6 +117,7 @@ enabled):
 Release history prior to 0.19.0 is available from the
 [git tags](https://github.com/Zagforge-Org/zigzag/tags).
 
-[Unreleased]: https://github.com/Zagforge-Org/zigzag/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/Zagforge-Org/zigzag/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/Zagforge-Org/zigzag/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/Zagforge-Org/zigzag/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/Zagforge-Org/zigzag/compare/v0.18.0...v0.19.0

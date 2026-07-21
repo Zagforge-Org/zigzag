@@ -20,6 +20,7 @@ const chunkSizeHandler = @import("./handlers/flags/chunk_size.zig").handleChunkS
 const portHandler = @import("./handlers/flags/port.zig").handlePort;
 const logHandler = @import("./handlers/flags/log.zig").handleLog;
 const openHandler = @import("./handlers/flags/open.zig").handleOpen;
+const handleLLMSignature = @import("./handlers/flags/llm_signature.zig").handleLLMSignature;
 
 ///  FlagsHandler represents a command-line flag.
 pub const FlagsHandler = struct {
@@ -48,4 +49,5 @@ pub const flags = [_]FlagsHandler{
     .{ .name = "--port", .takes_value = true, .handler = &portHandler },
     .{ .name = "--log", .takes_value = false, .handler = &logHandler },
     .{ .name = "--open", .takes_value = false, .handler = &openHandler },
+    .{ .name = "--llm-signatures", .takes_value = false, .handler = &handleLLMSignature },
 };

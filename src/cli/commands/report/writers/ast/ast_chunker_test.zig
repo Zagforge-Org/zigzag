@@ -38,6 +38,21 @@ test "chunkSource returns chunks for Python functions" {
     try std.testing.expectEqual(@as(u32, 4), chunks[1].end_line);
 }
 
+test "chunkSource populates byte offsets that exclude the body" {
+    const source = "def hello():\n    pass\n";
+    const chunks = try ast_chunker.chunkSource(source, ".py", std.testing.allocator) orelse
+        return error.ExpectedChunks;
+    defer std.testing.allocator.free(chunks);
+
+    try std.testing.expectEqual(@as(usize, 1), chunks.len);
+    // A body node was found, so the signature boundary sits past the declaration start.
+    try std.testing.expect(chunks[0].sig_end_byte > chunks[0].start_byte);
+
+    const sig = source[chunks[0].start_byte..chunks[0].sig_end_byte];
+    try std.testing.expect(std.mem.indexOf(u8, sig, "def hello") != null);
+    try std.testing.expect(std.mem.indexOf(u8, sig, "pass") == null);
+}
+
 test "chunkSource returns chunks for Python class" {
     const source =
         \\class Foo:

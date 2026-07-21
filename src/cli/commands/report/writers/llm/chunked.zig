@@ -44,7 +44,7 @@ pub fn write(
     for (analysis.real_entries.items, analysis.file_contents.items) |entry, fc| {
         var fw: std.Io.Writer.Allocating = .init(allocator);
         defer fw.deinit();
-        try sections.writeSourceBlock(&fw.writer, entry, fc);
+        try sections.writeSourceBlock(&fw.writer, entry, fc, cfg.llm_signatures);
         const block = fw.written();
 
         // Keep each file's block whole

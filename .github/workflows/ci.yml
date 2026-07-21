@@ -202,6 +202,9 @@ jobs:
                       .zig-cache/ts_php_parser.o \
                       .zig-cache/ts_php_scanner.o \
                       .zig-cache/ts_chunker.o
+            - name: Generate test manifest
+              shell: bash
+              run: zig build test-manifest
             - name: Run tests
               shell: bash
               run: zig test -fllvm -lc --dep options -Mroot=src/root.zig -Moptions=src/cli/version/fallback.zig .zig-cache/ts_ast.a

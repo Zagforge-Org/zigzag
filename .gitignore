@@ -27,3 +27,4 @@ src/templates/combined-dashboard.html
 zigzag-reports
 .claude
 checklist.md
+src/test_manifest.zig

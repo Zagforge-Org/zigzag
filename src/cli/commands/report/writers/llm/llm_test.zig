@@ -183,3 +183,57 @@ test "writeLlmReport emits AST chunks for Python files" {
     // No condensed marker
     try std.testing.expect(std.mem.indexOf(u8, written, "lines omitted]") == null);
 }
+
+test "writeLlmReport emits signatures without bodies when llm_signatures is set" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+
+    const tmp_path = try tmp.dir.realPathFileAlloc(std.testing.io, ".", alloc);
+    defer alloc.free(tmp_path);
+
+    var cfg = Config.default(alloc);
+    defer cfg.deinit();
+    cfg.llm_max_lines = 150;
+    cfg.llm_signatures = true;
+
+    const zig_content =
+        \\pub fn add(a: i32, b: i32) i32 {
+        \\    const sum = a + b;
+        \\    return sum;
+        \\}
+        \\
+    ;
+
+    var file_entries = std.StringHashMap(JobEntry).init(alloc);
+    defer file_entries.deinit();
+    try file_entries.put("src/math.zig", .{
+        .path = "src/math.zig",
+        .content = @constCast(zig_content),
+        .size = zig_content.len,
+        .mtime = 0,
+        .extension = ".zig",
+        .line_count = 4,
+    });
+
+    var binary_entries = std.StringHashMap(BinaryEntry).init(alloc);
+    defer binary_entries.deinit();
+
+    const llm_path = try std.fs.path.join(alloc, &.{ tmp_path, "report.llm.md" });
+    defer alloc.free(llm_path);
+
+    var data = try ReportData.init(std.testing.io, alloc, &file_entries, &binary_entries, null);
+    defer data.deinit();
+
+    try writeLlmReport(std.testing.io, &data, 0, llm_path, "src", &cfg, 0, alloc, null, null);
+
+    const written = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, llm_path, alloc, .limited(1024 * 1024));
+    defer alloc.free(written);
+
+    // The signature line and its exact source range are kept...
+    try std.testing.expect(std.mem.indexOf(u8, written, "pub fn add(a: i32, b: i32) i32") != null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "src/math.zig [1–4]") != null);
+    // ...but the body is dropped (read it from the range on demand).
+    try std.testing.expect(std.mem.indexOf(u8, written, "const sum = a + b") == null);
+    try std.testing.expect(std.mem.indexOf(u8, written, "return sum") == null);
+}
