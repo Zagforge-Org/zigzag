@@ -33,7 +33,7 @@ pub fn write(
 
     try w.writeAll("## Source\n\n");
     for (analysis.real_entries.items, analysis.file_contents.items) |entry, fc| {
-        try sections.writeSourceBlock(w, entry, fc);
+        try sections.writeSourceBlock(w, entry, fc, cfg.llm_signatures);
     }
 
     var llm_file = try std.Io.Dir.cwd().createFile(io, llm_path, .{ .truncate = true });

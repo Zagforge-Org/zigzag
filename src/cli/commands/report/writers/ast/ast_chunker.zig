@@ -6,6 +6,8 @@ const TSLanguage = opaque {};
 const CChunk = extern struct {
     start_line: u32,
     end_line: u32,
+    start_byte: u32,
+    sig_end_byte: u32,
 };
 
 const ChunkConfig = extern struct {
@@ -157,6 +159,8 @@ const typescript_types = [_][*c]const u8{
 pub const Chunk = struct {
     start_line: u32, // 0-based (tree-sitter row)
     end_line: u32, // 0-based, inclusive
+    start_byte: u32 = 0, // absolute byte offset of the declaration start
+    sig_end_byte: u32 = 0, // byte where the body begins; == start_byte when no AST body
 };
 
 const LanguageConfig = struct {
@@ -304,7 +308,12 @@ pub fn chunkSource(
 
     const chunks = try allocator.alloc(Chunk, result.count);
     for (result.chunks[0..result.count], chunks) |raw, *out| {
-        out.* = .{ .start_line = raw.start_line, .end_line = raw.end_line };
+        out.* = .{
+            .start_line = raw.start_line,
+            .end_line = raw.end_line,
+            .start_byte = raw.start_byte,
+            .sig_end_byte = raw.sig_end_byte,
+        };
     }
     return chunks;
 }
