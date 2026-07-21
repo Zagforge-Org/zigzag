@@ -23,6 +23,7 @@ A blazing-fast code analytics tool that converts source code into comprehensive 
 - **Real-time watch mode** regenerates reports on file changes across MD, JSON, and HTML outputs
 - **HTML Dashboard** (`--html`) — interactive single-file dashboard with charts, virtual-scroll source viewer, and syntax highlighting; live-reloads in watch mode
 - **LLM report** (`--llm-report`) — condensed, token-efficient report with per-file condensation; supports chunking via `--chunk-size` for large codebases
+- **Signatures mode** (`--llm-signatures`) — emit each declaration's signature + exact line range instead of its body, turning the LLM report into a *map* of the codebase you read bodies from on demand
 - **Phase progress** — scan / aggregate / write phase indicators on stderr with a final rich summary (machine info, timings, file counts)
 - **Bench subcommand** — per-phase timing table with CPU model and core count
 
@@ -173,6 +174,7 @@ Without a subcommand, ZigZag applies CLI flags directly (no file config is loade
 | `--json` | `bool` | `false` | Generate a JSON report alongside Markdown. |
 | `--html` | `bool` | `false` | Generate an interactive HTML dashboard alongside Markdown. |
 | `--llm-report` | `bool` | `false` | Generate a condensed LLM-optimised report. |
+| `--llm-signatures` | `bool` | `false` | Emit declaration signatures + line ranges instead of bodies (a map, not the source). |
 | `--chunk-size` | `string` | — | Split the LLM report into chunks of this size (e.g. `500k`, `2m`). Omit or set to `null` in config for a single file. |
 | `--log` | `bool` | `false` | Enable logging. |
 | `--open` | `bool` | `false` | Automatically open the HTML report in a browser. |
@@ -206,6 +208,7 @@ All fields supported in `zig.conf.json`:
 | `html_output` | `bool` | `false` | Generate HTML dashboards |
 | `output_dir` | `string` | `"zigzag-reports"` | Output directory for all reports |
 | `llm_report` | `bool` | `false` | Enable LLM-optimized reporting |
+| `llm_signatures` | `bool` | `false` | Emit declaration signatures + line ranges instead of bodies |
 | `llm_max_lines` | `number` | `150` | Max lines per file in LLM reports |
 | `llm_description` | `string\|null` | `null` | Project description for LLM reports |
 | `llm_chunk_size` | `number\|string\|null` | `null` | Split LLM report into chunks of this size. `null` or `0` = single file. Accepts numeric bytes or string with `k`/`m` suffixes (e.g. `500000` or `"500k"`) |
@@ -215,6 +218,26 @@ All fields supported in `zig.conf.json`:
 Pass `--llm-report` (or set `"llm_report": true` in `zig.conf.json`) to generate a condensed report alongside the Markdown file. The LLM report is written as `report.llm.md` in the same directory.
 
 Each source file is condensed: files exceeding `llm_max_lines` are truncated to the first 60 and last 20 lines with an omission notice. Boilerplate files (`package-lock.json`, `yarn.lock`, `*.lock`, etc.) are excluded automatically.
+
+### Signatures Mode — map first, then read bodies
+
+Pass `--llm-signatures` (or set `"llm_signatures": true`) to emit each declaration's **signature only** — the function/type header up to its body with the exact source line range in the heading:
+
+````markdown
+### src/cache/Cache.zig [22–60]
+```zig
+pub fn init(allocator: std.mem.Allocator, io: std.Io, cache_dir: []const u8, small_file_threshold: usize) !Self
+```
+````
+
+The body is not in the report — the `[22–60]` range is. This turns the report into a **map** of the codebase (roughly a 3× token reduction on a Zig tree), meant to be used in two steps:
+
+1. **Map first.** Grep the signatures report to find *what exists and where* — declarations, their inputs/outputs, their location. Structural questions ("where is `init`", "what's the interface of this module") are answered from the map alone.
+2. **Then read bodies.** When you need what a declaration *does*, read the source at its line range (e.g. `Cache.zig` lines 22–60). You pay for the few bodies you actually open, not all of them up front.
+
+The cut is **AST-accurate**: the signature/body boundary comes from tree-sitter, so it is not fooled by a `{` or `;` inside a signature, string, or comment (16 of 17 grammars; the rest fall back to a `{`/`;` scan).
+
+> **Note:** the signatures report is a navigation layer, not a replacement for source. Answer implementation questions by reading the referenced line range — don't infer behavior from a signature alone. For a single self-contained artifact with full bodies, use the default `--llm-report` (or plain source) instead.
 
 ### LLM Chunking
 
